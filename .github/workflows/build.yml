@@ -28,8 +28,21 @@ jobs:
           cache: true
       - run: ${{ env.CREATE }}
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
-      - run: flutter test
+      - name: Analyze
+        run: |
+          set +e
+          dart analyze --format=machine > analyze.txt 2>&1
+          # Show errors first, then warnings, as annotations on the run page.
+          for lvl in ERROR WARNING; do
+            grep "^$lvl|" analyze.txt | head -45 | while IFS='|' read -r sev type code file line col len msg; do
+              f=${file#$GITHUB_WORKSPACE/}
+              echo "::error file=$f,line=$line,col=$col,title=$code::$f:$line:$col $msg"
+            done
+          done
+          cat analyze.txt
+          ! grep -q "^ERROR|" analyze.txt
+      - name: Test
+        run: flutter test --reporter github
 
   web:
     name: Web
