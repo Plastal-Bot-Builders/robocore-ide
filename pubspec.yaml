@@ -1,0 +1,50 @@
+name: robocore_ide
+description: RoboCore IDE — build, code and run sketches for the RoboCore classroom robot, on web, Android, iOS, Windows and macOS.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.0.10
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/Barlow-400.ttf
+          weight: 400
+        - asset: assets/fonts/Barlow-500.ttf
+          weight: 500
+        - asset: assets/fonts/Barlow-600.ttf
+          weight: 600
+        - asset: assets/fonts/Barlow-700.ttf
+          weight: 700
+    - family: BarlowCondensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-500.ttf
+          weight: 500
+        - asset: assets/fonts/BarlowCondensed-600.ttf
+          weight: 600
+        - asset: assets/fonts/BarlowCondensed-700.ttf
+          weight: 700
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-400.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-500.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-700.ttf
+          weight: 700

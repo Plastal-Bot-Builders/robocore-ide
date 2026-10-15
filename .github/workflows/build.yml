@@ -1,0 +1,140 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CREATE: flutter create --platforms=web,android,ios,windows,macos --project-name robocore_ide --org com.robocore .
+
+jobs:
+  check:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ${{ env.CREATE }}
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test
+
+  web:
+    name: Web
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ${{ env.CREATE }}
+      - run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  pages:
+    name: Publish web app
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  android:
+    name: Android
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ${{ env.CREATE }}
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: robocore-ide-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    name: Windows
+    needs: check
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ${{ env.CREATE }}
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: robocore-ide-windows
+          path: build/windows/x64/runner/Release/
+
+  macos:
+    name: macOS
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ${{ env.CREATE }}
+      - run: flutter build macos --release
+      - run: cd build/macos/Build/Products/Release && zip -qry "$GITHUB_WORKSPACE/robocore-ide-macos.zip" *.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: robocore-ide-macos
+          path: robocore-ide-macos.zip
+
+  ios:
+    name: iOS (unsigned)
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ${{ env.CREATE }}
+      - run: flutter build ios --release --no-codesign
+      - run: cd build/ios/iphoneos && zip -qry "$GITHUB_WORKSPACE/robocore-ide-ios-unsigned.zip" Runner.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: robocore-ide-ios-unsigned
+          path: robocore-ide-ios-unsigned.zip

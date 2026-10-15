@@ -1,0 +1,770 @@
+// Runs a parsed sketch against a simulated board.
+import 'dart:async';
+import 'dart:math' as math;
+
+import '../data/catalog.dart';
+import 'compiler.dart';
+import 'lexer.dart';
+import 'parser.dart';
+
+class RuntimeErr implements Exception {
+  final int? line;
+  final String msg;
+  RuntimeErr(this.line, this.msg);
+}
+
+class _Stop implements Exception {
+  const _Stop();
+}
+
+class _Brk implements Exception {
+  const _Brk();
+}
+
+class _Cont implements Exception {
+  const _Cont();
+}
+
+class _Ret implements Exception {
+  final dynamic value;
+  const _Ret(this.value);
+}
+
+const _stop = _Stop();
+const _brk = _Brk();
+const _cont = _Cont();
+
+class StopToken {
+  bool stop = false;
+}
+
+/// What the interpreter can do to the (simulated or real) board.
+abstract class BoardIO {
+  int get boardLed;
+  bool get userPressed;
+  String get inQ;
+  set inQ(String v);
+  void markReadsSerial();
+  int millis();
+  void pinMode(int pin, int mode);
+  int? pinModeOf(int pin);
+  void digitalWrite(int pin, int v);
+  int digitalRead(int pin);
+  int analogRead();
+  void tone(num freq, num? ms);
+  void noTone();
+  void rgb(int r, int g, int b);
+  void motors(num l, num r);
+  void servo(num a);
+  num distance();
+  num lineRead();
+  num temperature();
+  num tilt();
+  void serialWrite(String s);
+  void serialFlushLine();
+  void skipped(String name);
+}
+
+final _flt = RegExp(r'\b(float|double)\b');
+final _intT = RegExp(r'\b(int|long|short|byte|char|unsigned|word|size_t|u?int(8|16|32|64)_t)\b');
+final _boolT = RegExp(r'\bbool(ean)?\b');
+
+String jsStr(dynamic v) {
+  if (v == null) return '';
+  if (v is double) {
+    if (v.isFinite && v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toString();
+  }
+  return '$v';
+}
+
+bool truthy(dynamic v) {
+  if (v == null) return false;
+  if (v is num) return v != 0 && !v.isNaN;
+  if (v is String) return v.isNotEmpty;
+  return true;
+}
+
+num _asNum(dynamic v) {
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v.trim()) ?? 0;
+  return 0;
+}
+
+int _asInt(dynamic v) {
+  final n = _asNum(v);
+  if (n is int) return n;
+  if (!n.isFinite) return 0;
+  return n.truncate();
+}
+
+dynamic coerce(String? t, dynamic v) {
+  if (t == null || t.isEmpty) return v;
+  if (t == 'String' || t == 'const String') return v is num ? jsStr(v) : jsStr(v ?? '');
+  if (_boolT.hasMatch(t)) return truthy(v) ? 1 : 0;
+  if (_flt.hasMatch(t)) return _asNum(v).toDouble();
+  if (_intT.hasMatch(t)) {
+    if (v is String) return v.isEmpty ? 0 : v.codeUnitAt(0);
+    return _asInt(v);
+  }
+  return v;
+}
+
+class _Ref {
+  dynamic v;
+  final String t;
+  final bool arr, c;
+  _Ref(this.v, this.t, {this.arr = false, this.c = false});
+}
+
+typedef Scope = List<Map<String, _Ref>>;
+
+class Interpreter {
+  final CompileResult info;
+  final BoardIO io;
+  final StopToken tok;
+  final Map<String, num> consts;
+  final Map<String, _Ref> g = {};
+  final Map<String, Node> fns;
+  final math.Random _rnd = math.Random();
+  int slept = 0;
+  int _steps = 0;
+
+  Interpreter(this.info, this.io, this.tok)
+      : consts = baseConsts(info.board),
+        fns = (info.prog!['fns'] as Map).cast<String, Node>();
+
+  Future<void> sleep(num ms) async {
+    slept++;
+    _steps = 0;
+    final end = io.millis() + ms;
+    while (true) {
+      if (tok.stop) throw _stop;
+      final left = end - io.millis();
+      if (left <= 0) break;
+      await Future<void>.delayed(Duration(milliseconds: math.min(40, left.ceil())));
+    }
+    if (tok.stop) throw _stop;
+  }
+
+  Future<void> _tick() async {
+    if (tok.stop) throw _stop;
+    if (++_steps > 3000) {
+      _steps = 0;
+      await Future<void>.delayed(Duration.zero);
+      if (tok.stop) throw _stop;
+    }
+  }
+
+  _Ref? _look(String name, Scope sc) {
+    for (final m in sc) {
+      final r = m[name];
+      if (r != null) return r;
+    }
+    return null;
+  }
+
+  bool _isObjType(String t) => t.split(RegExp(r'\s+')).any((w) => w.isNotEmpty && !qualifiers.contains(w) && !primTypes.contains(w));
+
+  bool _isFloat(Node? n, Scope sc) {
+    if (n == null) return false;
+    switch (n['k']) {
+      case 'num':
+        return n['f'] == true;
+      case 'id':
+        final r = _look(n['name'] as String, sc);
+        return r != null && _flt.hasMatch(r.t);
+      case 'cast':
+        return _flt.hasMatch(n['to'] as String);
+      case 'call':
+        final nm = n['name'] as String;
+        return RegExp(r'(distanceCm|temperature|tiltDeg|toFloat)$').hasMatch(nm) || nm == 'line.read';
+      case 'bin':
+        return _isFloat(n['a'] as Node?, sc) || _isFloat(n['b'] as Node?, sc);
+      case 'un':
+        return _isFloat(n['a'] as Node?, sc);
+      case 'tern':
+        return _isFloat(n['a'] as Node?, sc) || _isFloat(n['b'] as Node?, sc);
+    }
+    return false;
+  }
+
+  Future<void> _declare(String type, Node it, Map<String, _Ref> map, Scope sc) async {
+    final c = RegExp(r'\bconst\b').hasMatch(type);
+    final name = it['name'] as String;
+    if (it['arr'] == true) {
+      final list = (it['list'] as List?)?.cast<Node>();
+      final size = it['size'] != null ? _asInt(await ev(it['size'] as Node, sc)) : (list?.length ?? 0);
+      final arr = List<dynamic>.filled(math.max(0, size), type == 'String' ? '' : 0, growable: false);
+      if (list != null) {
+        for (var i = 0; i < list.length && i < arr.length; i++) {
+          arr[i] = coerce(type, await ev(list[i], sc));
+        }
+      }
+      map[name] = _Ref(arr, type, arr: true, c: c);
+      return;
+    }
+    if (_isObjType(type) && !RegExp(r'^(const\s+)?String$').hasMatch(type)) {
+      map[name] = _Ref(<String, dynamic>{'obj': type}, type, c: c);
+      return;
+    }
+    final dynamic v = it['init'] != null ? await ev(it['init'] as Node, sc) : (type == 'String' ? '' : 0);
+    map[name] = _Ref(coerce(type, v), type, c: c);
+  }
+
+  Future<dynamic> _assign(Node t, dynamic v, Scope sc) async {
+    if (t['k'] == 'id') {
+      final r = _look(t['name'] as String, sc);
+      if (r == null) throw RuntimeErr(t['line'] as int?, "'${t['name']}' was not declared in this scope");
+      if (r.c) throw RuntimeErr(t['line'] as int?, "assignment of read-only variable '${t['name']}'");
+      r.v = coerce(r.t, v);
+      return r.v;
+    }
+    if (t['k'] == 'idx') {
+      final arr = await ev(t['a'] as Node, sc);
+      final i = _asInt(await ev(t['i'] as Node, sc));
+      if (arr is! List) throw RuntimeErr(t['line'] as int?, 'subscripted value is not an array');
+      final a = t['a'] as Node;
+      final base = a['k'] == 'id' ? _look(a['name'] as String, sc) : null;
+      if (i >= 0 && i < arr.length) arr[i] = coerce(base?.t, v);
+      return v;
+    }
+    throw RuntimeErr(t['line'] as int?, 'lvalue required');
+  }
+
+  dynamic _arith(String o, dynamic c, dynamic v, bool isF, int? line) {
+    switch (o) {
+      case '+':
+        if (c is String || v is String) return jsStr(c) + jsStr(v);
+        return _asNum(c) + _asNum(v);
+      case '-':
+        return _asNum(c) - _asNum(v);
+      case '*':
+        return _asNum(c) * _asNum(v);
+      case '/':
+        final b = _asNum(v), a = _asNum(c);
+        if (b == 0) {
+          if (isF) return a / b;
+          throw RuntimeErr(line, 'division by zero');
+        }
+        return isF ? a / b : (a / b).truncate();
+      case '%':
+        final b = _asNum(v);
+        return b == 0 ? 0 : _asNum(c).remainder(b);
+      case '|':
+        return _asInt(c) | _asInt(v);
+      case '&':
+        return _asInt(c) & _asInt(v);
+      case '^':
+        return _asInt(c) ^ _asInt(v);
+      case '<<':
+        return _asInt(c) << _asInt(v);
+      case '>>':
+        return _asInt(c) >> _asInt(v);
+    }
+    return 0;
+  }
+
+  int _cmp(dynamic a, dynamic b) {
+    if (a is String && b is String) return a.compareTo(b);
+    return _asNum(a).compareTo(_asNum(b));
+  }
+
+  bool _eq(dynamic a, dynamic b) {
+    if (a is num && b is num) return a == b;
+    if (a is String && b is String) return a == b;
+    if (a is String || b is String) return jsStr(a) == jsStr(b);
+    return identical(a, b);
+  }
+
+  Future<dynamic> ev(Node n, Scope sc) async {
+    await _tick();
+    switch (n['k']) {
+      case 'num':
+        return n['v'];
+      case 'str':
+        return n['v'];
+      case 'id':
+        {
+          final name = n['name'] as String;
+          final r = _look(name, sc);
+          if (r != null) return r.v;
+          final c = consts[name];
+          if (c != null) return c;
+          throw RuntimeErr(n['line'] as int?, "'$name' was not declared in this scope");
+        }
+      case 'un':
+        {
+          final a = await ev(n['a'] as Node, sc);
+          switch (n['op']) {
+            case '-':
+              return -_asNum(a);
+            case '!':
+              return truthy(a) ? 0 : 1;
+            case '~':
+              return ~_asInt(a);
+          }
+          return _asNum(a);
+        }
+      case 'cast':
+        return coerce(n['to'] == 'boolean' ? 'bool' : n['to'] as String, await ev(n['a'] as Node, sc));
+      case 'tern':
+        return truthy(await ev(n['c'] as Node, sc)) ? ev(n['a'] as Node, sc) : ev(n['b'] as Node, sc);
+      case 'bin':
+        {
+          final op = n['op'] as String;
+          if (op == '&&') return (truthy(await ev(n['a'] as Node, sc)) && truthy(await ev(n['b'] as Node, sc))) ? 1 : 0;
+          if (op == '||') return (truthy(await ev(n['a'] as Node, sc)) || truthy(await ev(n['b'] as Node, sc))) ? 1 : 0;
+          final a = await ev(n['a'] as Node, sc), b = await ev(n['b'] as Node, sc);
+          switch (op) {
+            case '<':
+              return _cmp(a, b) < 0 ? 1 : 0;
+            case '>':
+              return _cmp(a, b) > 0 ? 1 : 0;
+            case '<=':
+              return _cmp(a, b) <= 0 ? 1 : 0;
+            case '>=':
+              return _cmp(a, b) >= 0 ? 1 : 0;
+            case '==':
+              return _eq(a, b) ? 1 : 0;
+            case '!=':
+              return _eq(a, b) ? 0 : 1;
+          }
+          final isF = _isFloat(n['a'] as Node?, sc) || _isFloat(n['b'] as Node?, sc);
+          return _arith(op, a, b, isF, n['line'] as int?);
+        }
+      case 'asg':
+        {
+          var v = await ev(n['v'] as Node, sc);
+          final op = n['op'] as String;
+          if (op != '=') {
+            final c = await ev(n['t'] as Node, sc);
+            final o = op.substring(0, op.length - 1);
+            final isF = _isFloat(n['t'] as Node?, sc) || _isFloat(n['v'] as Node?, sc);
+            if (o == '/' && _asNum(v) == 0) {
+              v = 0;
+            } else {
+              v = _arith(o, c, v, isF, n['line'] as int?);
+            }
+          }
+          return _assign(n['t'] as Node, v, sc);
+        }
+      case 'pre':
+        {
+          final v = _asNum(await ev(n['t'] as Node, sc)) + (n['op'] == '++' ? 1 : -1);
+          return _assign(n['t'] as Node, v, sc);
+        }
+      case 'post':
+        {
+          final v = _asNum(await ev(n['t'] as Node, sc));
+          await _assign(n['t'] as Node, v + (n['op'] == '++' ? 1 : -1), sc);
+          return v;
+        }
+      case 'idx':
+        {
+          final a = await ev(n['a'] as Node, sc);
+          final i = _asInt(await ev(n['i'] as Node, sc));
+          if (a is String) return (i >= 0 && i < a.length) ? a.codeUnitAt(i) : 0;
+          if (a is! List) throw RuntimeErr(n['line'] as int?, 'subscripted value is not an array');
+          return (i >= 0 && i < a.length) ? (a[i] ?? 0) : 0;
+        }
+      case 'call':
+        return _call(n, sc);
+    }
+    return 0;
+  }
+
+  String _fmt(dynamic v, dynamic digits, Node? node, Scope sc) {
+    if (v is String) return v;
+    if (v is! num) return '';
+    final isInt = v is int || (v.isFinite && v == v.truncateToDouble());
+    final fl = _isFloat(node, sc) || !isInt;
+    if (fl) {
+      final d = digits == null ? 2 : _asInt(digits).clamp(0, 8).toInt();
+      return v.toDouble().toStringAsFixed(d);
+    }
+    final iv = v.toInt();
+    if (digits == 16) return iv.toRadixString(16).toUpperCase();
+    if (digits == 2) return iv.toRadixString(2);
+    if (digits == 8) return iv.toRadixString(8);
+    return '$iv';
+  }
+
+  Future<dynamic> _call(Node n, Scope sc) async {
+    final nm = n['name'] as String;
+    final argNodes = (n['args'] as List).cast<Node>();
+    final a = <dynamic>[];
+    for (final x in argNodes) {
+      a.add(await ev(x, sc));
+    }
+    dynamic arg(int i) => i < a.length ? a[i] : 0;
+    num argN(int i) => _asNum(arg(i));
+    Node? argNode(int i) => i < argNodes.length ? argNodes[i] : null;
+    dynamic digitsArg() => a.length > 1 ? a[1] : null;
+
+    final user = fns[nm];
+    if (user != null) return callFn(user, a);
+
+    final dot = nm.lastIndexOf('.');
+    final obj = dot > 0 ? nm.substring(0, dot) : null;
+    final meth = dot > 0 ? nm.substring(dot + 1) : nm;
+    if (obj == null) {
+      switch (nm) {
+        case 'pinMode':
+          io.pinMode(_asInt(arg(0)), _asInt(arg(1)));
+          return 0;
+        case 'digitalWrite':
+          io.digitalWrite(_asInt(arg(0)), truthy(arg(1)) ? 1 : 0);
+          return 0;
+        case 'digitalRead':
+          return io.digitalRead(_asInt(arg(0)));
+        case 'analogRead':
+          return io.analogRead();
+        case 'analogWrite':
+          io.digitalWrite(_asInt(arg(0)), argN(1) > 0 ? 1 : 0);
+          return 0;
+        case 'delay':
+          await sleep(math.max(0, argN(0)));
+          return 0;
+        case 'delayMicroseconds':
+        case 'yield':
+        case 'randomSeed':
+        case 'attachInterrupt':
+        case 'detachInterrupt':
+        case 'ledcAttach':
+        case 'ledcWrite':
+          return 0;
+        case 'millis':
+          return io.millis();
+        case 'micros':
+          return io.millis() * 1000;
+        case 'random':
+          if (a.length > 1) return (argN(0) + _rnd.nextDouble() * (argN(1) - argN(0))).floor();
+          return (_rnd.nextDouble() * argN(0)).floor();
+        case 'map':
+          if (argN(2) == argN(1)) return argN(3);
+          return ((argN(0) - argN(1)) * (argN(4) - argN(3)) / (argN(2) - argN(1)) + argN(3)).truncate();
+        case 'constrain':
+          return math.min(math.max(argN(0), argN(1)), argN(2));
+        case 'abs':
+          return argN(0).abs();
+        case 'min':
+          return math.min(argN(0), argN(1));
+        case 'max':
+          return math.max(argN(0), argN(1));
+        case 'sqrt':
+          return math.sqrt(argN(0));
+        case 'pow':
+          return math.pow(argN(0), argN(1));
+        case 'sq':
+          return argN(0) * argN(0);
+        case 'sin':
+          return math.sin(argN(0));
+        case 'cos':
+          return math.cos(argN(0));
+        case 'floor':
+          return argN(0).floor();
+        case 'ceil':
+          return argN(0).ceil();
+        case 'round':
+          return argN(0).round();
+        case 'bitRead':
+          return (_asInt(arg(0)) >> _asInt(arg(1))) & 1;
+        case 'tone':
+          io.tone(argN(1), a.length > 2 ? argN(2) : null);
+          return 0;
+        case 'noTone':
+          io.noTone();
+          return 0;
+        case 'rgbLedWrite':
+        case 'neopixelWrite':
+          io.rgb(_asInt(arg(1)), _asInt(arg(2)), _asInt(arg(3)));
+          return 0;
+        case 'String':
+          return a.isNotEmpty ? _fmt(a[0], digitsArg(), argNode(0), sc) : '';
+      }
+      if (castTypes.contains(nm)) return coerce(nm, arg(0));
+      io.skipped(nm);
+      return 0;
+    }
+    if (obj == 'Serial') {
+      switch (meth) {
+        case 'begin':
+        case 'flush':
+        case 'setTimeout':
+          return 0;
+        case 'print':
+          io.serialWrite(_fmt(arg(0), digitsArg(), argNode(0), sc));
+          return 0;
+        case 'println':
+          if (a.isNotEmpty) io.serialWrite(_fmt(a[0], digitsArg(), argNode(0), sc));
+          io.serialFlushLine();
+          return 0;
+        case 'write':
+          final v = arg(0);
+          io.serialWrite(v is num ? String.fromCharCode(v.toInt()) : jsStr(v));
+          return 0;
+        case 'available':
+          io.markReadsSerial();
+          return io.inQ.length;
+        case 'read':
+          io.markReadsSerial();
+          if (io.inQ.isEmpty) return -1;
+          final c = io.inQ.codeUnitAt(0);
+          io.inQ = io.inQ.substring(1);
+          return c;
+        case 'peek':
+          return io.inQ.isEmpty ? -1 : io.inQ.codeUnitAt(0);
+        case 'readString':
+          io.markReadsSerial();
+          final s = io.inQ;
+          io.inQ = '';
+          return s;
+        case 'readStringUntil':
+          io.markReadsSerial();
+          final ch = String.fromCharCode(_asInt(arg(0)));
+          final q = io.inQ;
+          final k = q.indexOf(ch);
+          if (k < 0) {
+            io.inQ = '';
+            return q;
+          }
+          io.inQ = q.substring(k + 1);
+          return q.substring(0, k);
+        case 'parseInt':
+          io.markReadsSerial();
+          final m = RegExp(r'-?\d+').firstMatch(io.inQ);
+          if (m == null) {
+            io.inQ = '';
+            return 0;
+          }
+          io.inQ = io.inQ.substring(m.end);
+          return int.parse(m.group(0)!);
+      }
+      io.skipped(nm);
+      return 0;
+    }
+    final r = _look(obj, sc);
+    if (r == null) throw RuntimeErr(n['line'] as int?, "'$obj' was not declared in this scope");
+    final rv = r.v;
+    if (rv is String) {
+      switch (meth) {
+        case 'length':
+          return rv.length;
+        case 'trim':
+          r.v = rv.trim();
+          return 0;
+        case 'toInt':
+          return int.tryParse(RegExp(r'^\s*-?\d+').stringMatch(rv)?.trim() ?? '') ?? 0;
+        case 'toFloat':
+          return double.tryParse(RegExp(r'^\s*-?\d*\.?\d+').stringMatch(rv)?.trim() ?? '') ?? 0.0;
+        case 'equals':
+          return rv == jsStr(arg(0)) ? 1 : 0;
+        case 'toUpperCase':
+          r.v = rv.toUpperCase();
+          return 0;
+        case 'toLowerCase':
+          r.v = rv.toLowerCase();
+          return 0;
+        case 'indexOf':
+          final x = arg(0);
+          return rv.indexOf(x is num ? String.fromCharCode(x.toInt()) : jsStr(x));
+        case 'startsWith':
+          return rv.startsWith(jsStr(arg(0))) ? 1 : 0;
+        case 'endsWith':
+          return rv.endsWith(jsStr(arg(0))) ? 1 : 0;
+        case 'charAt':
+          final i = _asInt(arg(0));
+          return (i >= 0 && i < rv.length) ? rv.codeUnitAt(i) : 0;
+        case 'substring':
+          final s = _asInt(arg(0)).clamp(0, rv.length).toInt();
+          final e = a.length > 1 ? _asInt(arg(1)).clamp(s, rv.length).toInt() : rv.length;
+          return rv.substring(s, e);
+      }
+      return 0;
+    }
+    final t = r.t;
+    switch (meth) {
+      case 'begin':
+      case 'attach':
+      case 'detach':
+      case 'init':
+      case 'setBrightness':
+      case 'show':
+      case 'clear':
+      case 'backlight':
+        return 0;
+      case 'drive':
+        io.motors(argN(0), argN(1));
+        return 0;
+      case 'stop':
+        io.motors(0, 0);
+        return 0;
+      case 'distanceCm':
+      case 'ping_cm':
+        return io.distance();
+      case 'read':
+        if (t.contains('LineSensor')) return io.lineRead();
+        return 0;
+      case 'temperature':
+        return io.temperature();
+      case 'tiltDeg':
+        return io.tilt();
+      case 'write':
+        if (t.contains('Servo')) {
+          io.servo(argN(0));
+          return 0;
+        }
+        break;
+    }
+    io.skipped(nm);
+    return 0;
+  }
+
+  Future<void> ex(Node n, Scope sc) async {
+    switch (n['k']) {
+      case 'nop':
+        return;
+      case 'blk':
+        {
+          final inner = <Map<String, _Ref>>[{}, ...sc];
+          for (final s in (n['body'] as List).cast<Node>()) {
+            await ex(s, inner);
+          }
+          return;
+        }
+      case 'decl':
+        for (final it in (n['items'] as List).cast<Node>()) {
+          await _declare(n['type'] as String, it, sc[0], sc);
+        }
+        return;
+      case 'ex':
+        await ev(n['e'] as Node, sc);
+        return;
+      case 'if':
+        if (truthy(await ev(n['c'] as Node, sc))) {
+          await ex(n['a'] as Node, sc);
+        } else if (n['b'] != null) {
+          await ex(n['b'] as Node, sc);
+        }
+        return;
+      case 'while':
+        while (truthy(await ev(n['c'] as Node, sc))) {
+          try {
+            await ex(n['body'] as Node, sc);
+          } on _Brk {
+            break;
+          } on _Cont {
+            continue;
+          }
+        }
+        return;
+      case 'do':
+        do {
+          try {
+            await ex(n['body'] as Node, sc);
+          } on _Brk {
+            break;
+          } on _Cont {
+            // fall through to the condition
+          }
+        } while (truthy(await ev(n['c'] as Node, sc)));
+        return;
+      case 'for':
+        {
+          final s2 = <Map<String, _Ref>>[{}, ...sc];
+          final init = n['init'] as Node?;
+          if (init != null) {
+            if (init['k'] == 'decl') {
+              await ex(init, s2);
+            } else {
+              await ev(init['e'] as Node, s2);
+            }
+          }
+          final c = n['c'] as Node?, step = n['step'] as Node?;
+          while (c == null || truthy(await ev(c, s2))) {
+            try {
+              await ex(n['body'] as Node, s2);
+            } on _Brk {
+              break;
+            } on _Cont {
+              // next iteration
+            }
+            if (step != null) await ev(step, s2);
+          }
+          return;
+        }
+      case 'ret':
+        throw _Ret(n['e'] != null ? await ev(n['e'] as Node, sc) : null);
+      case 'brk':
+        throw _brk;
+      case 'cont':
+        throw _cont;
+    }
+  }
+
+  Future<dynamic> callFn(Node fn, List<dynamic> args) async {
+    final m = <String, _Ref>{};
+    final params = (fn['params'] as List).cast<Node>();
+    for (var i = 0; i < params.length; i++) {
+      final t = params[i]['type'] as String;
+      m[params[i]['name'] as String] = _Ref(coerce(t, i < args.length ? args[i] : 0), t);
+    }
+    try {
+      await ex(fn['body'] as Node, [m, g]);
+    } on _Ret catch (r) {
+      return coerce(fn['type'] as String, r.value);
+    }
+    return 0;
+  }
+
+  Future<void> init() async {
+    for (final e in info.defines.entries) {
+      if (e.value.v.isEmpty) continue;
+      try {
+        final node = Parser(lex(e.value.v)).soloExpr();
+        final v = await ev(node, [g]);
+        if (v is num) consts[e.key] = v;
+      } on _Stop {
+        rethrow;
+      } catch (_) {
+        // A #define that isn't a plain value is ignored by the simulator.
+      }
+    }
+    for (final d in (info.prog!['globals'] as List).cast<Node>()) {
+      for (final it in (d['items'] as List).cast<Node>()) {
+        await _declare(d['type'] as String, it, g, [g]);
+      }
+    }
+  }
+
+  /// Runs setup() once, then loop() until stopped. Returns null when stopped
+  /// normally, or the runtime error that ended the sketch.
+  Future<RuntimeErr?> run() async {
+    try {
+      await init();
+      await callFn(fns['setup']!, const []);
+      while (!tok.stop) {
+        final before = slept;
+        await callFn(fns['loop']!, const []);
+        if (slept == before) await sleep(16);
+      }
+    } on _Stop {
+      return null;
+    } on RuntimeErr catch (e) {
+      if (tok.stop) return null;
+      return e;
+    } on _Brk {
+      return RuntimeErr(null, 'break statement not within loop');
+    } on _Cont {
+      return RuntimeErr(null, 'continue statement not within a loop');
+    } catch (e) {
+      if (tok.stop) return null;
+      return RuntimeErr(null, '$e');
+    }
+    return null;
+  }
+}
+
+/// Board facts used by the simulator.
+BoardDef boardFor(String id) => kBoards[id] ?? kBoards['v2']!;
