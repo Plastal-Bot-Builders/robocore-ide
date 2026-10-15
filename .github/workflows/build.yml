@@ -42,7 +42,25 @@ jobs:
           cat analyze.txt
           ! grep -q "^ERROR|" analyze.txt
       - name: Test
-        run: flutter test --reporter github
+        run: |
+          set +e
+          flutter test --machine > test.json
+          code=$?
+          python3 - <<'PY'
+          import json
+          names = {}
+          for line in open('test.json'):
+              try:
+                  e = json.loads(line)
+              except Exception:
+                  continue
+              if e.get('type') == 'testStart':
+                  names[e['test']['id']] = e['test']['name']
+              if e.get('type') == 'error':
+                  msg = (e.get('error', '') + ' | ' + e.get('stackTrace', '')[:600]).replace('\n', ' ').replace('%', '%25')
+                  print(f"::error title={names.get(e['testID'], 'test')}::{msg[:1500]}")
+          PY
+          exit $code
 
   web:
     name: Web
