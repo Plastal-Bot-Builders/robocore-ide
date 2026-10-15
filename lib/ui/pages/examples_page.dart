@@ -46,14 +46,14 @@ class ExampleCard extends StatelessWidget {
       onTap: () => s.openExample(e.id),
       tooltip: 'Open a copy of ${e.name}',
       builder: (context, h) => Container(
-        height: 156,
+        constraints: const BoxConstraints(minHeight: 156),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: c.surface,
           border: Border.all(color: h ? c.faint : c.line),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
               width: 40,
@@ -69,7 +69,7 @@ class ExampleCard extends StatelessWidget {
           Text(e.name, style: tBody(c, size: 15, w: FontWeight.w700, height: 20 / 15), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           Text(e.desc, style: tBody(c, size: 13, color: c.muted, height: 18 / 13), maxLines: 2, overflow: TextOverflow.ellipsis),
-          const Spacer(),
+          const SizedBox(height: 10),
           Text('${e.blocks != null ? 'Blocks + Code' : 'Code'} · ${e.boards}', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
         ]),
       ),
