@@ -407,14 +407,16 @@ class Pills extends StatelessWidget {
               return Container(
                 height: 30,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: on ? c.ink : (h ? c.sunk : Colors.transparent),
                   border: Border.all(color: on ? c.ink : c.line),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(it.$2,
-                    style: TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: on ? c.bg : c.ink)),
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(it.$2,
+                      style: TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: on ? c.bg : c.ink)),
+                ),
               );
             },
           ),
@@ -433,9 +435,11 @@ class Badge2 extends StatelessWidget {
     return Container(
       height: 20,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      alignment: Alignment.center,
       decoration: BoxDecoration(color: bg ?? c.sunk, borderRadius: BorderRadius.circular(4)),
-      child: Text(text, style: TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w500, color: fg ?? c.ink)),
+      child: Center(
+        widthFactor: 1,
+        child: Text(text, style: TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w500, color: fg ?? c.ink)),
+      ),
     );
   }
 }
@@ -456,17 +460,22 @@ class LinkText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
+    final arrow = text.endsWith(' →');
+    final label = arrow ? text.substring(0, text.length - 2) : text;
     return Hover(
       onTap: onTap,
-      builder: (context, h) => Text(text,
-          style: TextStyle(
-            fontFamily: fBody,
-            fontSize: 13,
-            height: 16 / 13,
-            fontWeight: FontWeight.w600,
-            color: c.ink,
-            decoration: h ? TextDecoration.underline : TextDecoration.none,
-          )),
+      builder: (context, h) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(label,
+            style: TextStyle(
+              fontFamily: fBody,
+              fontSize: 13,
+              height: 16 / 13,
+              fontWeight: FontWeight.w600,
+              color: c.ink,
+              decoration: h ? TextDecoration.underline : TextDecoration.none,
+            )),
+        if (arrow) ...[const SizedBox(width: 4), RcIcon('arrow', size: 14, color: c.ink)],
+      ]),
     );
   }
 }

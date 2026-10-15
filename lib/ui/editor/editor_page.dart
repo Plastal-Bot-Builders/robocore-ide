@@ -292,7 +292,7 @@ class LiveBoard extends StatelessWidget {
         final io = <String>[
           if (sim.motorSpeeds[0] != 0 || sim.motorSpeeds[1] != 0) 'motors ${sim.motorSpeeds[0]} / ${sim.motorSpeeds[1]}',
           if (sim.servoAngle != null) 'servo ${sim.servoAngle}°',
-          if (sim.toneHz != null) '♪ ${sim.toneHz} Hz',
+          if (sim.toneHz != null) 'tone ${sim.toneHz} Hz',
           for (final e in sim.pins.entries) 'pin ${e.key} ${e.value != 0 ? 'HIGH' : 'LOW'}',
         ];
         Widget lamp(Color? on, String label) => Row(mainAxisSize: MainAxisSize.min, children: [

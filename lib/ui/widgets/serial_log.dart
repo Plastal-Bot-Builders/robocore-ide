@@ -67,7 +67,10 @@ class _SerialLogState extends State<SerialLog> {
     switch (e.dir) {
       case 'in':
         body = TextSpan(children: [
-          TextSpan(text: '→ ', style: base.copyWith(color: c.textBrand)),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(padding: const EdgeInsets.only(right: 6), child: RcIcon('arrow', size: 12, color: c.textBrand)),
+          ),
           TextSpan(text: e.text, style: base.copyWith(color: c.ink, fontWeight: FontWeight.w700)),
         ]);
         break;
