@@ -125,7 +125,7 @@ class HomePage extends StatelessWidget {
     );
 
     final recentSec = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SectionHead('Recent projects', link: 'All projects →', onLink: () => s.go(View.projects)),
+      SectionHead('Recent projects', link: 'All projects →', onLink: () => s.go(Screen.projects)),
       if (recent.isEmpty)
         Text('No projects yet. Start one with New project.', style: tBody(c, color: c.muted))
       else
@@ -144,7 +144,7 @@ class HomePage extends StatelessWidget {
     ]);
 
     final tiles = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SectionHead('Start from a template', link: 'All examples →', onLink: () => s.go(View.examples)),
+      SectionHead('Start from a template', link: 'All examples →', onLink: () => s.go(Screen.examples)),
       LayoutBuilder(builder: (context, k) {
         final cols = k.maxWidth >= 900 ? 4 : (k.maxWidth >= 480 ? 2 : 1);
         final w = (k.maxWidth - 16 * (cols - 1)) / cols;

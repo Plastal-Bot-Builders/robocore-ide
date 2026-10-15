@@ -159,7 +159,7 @@ class BoardSummary extends StatelessWidget {
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: Align(alignment: Alignment.centerLeft, child: LinkText('Board setup →', onTap: () => s.go(View.board))),
+        child: Align(alignment: Alignment.centerLeft, child: LinkText('Board setup →', onTap: () => s.go(Screen.board))),
       ),
       if (extra != null) extra!,
     ]);

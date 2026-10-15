@@ -12,7 +12,7 @@ import '../engine/compiler.dart';
 import 'models.dart';
 import 'sim_board.dart';
 
-enum View { home, projects, examples, libraries, board, serial, settings, editor }
+enum Screen { home, projects, examples, libraries, board, serial, settings, editor }
 
 class Verified {
   final int size, pct, rp;
@@ -56,7 +56,7 @@ class AppState extends ChangeNotifier {
   List<Project> projects = [];
 
   // ---- session ----
-  View view = View.home;
+  Screen view = Screen.home;
   String? pid;
   int file = 0;
   final List<int> closedTabs = [];
@@ -98,7 +98,7 @@ class AppState extends ChangeNotifier {
   }
 
   List<Project> get sortedProjects => [...projects]..sort((a, b) => b.updated.compareTo(a.updated));
-  String get boardId => (view == View.editor && cur != null) ? cur!.board : board;
+  String get boardId => (view == Screen.editor && cur != null) ? cur!.board : board;
   Set<String> get installedLibs => {for (final e in libs.entries) if (e.value) e.key};
 
   // ---------- persistence ----------
@@ -192,14 +192,14 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- navigation ----------
-  void go(View v) {
+  void go(Screen v) {
     view = v;
-    if (v != View.board) conn = null;
-    if (v == View.board) bsel = null;
-    if (v == View.editor && cur == null) {
+    if (v != Screen.board) conn = null;
+    if (v == Screen.board) bsel = null;
+    if (v == Screen.editor && cur == null) {
       final s = sortedProjects;
       if (s.isEmpty) {
-        view = View.home;
+        view = Screen.home;
       } else {
         pid = s.first.id;
       }
@@ -228,7 +228,7 @@ class AppState extends ChangeNotifier {
     }
     pid = id;
     p.syncCode();
-    go(View.editor);
+    go(Screen.editor);
   }
 
   void openExample(String id) {
@@ -296,7 +296,7 @@ class AppState extends ChangeNotifier {
     sim.stop();
     pid = null;
     showToast('Deleted $name.');
-    go(View.projects);
+    go(Screen.projects);
   }
 
   // ---------- saving ----------
@@ -335,7 +335,7 @@ class AppState extends ChangeNotifier {
   // ---------- board / connection ----------
   void pickBoard(String id) {
     final p = cur;
-    if (view == View.editor && p != null) {
+    if (view == Screen.editor && p != null) {
       p.board = id;
       verified = null;
       problems = [];
@@ -823,7 +823,7 @@ class AppState extends ChangeNotifier {
     pid = null;
     lastRun = null;
     showToast('Sample projects restored.');
-    go(View.home);
+    go(Screen.home);
   }
 
   void setSerialOption({bool? ts, bool? scroll, String? ending}) {

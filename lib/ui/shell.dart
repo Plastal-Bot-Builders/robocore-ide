@@ -92,37 +92,37 @@ class _ShellState extends State<Shell> {
 
   void _save(AppState s) {
     final p = s.cur;
-    if (s.view == View.editor && p != null) {
+    if (s.view == Screen.editor && p != null) {
       s.saveNow(p);
       s.showToast('Saved.');
     }
   }
 
   void _verify(AppState s) {
-    if (s.view == View.editor) s.verify();
+    if (s.view == Screen.editor) s.verify();
   }
 
   void _upload(AppState s) {
-    if (s.view == View.editor) s.upload();
+    if (s.view == Screen.editor) s.upload();
   }
 
   Widget _view(AppState s, bool phone) {
     switch (s.view) {
-      case View.projects:
+      case Screen.projects:
         return const ProjectsPage();
-      case View.examples:
+      case Screen.examples:
         return const ExamplesPage();
-      case View.libraries:
+      case Screen.libraries:
         return const LibrariesPage();
-      case View.board:
+      case Screen.board:
         return const BoardPage();
-      case View.serial:
+      case Screen.serial:
         return const SerialPage();
-      case View.settings:
+      case Screen.settings:
         return const SettingsPage();
-      case View.editor:
+      case Screen.editor:
         return s.cur == null ? const HomePage() : const EditorPage();
-      case View.home:
+      case Screen.home:
         return const HomePage();
     }
   }
@@ -167,7 +167,7 @@ class TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = RC.of(context);
-    final p = s.view == View.editor ? s.cur : null;
+    final p = s.view == Screen.editor ? s.cur : null;
     final narrow = MediaQuery.sizeOf(context).width < 1100;
     return Container(
       height: 56,
@@ -180,7 +180,7 @@ class TopBar extends StatelessWidget {
             if (phone) ...[IconBtn('menu', onTap: onMenu, tip: 'Open menu', color: kNavy, iconSize: 20), const SizedBox(width: 4)],
             if (!(phone && p != null))
               Hover(
-                onTap: () => s.go(View.home),
+                onTap: () => s.go(Screen.home),
                 tooltip: 'RoboCore IDE home',
                 builder: (context, h) => Row(children: [
                   Image.asset('assets/images/wordmark.png', width: phone ? 96 : 126, filterQuality: FilterQuality.medium),
@@ -219,7 +219,7 @@ class TopBar extends StatelessWidget {
             if (!phone) ...[
               const SizedBox(width: 12),
               Hover(
-                onTap: () => s.go(View.settings),
+                onTap: () => s.go(Screen.settings),
                 tooltip: 'Settings',
                 builder: (context, h) => Container(
                   width: 32,
@@ -471,7 +471,7 @@ class BoardMenu extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: LinkText('Board setup →', onTap: () {
                 onDone();
-                s.go(View.board);
+                s.go(Screen.board);
               }),
             ),
           ]),
@@ -596,13 +596,13 @@ class _SearchBoxState extends State<SearchBox> {
 
 // ---------------------------------------------------------------- sidebar
 const _nav = [
-  (View.home, 'Home', 'home'),
-  (View.projects, 'Projects', 'folder'),
-  (View.libraries, 'Libraries', 'libs'),
-  (View.examples, 'Examples', 'light'),
+  (Screen.home, 'Home', 'home'),
+  (Screen.projects, 'Projects', 'folder'),
+  (Screen.libraries, 'Libraries', 'libs'),
+  (Screen.examples, 'Examples', 'light'),
   null,
-  (View.board, 'Board Setup', 'chip'),
-  (View.serial, 'Serial Monitor', 'term'),
+  (Screen.board, 'Board Setup', 'chip'),
+  (Screen.serial, 'Serial Monitor', 'term'),
 ];
 
 class SideBar extends StatelessWidget {
@@ -615,7 +615,7 @@ class SideBar extends StatelessWidget {
     final s = AppScope.of(context);
     final c = RC.of(context);
     final rp = s.cur ?? (s.sortedProjects.isEmpty ? null : s.sortedProjects.first);
-    void nav(View v) {
+    void nav(Screen v) {
       onNavigate?.call();
       s.go(v);
     }
@@ -637,8 +637,8 @@ class SideBar extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 10),
               padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 10, vertical: 8),
               decoration: BoxDecoration(
-                color: s.view == View.editor ? c.surface : (h ? c.sunk : Colors.transparent),
-                border: Border.all(color: s.view == View.editor ? c.ink : c.line),
+                color: s.view == Screen.editor ? c.surface : (h ? c.sunk : Colors.transparent),
+                border: Border.all(color: s.view == Screen.editor ? c.ink : c.line),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
@@ -665,11 +665,11 @@ class SideBar extends StatelessWidget {
               label: n.$2,
               on: s.view == n.$1,
               collapsed: collapsed,
-              dot: n.$1 == View.serial && s.sim.running,
+              dot: n.$1 == Screen.serial && s.sim.running,
               onTap: () => nav(n.$1),
             ),
         const Spacer(),
-        _NavItem(icon: 'gear', label: 'Settings', on: s.view == View.settings, collapsed: collapsed, onTap: () => nav(View.settings)),
+        _NavItem(icon: 'gear', label: 'Settings', on: s.view == Screen.settings, collapsed: collapsed, onTap: () => nav(Screen.settings)),
         const SizedBox(height: 2),
         Container(
           padding: EdgeInsets.only(top: 10, left: collapsed ? 0 : 12, right: collapsed ? 0 : 4),
@@ -774,7 +774,7 @@ class StatusBar extends StatelessWidget {
         ),
         if (!phone)
           Text('${b.name} · ${s.connected ? s.port : 'not connected'} · ${s.baud} baud', style: tCaption(c, color: c.faint)),
-        if (s.view == View.editor && p != null && p.mode == 'code') ...[
+        if (s.view == Screen.editor && p != null && p.mode == 'code') ...[
           const SizedBox(width: 16),
           Text(s.cursorPos, style: tCaption(c, color: c.faint)),
         ],
@@ -784,23 +784,23 @@ class StatusBar extends StatelessWidget {
 
   String _detail(AppState s, Project? p) {
     switch (s.view) {
-      case View.home:
-      case View.projects:
+      case Screen.home:
+      case Screen.projects:
         final n = s.projects.length;
         return '$n project${n == 1 ? '' : 's'} · saved on this device';
-      case View.examples:
+      case Screen.examples:
         return '${kExamples.length} examples';
-      case View.libraries:
+      case Screen.libraries:
         final inc = kLibs.where((l) => l.kind == 'included').length;
         final ins = kLibs.where((l) => l.kind == 'opt' && (s.libs[l.id] ?? false)).length;
         return '$inc included · $ins installed';
-      case View.board:
+      case Screen.board:
         return 'Board package 1.0 · esp32 core 3.0.7';
-      case View.serial:
+      case Screen.serial:
         return '${s.log.length} lines received';
-      case View.settings:
+      case Screen.settings:
         return 'Saved on this device';
-      case View.editor:
+      case Screen.editor:
         if (p == null) return '';
         final v = s.verified;
         if (v != null) return '${fmtN(v.size)} bytes (${v.pct}%) · RAM ${v.rp}%';
