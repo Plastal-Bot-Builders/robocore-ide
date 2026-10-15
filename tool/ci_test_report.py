@@ -20,3 +20,17 @@ for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
     elif t == 'print' and 'EXCEPTION' in (e.get('message') or ''):
         m = e['message'].replace('%', '%25').replace('\n', ' ¶ ')
         print(f"::error title=exception::{m[:2000]}")
+
+# Debug summary: counts of event types and any non-JSON output.
+from collections import Counter
+types = Counter()
+other = []
+for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
+    try:
+        types[json.loads(line).get('type')] += 1
+    except Exception:
+        if line.strip():
+            other.append(line.strip())
+print(f"::notice title=events::{dict(types)}")
+for o in other[:8]:
+    print(f"::notice title=output::{o[:900].replace('%', '%25')}")
