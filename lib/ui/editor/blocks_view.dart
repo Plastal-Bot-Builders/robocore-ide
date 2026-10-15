@@ -33,9 +33,9 @@ Color _ink(String t) => (kBlockTypes[t]?.isControl ?? false) ? kNavy : kCream;
 
 /// Puzzle-piece outline: notch cut into the top, tab hanging off the bottom.
 class _BlockPainter extends CustomPainter {
-  _BlockPainter(this.fill, {this.attached = false, this.highlight = false});
+  _BlockPainter(this.fill, {this.attached = false});
   final Color fill;
-  final bool attached, highlight;
+  final bool attached;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -68,7 +68,7 @@ class _BlockPainter extends CustomPainter {
         ..lineTo(0, 0);
     }
     p.close();
-    canvas.drawPath(p, Paint()..color = highlight ? Color.lerp(fill, Colors.white, .2)! : fill);
+    canvas.drawPath(p, Paint()..color = fill);
     canvas.drawPath(
         p,
         Paint()
@@ -78,7 +78,7 @@ class _BlockPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_BlockPainter o) => o.fill != fill || o.attached != attached || o.highlight != highlight;
+  bool shouldRepaint(_BlockPainter o) => o.fill != fill || o.attached != attached;
 }
 
 class BlocksView extends StatelessWidget {

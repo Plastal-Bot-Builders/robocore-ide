@@ -2,7 +2,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:robocore_ide/data/catalog.dart';
 import 'package:robocore_ide/engine/compiler.dart';
-import 'package:robocore_ide/engine/interpreter.dart';
 import 'package:robocore_ide/state/models.dart';
 import 'package:robocore_ide/state/sim_board.dart';
 
