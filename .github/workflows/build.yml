@@ -62,6 +62,8 @@ jobs:
     name: Web
     needs: check
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -69,10 +71,16 @@ jobs:
           channel: stable
           cache: true
       - run: ${{ env.CREATE }}
-      - run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+      - run: flutter build web --release --no-web-resources-cdn --base-href "/${{ github.event.repository.name }}/"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
+      - name: Save the web build to the web-build branch
+        if: github.event_name != 'pull_request'
+        run: |
+          cd build/web && git init -q && git checkout -q -b web-build && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "web ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" web-build
 
   pages:
     name: Publish web app
