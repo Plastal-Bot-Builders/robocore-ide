@@ -74,9 +74,10 @@ class Parser {
     return _groups(toks).map((g) {
       final ids = g.where((x) => x.k == 'id').toList();
       if (ids.length < 2) throw CompileError(line, 'expected parameter name');
+      final ptr = g.any((x) => x.k == 'op' && x.v == '*');
       return <String, dynamic>{
         'name': ids.last.s,
-        'type': ids.sublist(0, ids.length - 1).map((x) => x.s).join(' '),
+        'type': ids.sublist(0, ids.length - 1).map((x) => x.s).join(' ') + (ptr ? ' *' : ''),
       };
     }).toList();
   }
@@ -152,7 +153,9 @@ class Parser {
   }
 
   bool isDecl() =>
-      peek().k == 'id' && peek(1).k == 'id' && !_notType.contains(peek().v) && !_notType.contains(peek(1).v);
+      (peek().k == 'id' && peek(1).k == 'id' && !_notType.contains(peek().v) && !_notType.contains(peek(1).v)) ||
+      // char *name = ...
+      (peek().k == 'id' && castTypes.contains(peek().v) && isTok('*', 1) && peek(2).k == 'id');
 
   Node stmt() {
     final x = peek();
@@ -250,8 +253,12 @@ class Parser {
 
   Node decl() {
     final types = <String>[];
-    while (peek().k == 'id' && peek(1).k == 'id') {
+    while (peek().k == 'id' && (peek(1).k == 'id' || (isTok('*', 1) && peek(2).k == 'id'))) {
       types.add(next().s);
+      if (isTok('*')) {
+        next();
+        types.add('*');
+      }
     }
     final type = types.join(' ');
     final items = <Node>[];
@@ -384,7 +391,8 @@ class Parser {
         return {'k': 'cast', 'to': x.s, 'a': a};
       }
       var name = x.s;
-      while (isTok('.') && peek(1).k == 'id') {
+      // obj.member and Namespace::member (RoboCore::batteryVolts) are both kept as "a.b".
+      while ((isTok('.') || isTok('::')) && peek(1).k == 'id') {
         next();
         name += '.${next().s}';
       }

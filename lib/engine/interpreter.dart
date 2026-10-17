@@ -60,6 +60,9 @@ abstract class BoardIO {
   num lineRead();
   num temperature();
   num tilt();
+
+  /// Battery pack voltage (RoboCore::batteryVolts()).
+  num batteryVolts();
   void serialWrite(String s);
   void serialFlushLine();
   void skipped(String name);
@@ -100,6 +103,7 @@ int _asInt(dynamic v) {
 
 dynamic coerce(String? t, dynamic v) {
   if (t == null || t.isEmpty) return v;
+  if (t.contains('*')) return v; // const char *name: keep the text
   if (t == 'String' || t == 'const String') return v is num ? jsStr(v) : jsStr(v ?? '');
   if (_boolT.hasMatch(t)) return truthy(v) ? 1 : 0;
   if (_flt.hasMatch(t)) return _asNum(v).toDouble();
@@ -120,6 +124,10 @@ class _Ref {
 typedef Scope = List<Map<String, _Ref>>;
 
 class Interpreter {
+  /// How deep function calls may nest before the sketch is stopped (a real ESP32 would crash
+  /// with a stack overflow; the preview stops cleanly and says why).
+  static const maxCallDepth = 200;
+
   final CompileResult info;
   final BoardIO io;
   final StopToken tok;
@@ -129,9 +137,10 @@ class Interpreter {
   final math.Random _rnd = math.Random();
   int slept = 0;
   int _steps = 0;
+  int _depth = 0;
 
   Interpreter(this.info, this.io, this.tok)
-      : consts = baseConsts(info.board),
+      : consts = {...baseConsts(info.board), ...info.extraConsts},
         fns = (info.prog!['fns'] as Map).cast<String, Node>();
 
   Future<void> sleep(num ms) async {
@@ -164,7 +173,9 @@ class Interpreter {
     return null;
   }
 
-  bool _isObjType(String t) => t.split(RegExp(r'\s+')).any((w) => w.isNotEmpty && !qualifiers.contains(w) && !primTypes.contains(w));
+  bool _isObjType(String t) => t
+      .split(RegExp(r'\s+'))
+      .any((w) => w.isNotEmpty && w != '*' && w != '&' && !qualifiers.contains(w) && !primTypes.contains(w));
 
   bool _isFloat(Node? n, Scope sc) {
     if (n == null) return false;
@@ -178,7 +189,7 @@ class Interpreter {
         return _flt.hasMatch(n['to'] as String);
       case 'call':
         final nm = n['name'] as String;
-        return RegExp(r'(distanceCm|temperature|tiltDeg|toFloat)$').hasMatch(nm) || nm == 'line.read';
+        return RegExp(r'(distanceCm|temperature|tiltDeg|toFloat|batteryVolts|accel[XYZ]|gyro[XYZ])$').hasMatch(nm) || nm == 'line.read';
       case 'bin':
         return _isFloat(n['a'] as Node?, sc) || _isFloat(n['b'] as Node?, sc);
       case 'un':
@@ -487,6 +498,7 @@ class Interpreter {
       io.skipped(nm);
       return 0;
     }
+    if (obj == 'RoboCore') return _roboCore(nm, meth, a);
     if (obj == 'Serial') {
       switch (meth) {
         case 'begin':
@@ -586,6 +598,7 @@ class Interpreter {
     final t = r.t;
     switch (meth) {
       case 'begin':
+        return 1; // imu.begin(), sonar.begin() ... report success
       case 'attach':
       case 'detach':
       case 'init':
@@ -616,6 +629,38 @@ class Interpreter {
           return 0;
         }
         break;
+    }
+    io.skipped(nm);
+    return 0;
+  }
+
+  /// The RoboCore:: helpers from RoboCore.h.
+  Future<dynamic> _roboCore(String nm, String meth, List<dynamic> a) async {
+    num argN(int i, num def) => i < a.length ? _asNum(a[i]) : def;
+    switch (meth) {
+      case 'batteryVolts':
+        return io.batteryVolts();
+      case 'userPressed':
+        return io.userPressed ? 1 : 0;
+      case 'waitForUser':
+        final timeout = argN(0, 0);
+        final start = io.millis();
+        while (!io.userPressed) {
+          if (timeout > 0 && io.millis() - start >= timeout) return 0;
+          await sleep(5);
+        }
+        await sleep(20);
+        while (io.userPressed) {
+          await sleep(5);
+        }
+        await sleep(20);
+        return 1;
+      case 'beep':
+        io.tone(argN(0, 2000), argN(1, 80));
+        return 0;
+      case 'rgb':
+        io.rgb(_asInt(argN(0, 0)), _asInt(argN(1, 0)), _asInt(argN(2, 0)));
+        return 0;
     }
     io.skipped(nm);
     return 0;
@@ -704,16 +749,23 @@ class Interpreter {
   }
 
   Future<dynamic> callFn(Node fn, List<dynamic> args) async {
+    if (_depth >= maxCallDepth) {
+      throw RuntimeErr(fn['line'] as int?,
+          "stack overflow: calls to '${fn['name']}()' nested more than $maxCallDepth deep. A function that calls itself needs a way to stop.");
+    }
     final m = <String, _Ref>{};
     final params = (fn['params'] as List).cast<Node>();
     for (var i = 0; i < params.length; i++) {
       final t = params[i]['type'] as String;
       m[params[i]['name'] as String] = _Ref(coerce(t, i < args.length ? args[i] : 0), t);
     }
+    _depth++;
     try {
       await ex(fn['body'] as Node, [m, g]);
     } on _Ret catch (r) {
       return coerce(fn['type'] as String, r.value);
+    } finally {
+      _depth--;
     }
     return 0;
   }

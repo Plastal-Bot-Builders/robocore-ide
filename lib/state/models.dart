@@ -49,7 +49,7 @@ class Project {
   bool get hasBlocks => mode == 'blocks' || !codeEdited;
   List<Block> stack(String s) => s == 'setup' ? setup : loop;
 
-  String generate() => genBlocks(name, setup, loop);
+  String generate() => genBlocks(name, setup, loop, board: board);
   void syncCode() {
     if (!codeEdited) files.first.content = generate();
   }
@@ -93,22 +93,24 @@ String fileBase(String n) {
 
 Project projectFrom(Example ex, {String? name, String board = 'v2', String? mode, int? updated}) {
   final nm = name ?? ex.proj;
-  final hasBlocks = ex.blocks != null;
+  final blocks = ex.blocksFor(board);
+  final code = ex.codeFor(board);
+  final hasBlocks = blocks != null;
   final m = (mode != null && (mode == 'code' || hasBlocks)) ? mode : (hasBlocks ? 'blocks' : 'code');
   final p = Project(
     id: uid(),
     name: nm,
     board: board,
     mode: m,
-    setup: cloneBlocks(ex.blocks?['setup']),
-    loop: cloneBlocks(ex.blocks?['loop']),
-    files: [ProjectFile('${ex.file ?? fileBase(nm)}.ino', ex.code), ProjectFile('config.h', kConfigH)],
+    setup: cloneBlocks(blocks?['setup']),
+    loop: cloneBlocks(blocks?['loop']),
+    files: [ProjectFile('${ex.file ?? fileBase(nm)}.ino', code), ProjectFile('config.h', kConfigH)],
     codeEdited: !hasBlocks,
     autosave: true,
     updated: updated ?? DateTime.now().millisecondsSinceEpoch,
   );
-  if (hasBlocks && (m == 'blocks' || ex.code.isEmpty)) p.files.first.content = p.generate();
-  if (hasBlocks && ex.code.isNotEmpty && m == 'code') p.codeEdited = true;
+  if (hasBlocks && (m == 'blocks' || code.isEmpty)) p.files.first.content = p.generate();
+  if (hasBlocks && code.isNotEmpty && m == 'code') p.codeEdited = true;
   return p;
 }
 
@@ -117,6 +119,9 @@ class Settings {
   int fontSize;
   bool autocomplete, wrap, autosave;
   String lang;
+
+  /// The compile server (server/ in this repo) that builds sketches for a real board. Empty = not set.
+  String compileServer;
   Settings({
     this.theme = 'paper',
     this.fontSize = 13,
@@ -124,9 +129,17 @@ class Settings {
     this.wrap = false,
     this.autosave = true,
     this.lang = 'English',
+    this.compileServer = '',
   });
-  Map<String, dynamic> toJson() =>
-      {'theme': theme, 'fontSize': fontSize, 'autocomplete': autocomplete, 'wrap': wrap, 'autosave': autosave, 'lang': lang};
+  Map<String, dynamic> toJson() => {
+        'theme': theme,
+        'fontSize': fontSize,
+        'autocomplete': autocomplete,
+        'wrap': wrap,
+        'autosave': autosave,
+        'lang': lang,
+        'compileServer': compileServer,
+      };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
         theme: j['theme'] as String? ?? 'paper',
         fontSize: (j['fontSize'] as num?)?.toInt() ?? 13,
@@ -134,6 +147,7 @@ class Settings {
         wrap: j['wrap'] as bool? ?? false,
         autosave: j['autosave'] as bool? ?? true,
         lang: j['lang'] as String? ?? 'English',
+        compileServer: j['compileServer'] as String? ?? '',
       );
 }
 
