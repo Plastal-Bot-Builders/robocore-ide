@@ -17,6 +17,7 @@ import 'pages/libraries_page.dart';
 import 'pages/projects_page.dart';
 import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/welcome_page.dart';
 import 'widgets/common.dart';
 import 'widgets/popover.dart';
 
@@ -37,6 +38,8 @@ class _ShellState extends State<Shell> {
     final c = RC.of(context);
     final w = MediaQuery.sizeOf(context).width;
     final phone = w < kPhone;
+    // First start on this device: ask who is using it before anything else.
+    if (s.needsProfile) return const WelcomePage();
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => _save(s),
@@ -232,15 +235,16 @@ class TopBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Tooltip(
-                message: s.user,
-                child: Container(
+              Hover(
+                onTap: () => s.go(Screen.settings),
+                tooltip: s.school.isEmpty ? '${s.user} · Profile' : '${s.user} · ${s.school}',
+                builder: (context, h) => Container(
                   width: 32,
                   height: 32,
                   alignment: Alignment.center,
-                  decoration: const BoxDecoration(color: kNavy, shape: BoxShape.circle),
-                  child: const Text('FM',
-                      style: TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
+                  decoration: BoxDecoration(color: h ? kNavyHover : kNavy, shape: BoxShape.circle),
+                  child: Text(s.initials,
+                      style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
                 ),
               ),
             ],

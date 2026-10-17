@@ -139,6 +139,50 @@ void main() {
     expect(s.linked, isTrue);
   });
 
+  group('Profile', () {
+    test('a new device has no name until the welcome screen is filled in', () async {
+      SharedPreferences.setMockInitialValues({});
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      expect(s.needsProfile, isTrue);
+      expect(s.user, isEmpty);
+      expect(s.projects.first.name, 'Blink LED');
+      expect(s.validateProfileName('  '), isNotNull);
+      s.setProfile(name: '  Thandi   Mokoena ', school: 'Grade 7B');
+      expect(s.user, 'Thandi Mokoena');
+      expect(s.firstName, 'Thandi');
+      expect(s.initials, 'TM');
+
+      final again = AppState(usbLink: FakeUsb());
+      await again.load();
+      again.sim.stop();
+      expect(again.needsProfile, isFalse);
+      expect(again.user, 'Thandi Mokoena');
+      expect(again.school, 'Grade 7B');
+    });
+
+    test('saves from before profiles (sample name "Fredrick") ask for a name once, and keep the projects', () async {
+      SharedPreferences.setMockInitialValues({
+        'robocore-ide-v1': _store([projectFrom(exampleById('blink'), name: 'My robot').toJson()]),
+      });
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      expect(s.needsProfile, isTrue);
+      expect(s.projects.single.name, 'My robot');
+    });
+
+    test('one-word names give one initial', () async {
+      SharedPreferences.setMockInitialValues({});
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      s.setProfile(name: 'sipho');
+      expect(s.initials, 'S');
+    });
+  });
+
   group('Upload to a real board', () {
     late FakeUsb usb;
     late AppState s;

@@ -88,6 +88,8 @@ class SettingsPage extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            card('Profile', [const _ProfileRow()]),
+            const SizedBox(height: 20),
             card('Appearance', [
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -209,6 +211,90 @@ class _CompileServerRowState extends State<_CompileServerRow> {
           const SizedBox(height: 8),
           Text(r.$2, style: tCaption(c, color: r.$1 ? c.ok : c.err)),
         ],
+      ]),
+    );
+  }
+}
+
+/// Settings → Profile: the name (and school or class) the IDE greets this device's user with.
+class _ProfileRow extends StatefulWidget {
+  const _ProfileRow();
+  @override
+  State<_ProfileRow> createState() => _ProfileRowState();
+}
+
+class _ProfileRowState extends State<_ProfileRow> {
+  final _name = TextEditingController();
+  final _school = TextEditingController();
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = AppScope.read(context);
+    _name.text = s.user;
+    _school.text = s.school;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _school.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final s = AppScope.read(context);
+    final e = s.validateProfileName(_name.text);
+    if (e != null) {
+      setState(() => _error = e);
+      return;
+    }
+    s.setProfile(name: _name.text, school: _school.text);
+    setState(() => _error = null);
+    s.showToast('Profile saved.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final phone = MediaQuery.sizeOf(context).width < 760;
+    Widget field(String label, TextEditingController ctl, String hint, {bool err = false}) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(label, style: tLabel(c, color: c.muted, w: FontWeight.w500)),
+            const SizedBox(height: 6),
+            RcInput(
+              controller: ctl,
+              hint: hint,
+              height: 36,
+              error: err,
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+              onSubmitted: (_) => _save(),
+            ),
+          ],
+        );
+    final name = field('Name', _name, 'Your name', err: _error != null);
+    final school = field('School or class', _school, 'Optional');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        phone
+            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [name, const SizedBox(height: 12), school])
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: name),
+                const SizedBox(width: 12),
+                Expanded(child: school),
+              ]),
+        if (_error != null) ...[const SizedBox(height: 6), Text(_error!, style: tCaption(c, color: c.err))],
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: Text('Kept on this device only. Each computer or browser has its own profile and projects.', style: tCaption(c))),
+          const SizedBox(width: 12),
+          Btn('Save', kind: BtnKind.primary, height: 34, onTap: _save),
+        ]),
       ]),
     );
   }
