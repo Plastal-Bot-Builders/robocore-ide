@@ -60,7 +60,11 @@ class AppState extends ChangeNotifier {
   final _rnd = math.Random();
 
   // ---- persisted ----
-  String user = 'Fredrick';
+  /// The person using the app on this device. Empty until they fill in the welcome screen.
+  String user = '';
+
+  /// Optional school or class, shown with the name.
+  String school = '';
   String board = 'v2';
 
   /// kPortSim (the preview board) or kPortUsb (a real board on USB-C).
@@ -132,6 +136,37 @@ class AppState extends ChangeNotifier {
   String get boardId => (view == Screen.editor && cur != null) ? cur!.board : board;
   Set<String> get installedLibs => {for (final e in libs.entries) if (e.value) e.key};
 
+  /// True until this device's user has told the app their name (first start).
+  bool get needsProfile => user.trim().isEmpty;
+
+  /// First name, for greetings.
+  String get firstName => user.trim().split(RegExp(r'\s+')).first;
+
+  /// Up to two initials for the avatar ("Thandi Mokoena" → "TM").
+  String get initials {
+    final words = user.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    String first(String w) => String.fromCharCode(w.runes.first);
+    final a = first(words.first);
+    final b = words.length > 1 ? first(words.last) : '';
+    return (a + b).toUpperCase();
+  }
+
+  String? validateProfileName(String name) {
+    final t = name.trim();
+    if (t.isEmpty) return 'Type your name.';
+    if (t.length > 40) return 'Use 40 characters or fewer.';
+    return null;
+  }
+
+  /// Saves the name (and optional school or class) for this device.
+  void setProfile({required String name, String school = ''}) {
+    user = name.trim().replaceAll(RegExp(r'\s+'), ' ');
+    this.school = school.trim();
+    persist(now: true);
+    notifyListeners();
+  }
+
   bool get onUsb => port == kPortUsb;
   bool get hasServer => settings.compileServer.trim().isNotEmpty;
 
@@ -191,7 +226,12 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    user = field(() => o['user'] as String?) ?? user;
+    // Saves from before the welcome screen always held the sample name, so only trust a
+    // name the user typed in (marked with 'profile': true); otherwise ask once.
+    if (field(() => o['profile'] as bool?) == true) {
+      user = field(() => o['user'] as String?) ?? '';
+      school = field(() => o['school'] as String?) ?? '';
+    }
     board = field(() => o['board'] as String?) ?? board;
     if (!kBoards.containsKey(board)) board = 'v2';
     port = field(() => o['port'] as String?) == kPortUsb ? kPortUsb : kPortSim;
@@ -231,25 +271,21 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Starter projects for a new user: a short "getting started" set, newest first.
   void _seed() {
     final now = DateTime.now().millisecondsSinceEpoch;
-    const m = 60000, h = 3600000, d = 86400000;
+    final starters = ['blink', 'distance', 'button', 'line', 'obstacle'];
     projects = [
-      projectFrom(exampleById('blink'), updated: now - 2 * m),
-      projectFrom(exampleById('obstacle'), updated: now - 2 * h),
-      projectFrom(exampleById('traffic'), board: 'uno', mode: 'blocks', updated: now - 26 * h),
-      projectFrom(exampleById('line'), mode: 'blocks', updated: now - 3 * d),
-      projectFrom(exampleById('melody'), board: 'uno', mode: 'code', updated: now - 8 * d),
-      projectFrom(exampleById('servo'), board: 'devkit', updated: now - 15 * d),
-      projectFrom(exampleById('distance'), updated: now - 22 * d),
-      projectFrom(exampleById('logger'), board: 'nodemcu', updated: now - 33 * d),
+      for (var i = 0; i < starters.length; i++) projectFrom(exampleById(starters[i]), board: board, updated: now - i * 1000),
     ];
     persist(now: true);
   }
 
   Map<String, dynamic> toJson() => {
         'v': 1,
+        'profile': !needsProfile,
         'user': user,
+        'school': school,
         'board': board,
         'port': port,
         'baud': baud,
