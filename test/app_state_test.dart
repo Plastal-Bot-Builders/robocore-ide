@@ -1,0 +1,251 @@
+// App state: loading saved data safely, and Upload to a real board (fake USB link + mock compile server).
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:robocore_ide/data/catalog.dart';
+import 'package:robocore_ide/hw/compile_client.dart';
+import 'package:robocore_ide/hw/usb_link.dart';
+import 'package:robocore_ide/state/app_state.dart';
+import 'package:robocore_ide/state/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class FakeUsb extends UsbLink {
+  bool open = false;
+  bool failBootloader = false;
+  Map<String, dynamic>? flashed;
+  final written = <String>[];
+
+  @override
+  bool get supported => true;
+  @override
+  bool get isOpen => open;
+
+  @override
+  Future<UsbResult> connect({required int baud, bool espressifOnly = false}) async {
+    open = true;
+    return const UsbResult(true, data: {'ok': true, 'label': 'ESP32-S3 USB (303A:1001)'});
+  }
+
+  @override
+  Future<UsbResult> reconnect({required int baud}) => connect(baud: baud);
+
+  @override
+  Future<UsbResult> disconnect() async {
+    open = false;
+    return const UsbResult(true);
+  }
+
+  @override
+  Future<UsbResult> setBaud(int baud) async => const UsbResult(true);
+
+  @override
+  Future<UsbResult> write(String text) async {
+    written.add(text);
+    return const UsbResult(true);
+  }
+
+  @override
+  Future<UsbResult> reset() async => const UsbResult(true);
+
+  @override
+  Future<UsbResult> flash(Map<String, dynamic> job) async {
+    if (failBootloader) return const UsbResult(false, code: 'bootloader', message: 'Failed to connect with the device');
+    flashed = job;
+    onEvent?.call('stage', 'connecting');
+    onEvent?.call('progress', jsonEncode({'name': 'app', 'address': 65536, 'done': 50, 'total': 100}));
+    onEvent?.call('progress', jsonEncode({'name': 'app', 'address': 65536, 'done': 100, 'total': 100}));
+    onText?.call('RoboCore V2 ready\r\n');
+    return const UsbResult(true, data: {'ok': true, 'chip': 'ESP32-S3', 'bytes': 100, 'reopened': true});
+  }
+}
+
+http.Response _ok() => http.Response(
+      jsonEncode({
+        'ok': true,
+        'problems': [],
+        'sizes': {
+          'flash': {'used': 300000, 'max': 3145728},
+          'ram': {'used': 20000, 'max': 327680}
+        },
+        'log': 'Sketch uses 300000 bytes (9%) of program storage space.',
+        'image': {
+          'format': 'esp32',
+          'chip': 'esp32s3',
+          'parts': [
+            {'name': 'bootloader', 'offset': 0, 'size': 3, 'data': 'AAEC'},
+            {'name': 'app', 'offset': 65536, 'size': 3, 'data': 'AAEC'}
+          ]
+        },
+      }),
+      200,
+    );
+
+String _store(List<dynamic> projects, {String port = 'sim', String server = ''}) => jsonEncode({
+      'v': 1,
+      'user': 'Fredrick',
+      'board': 'v2',
+      'port': port,
+      'baud': 115200,
+      'connected': true,
+      'settings': {'compileServer': server},
+      'libs': {'esp32servo': true},
+      'projects': projects,
+    });
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('one damaged project does not throw away the others', () async {
+    final good = projectFrom(exampleById('blink'), name: 'Keep me').toJson();
+    SharedPreferences.setMockInitialValues({
+      'robocore-ide-v1': _store([
+        good,
+        {'id': 'x', 'name': 'Broken'}, // no files
+        'not even a map',
+      ]),
+    });
+    final s = AppState(usbLink: FakeUsb());
+    await s.load();
+    s.sim.stop();
+    expect(s.projects.map((p) => p.name).toList(), ['Keep me']);
+    expect(s.loadNotice, contains('2 saved projects could not be opened'));
+    final prefs = await SharedPreferences.getInstance();
+    final aside = prefs.getKeys().where((k) => k.startsWith('robocore-ide-v1-damaged-')).toList();
+    expect(aside, hasLength(1));
+    expect(prefs.getString(aside.single), contains('Broken'));
+  });
+
+  test('unreadable saved data is kept aside before the samples are restored', () async {
+    SharedPreferences.setMockInitialValues({'robocore-ide-v1': '{not json'});
+    final s = AppState(usbLink: FakeUsb());
+    await s.load();
+    s.sim.stop();
+    expect(s.projects, isNotEmpty);
+    final prefs = await SharedPreferences.getInstance();
+    final aside = prefs.getKeys().where((k) => k.startsWith('robocore-ide-v1-unreadable-'));
+    expect(prefs.getString(aside.single), '{not json');
+  });
+
+  test('old port names become the preview board', () async {
+    SharedPreferences.setMockInitialValues({
+      'robocore-ide-v1': _store([projectFrom(exampleById('blink')).toJson()], port: '/dev/cu.usbmodem1101'),
+    });
+    final s = AppState(usbLink: FakeUsb());
+    await s.load();
+    s.sim.stop();
+    expect(s.port, kPortSim);
+    expect(s.linked, isTrue);
+  });
+
+  group('Upload to a real board', () {
+    late FakeUsb usb;
+    late AppState s;
+    late List<Map<String, dynamic>> requests;
+    http.Response Function() reply = _ok;
+
+    setUp(() async {
+      usb = FakeUsb();
+      requests = [];
+      reply = _ok;
+      SharedPreferences.setMockInitialValues({
+        'robocore-ide-v1': _store([projectFrom(exampleById('blink'), name: 'Blink LED').toJson()],
+            port: 'usb', server: 'https://cc.test'),
+      });
+      s = AppState(
+        usbLink: usb,
+        compileClient: CompileClient(
+          client: MockClient((req) async {
+            requests.add((jsonDecode(req.body) as Map).cast<String, dynamic>());
+            return reply();
+          }),
+        ),
+      );
+      await s.load();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      s.openProject(s.projects.first.id);
+    });
+
+    tearDown(() => s.sim.stop());
+
+    test('reconnects to the allowed board at start-up', () {
+      expect(s.onUsb, isTrue);
+      expect(s.usbOpen, isTrue);
+      expect(s.usbLabel, 'ESP32-S3 USB (303A:1001)');
+      expect(s.sim.running, isFalse);
+    });
+
+    test('compiles on the server, flashes every part and reopens the monitor', () async {
+      await s.upload();
+      expect(requests.single['board'], 'v2');
+      expect(requests.single['main'], 'Blink.ino');
+      expect(usb.flashed!['chip'], 'esp32s3');
+      expect((usb.flashed!['parts'] as List).length, 2);
+      expect(usb.flashed!['monitorBaud'], 115200);
+      final out = s.output.map((o) => o.text).join('\n');
+      expect(out, contains('Writing app at 0x00010000… (50 %)'));
+      expect(out, contains('Upload complete'));
+      expect(s.stateLabel, 'Uploaded');
+      expect(s.busy, isNull);
+      expect(s.verified!.size, 300000);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(s.log.map((l) => l.text), contains('RoboCore V2 ready'));
+    });
+
+    test('compile errors go to Problems and nothing is flashed', () async {
+      reply = () => http.Response(
+            jsonEncode({
+              'ok': false,
+              'problems': [
+                {'severity': 'error', 'file': 'Blink.ino', 'line': 3, 'column': 5, 'message': "expected ';' before '}' token"}
+              ],
+            }),
+            200,
+          );
+      await s.upload();
+      expect(usb.flashed, isNull);
+      expect(s.problems.single.line, 3);
+      expect(s.panelTab, 'problems');
+      expect(s.stateLabel, 'Errors');
+    });
+
+    test('no bootloader answer shows the BOOT + RESET tip', () async {
+      usb.failBootloader = true;
+      await s.upload();
+      expect(s.output.map((o) => o.text), contains(kBootTip));
+      expect(s.stateLabel, 'Upload failed');
+    });
+
+    test('without a compile server, Upload says how to set one up', () async {
+      s.setCompileServer('');
+      await s.upload();
+      expect(requests, isEmpty);
+      expect(s.output.last.text, contains('Settings → Compile server'));
+    });
+
+    test('Verify uses the server when one is set', () async {
+      await s.verify();
+      expect(requests, hasLength(1));
+      expect(usb.flashed, isNull);
+      expect(s.stateLabel, 'Verified');
+    });
+
+    test('serial text goes to the board; unplug and replug are reported', () async {
+      s.sendSerial('led on');
+      expect(usb.written, ['led on\n']);
+      usb.onEvent!('unplugged', 'ESP32-S3 USB (303A:1001)');
+      expect(s.usbOpen, isFalse);
+      expect(s.log.last.text, contains('unplugged'));
+      usb.onEvent!('reconnected', 'ESP32-S3 USB (303A:1001)');
+      expect(s.usbOpen, isTrue);
+      expect(s.log.last.text, contains('reconnected'));
+    });
+
+    test('text without a newline still shows up', () async {
+      usb.onText!('Type > ');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(s.log.last.text, 'Type > ');
+    });
+  });
+}
