@@ -158,7 +158,7 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       raw = null;
     }
-    if (raw != null) _restore(raw);
+    if (raw != null) _restoreSaved(raw);
     if (projects.isEmpty) _seed();
     if (onUsb) {
       serialPush('Looking for the board on USB-C…', 'sys');
@@ -173,7 +173,7 @@ class AppState extends ChangeNotifier {
 
   /// Reads the saved state one piece at a time, so one damaged project (or setting) never
   /// throws away the rest. Anything that can't be read is kept under a backup key, not deleted.
-  void _restore(String raw) {
+  void _restoreSaved(String raw) {
     Map<String, dynamic> o;
     try {
       o = (jsonDecode(raw) as Map).cast<String, dynamic>();

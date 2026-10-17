@@ -18,7 +18,7 @@ RUN set -eux; \
     f="arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz"; \
     cd /tmp; \
     curl -fsSLO "https://downloads.arduino.cc/arduino-cli/${f}"; \
-    curl -fsSL "https://downloads.arduino.cc/arduino-cli/arduino-cli_${ARDUINO_CLI_VERSION}_checksums.txt" -o sums.txt; \
+    curl -fsSL "https://downloads.arduino.cc/arduino-cli/${ARDUINO_CLI_VERSION}-checksums.txt" -o sums.txt; \
     grep " ${f}\$" sums.txt | sha256sum -c -; \
     tar -xzf "${f}" -C /usr/local/bin arduino-cli; \
     rm -f "${f}" sums.txt; \
