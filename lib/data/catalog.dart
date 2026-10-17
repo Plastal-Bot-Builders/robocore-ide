@@ -1,5 +1,9 @@
 // Boards, libraries, examples and block definitions (same data as the web IDE).
 // ignore_for_file: prefer_single_quotes
+import 'robocore_v2_examples.dart';
+import 'robocore_v2_pins.dart';
+
+export 'robocore_v2_pins.dart' show RoboCoreV2Pins;
 
 class BoardDef {
   final String id, name, full, chip, spec, arch, mcu, rev;
@@ -24,7 +28,9 @@ class BoardDef {
   });
 }
 
-const kPort = '/dev/cu.usbmodem1101';
+/// Where sketches run: the simulated preview board, or a real board on USB-C.
+const kPortSim = 'sim';
+const kPortUsb = 'usb';
 
 const Map<String, BoardDef> kBoards = {
   'v2': BoardDef(
@@ -34,7 +40,7 @@ const Map<String, BoardDef> kBoards = {
       chip: 'ESP32-S3',
       spec: 'ESP32-S3 · 8 MB flash · 2 MB PSRAM',
       arch: 'esp32',
-      led: 2,
+      led: RoboCoreV2Pins.rgbLed,
       max: 3145728,
       ram: 327680,
       base: 286000,
@@ -43,9 +49,10 @@ const Map<String, BoardDef> kBoards = {
       mcu: 'ESP32-S3, 240 MHz',
       rev: 'Prototype · rev 2.0',
       details: [
-        ['MCU', 'ESP32-S3, dual-core 240 MHz'],
-        ['Memory', '8 MB flash · 2 MB PSRAM'],
-        ['USB', 'USB-C, native serial'],
+        ['MCU', 'ESP32-S3-WROOM-1-N8R2, dual-core 240 MHz'],
+        ['Memory', '8 MB flash · 2 MB quad PSRAM'],
+        ['USB', 'USB-C straight to the ESP32-S3 (no USB-UART chip)'],
+        ['Built-in LED', 'RGB LED on IO48 (LED_BUILTIN)'],
         ['Wireless', 'Wi-Fi · Bluetooth LE'],
         ['Motors', '2 DC with encoders'],
         ['Servos', '4 ports'],
@@ -124,24 +131,34 @@ const Map<String, BoardDef> kBoards = {
 const kBoardOrder = ['v2', 'uno', 'devkit', 'nodemcu'];
 
 class LibDef {
+  /// arch: any | esp32 | v2 (the RoboCore library only builds for the RoboCore V2).
   final String id, name, ver, h, kind, arch, desc;
   final List<String> types;
   const LibDef(this.id, this.name, this.ver, this.h, this.kind, this.arch, this.types, this.desc);
 }
 
+/// The RoboCore library (firmware/RoboCore) is one Arduino library with three headers.
 const kLibs = [
-  LibDef('motors', 'RoboCore Motors', '1.0.0', 'RoboCoreMotors.h', 'included', 'esp32', ['RoboCoreMotors'],
+  LibDef('robocore', 'RoboCore', '1.0.0', 'RoboCore.h', 'included', 'v2', [],
+      'Pin names (RC_PIN_…), battery voltage, USER button, buzzer and RGB helpers, plus motors and sensors.'),
+  LibDef('motors', 'RoboCore Motors', '1.0.0', 'RoboCoreMotors.h', 'included', 'v2', ['RoboCoreMotors'],
       'Drive the two motor ports with encoder feedback.'),
-  LibDef('sensors', 'RoboCore Sensors', '1.0.0', 'RoboCoreSensors.h', 'included', 'esp32', ['Sonar', 'LineSensor', 'IMU'],
+  LibDef('sensors', 'RoboCore Sensors', '1.0.0', 'RoboCoreSensors.h', 'included', 'v2', ['Sonar', 'LineSensor', 'IMU'],
       'Ultrasonic, line sensor and IMU helpers.'),
   LibDef('wire', 'Wire', 'core', 'Wire.h', 'included', 'any', ['TwoWire'], 'I²C for the Qwiic port and expansion headers.'),
-  LibDef('esp32servo', 'ESP32Servo', '3.0.5', 'ESP32Servo.h', 'opt', 'esp32', ['Servo'], 'Control hobby servos with PWM.'),
+  LibDef('esp32servo', 'ESP32Servo', '3.2.1', 'ESP32Servo.h', 'opt', 'esp32', ['Servo'], 'Control hobby servos with PWM.'),
   LibDef('neopixel', 'Adafruit NeoPixel', '1.12.3', 'Adafruit_NeoPixel.h', 'opt', 'any', ['Adafruit_NeoPixel'],
       'The RoboCore V2 RGB LED.'),
   LibDef('newping', 'NewPing', '1.9.7', 'NewPing.h', 'opt', 'any', ['NewPing'], 'Fast ultrasonic distance readings.'),
   LibDef('lcd', 'LiquidCrystal I2C', '1.1.2', 'LiquidCrystal_I2C.h', 'opt', 'any', ['LiquidCrystal_I2C'],
       '16×2 and 20×4 character LCDs.'),
 ];
+
+/// Other headers that belong to a library above.
+const kHeaderAlias = {'RoboCoreV2Pins.h': 'RoboCore.h'};
+
+/// Libraries whose headers give a sketch the RoboCore V2 pin names (RC_PIN_…).
+const kRoboCoreLibs = {'robocore', 'motors', 'sensors'};
 
 const kConfigH = '''// config.h — shared settings for this project
 #pragma once
@@ -154,6 +171,16 @@ class Example {
   final String id, name, proj, cat, level, desc, tag, boards, code;
   final String? file;
   final Map<String, dynamic>? blocks;
+
+  /// The RoboCore library example used on the RoboCore V2 (a folder in firmware/RoboCore/examples).
+  final String? v2;
+
+  /// Blocks for the RoboCore V2 when its pins differ from the other boards.
+  final Map<String, dynamic>? v2Blocks;
+
+  /// Needs the real board: uses C++ the preview board can't run (Upload to a board on USB-C).
+  final bool realOnly;
+
   const Example({
     required this.id,
     required this.name,
@@ -166,11 +193,24 @@ class Example {
     required this.boards,
     this.blocks,
     required this.code,
+    this.v2,
+    this.v2Blocks,
+    this.realOnly = false,
   });
+
+  /// The sketch for [board]: the library's own example on the RoboCore V2.
+  String codeFor(String board) {
+    final lib = v2 == null ? null : kV2ExampleCode[v2];
+    if (lib != null && (board == 'v2' || code.isEmpty)) return lib;
+    return code;
+  }
+
+  Map<String, dynamic>? blocksFor(String board) => board == 'v2' ? (v2Blocks ?? blocks) : blocks;
 }
 
 const kExCats = ['All', 'Basics', 'Sensors', 'Robotics', 'Sound & light', 'Communication'];
 const kExIcon = {
+  'boardtest': 'chip',
   'blink': 'light',
   'button': 'enter',
   'traffic': 'clock',
@@ -190,7 +230,22 @@ const kExIcon = {
 
 const List<Example> kExamples = [
   Example(
+    id: 'boardtest',
+    v2: 'BoardTest',
+    name: 'RoboCore V2 board test',
+    proj: 'Board test',
+    file: 'BoardTest',
+    cat: 'Basics',
+    level: 'Advanced',
+    desc: 'Check every part of a RoboCore V2: LED, buzzer, buttons, IMU, sensors, motors and servos.',
+    tag: 'PASS / FAIL for each part',
+    boards: 'RoboCore V2 · real board',
+    realOnly: true,
+    code: '',
+  ),
+  Example(
     id: 'blink',
+    v2: 'Blink',
     name: 'Blink an LED',
     proj: 'Blink LED',
     file: 'Blink',
@@ -219,6 +274,7 @@ void loop() {
   ),
   Example(
     id: 'button',
+    v2: 'ButtonLed',
     name: 'Button-controlled LED',
     proj: 'Button LED',
     file: null,
@@ -246,6 +302,7 @@ void loop() {
   ),
   Example(
     id: 'traffic',
+    v2: 'TrafficLight',
     name: 'Traffic light',
     proj: 'Traffic light',
     file: null,
@@ -255,6 +312,8 @@ void loop() {
     tag: 'Three LEDs and a button',
     boards: 'V2 · Uno · ESP32',
     blocks: {"setup": [{"t": "serial", "baud": "115200"}], "loop": [{"t": "pin", "pin": "6", "state": "HIGH"}, {"t": "print", "text": "green"}, {"t": "wait", "secs": 4, "unit": "secs"}, {"t": "pin", "pin": "6", "state": "LOW"}, {"t": "pin", "pin": "5", "state": "HIGH"}, {"t": "print", "text": "amber"}, {"t": "wait", "secs": 1, "unit": "secs"}, {"t": "pin", "pin": "5", "state": "LOW"}, {"t": "pin", "pin": "4", "state": "HIGH"}, {"t": "print", "text": "red"}, {"t": "wait", "secs": 4, "unit": "secs"}, {"t": "pin", "pin": "4", "state": "LOW"}]},
+    // RoboCore V2: red IO3, amber IO37, green IO43 on the expansion header (4, 5 and 6 are sensor inputs there).
+    v2Blocks: {"setup": [{"t": "serial", "baud": "115200"}], "loop": [{"t": "pin", "pin": "43", "state": "HIGH"}, {"t": "print", "text": "green"}, {"t": "wait", "secs": 4, "unit": "secs"}, {"t": "pin", "pin": "43", "state": "LOW"}, {"t": "pin", "pin": "37", "state": "HIGH"}, {"t": "print", "text": "amber"}, {"t": "wait", "secs": 1, "unit": "secs"}, {"t": "pin", "pin": "37", "state": "LOW"}, {"t": "pin", "pin": "3", "state": "HIGH"}, {"t": "print", "text": "red"}, {"t": "wait", "secs": 4, "unit": "secs"}, {"t": "pin", "pin": "3", "state": "LOW"}]},
     code: r'''// Traffic light
 // Red, amber and green LEDs on pins 4, 5 and 6.
 // A push button between pin 2 and GND asks the light to change.
@@ -295,6 +354,7 @@ void loop() {
   ),
   Example(
     id: 'ultrasonic',
+    v2: 'UltrasonicDistance',
     name: 'Ultrasonic distance',
     proj: 'Ultrasonic distance',
     file: null,
@@ -325,6 +385,7 @@ void loop() {
   ),
   Example(
     id: 'tones',
+    v2: 'BuzzerTones',
     name: 'Buzzer tones',
     proj: 'Buzzer tones',
     file: null,
@@ -358,6 +419,7 @@ void loop() {
   ),
   Example(
     id: 'motors',
+    v2: 'MotorControl',
     name: 'Motor control',
     proj: 'Motor control',
     file: null,
@@ -395,6 +457,7 @@ void loop() {
   ),
   Example(
     id: 'imu',
+    v2: 'SensorsToSerial',
     name: 'Sensors to serial',
     proj: 'Sensors to serial',
     file: null,
@@ -426,6 +489,7 @@ void loop() {
   ),
   Example(
     id: 'obstacle',
+    v2: 'ObstacleAvoider',
     name: 'Obstacle avoider',
     proj: 'Obstacle avoider',
     file: null,
@@ -469,6 +533,7 @@ void loop() {
   ),
   Example(
     id: 'melody',
+    v2: 'BuzzerMelody',
     name: 'Buzzer melody',
     proj: 'Buzzer melody',
     file: null,
@@ -478,6 +543,8 @@ void loop() {
     tag: 'Play a tune with tone()',
     boards: 'V2 · Uno · ESP32',
     blocks: {"setup": [], "loop": [{"t": "tone", "pin": 8, "note": "C4", "secs": 0.4}, {"t": "tone", "pin": 8, "note": "C4", "secs": 0.4}, {"t": "tone", "pin": 8, "note": "G4", "secs": 0.4}, {"t": "tone", "pin": 8, "note": "G4", "secs": 0.4}, {"t": "tone", "pin": 8, "note": "A4", "secs": 0.4}, {"t": "tone", "pin": 8, "note": "A4", "secs": 0.4}, {"t": "tone", "pin": 8, "note": "G4", "secs": 0.8}, {"t": "wait", "secs": 1}]},
+    // RoboCore V2: the buzzer is IO47 (pin 8 is I²C SDA there).
+    v2Blocks: {"setup": [], "loop": [{"t": "tone", "pin": "47", "note": "C4", "secs": 0.4}, {"t": "tone", "pin": "47", "note": "C4", "secs": 0.4}, {"t": "tone", "pin": "47", "note": "G4", "secs": 0.4}, {"t": "tone", "pin": "47", "note": "G4", "secs": 0.4}, {"t": "tone", "pin": "47", "note": "A4", "secs": 0.4}, {"t": "tone", "pin": "47", "note": "A4", "secs": 0.4}, {"t": "tone", "pin": "47", "note": "G4", "secs": 0.8}, {"t": "wait", "secs": 1}]},
     code: r'''// Buzzer melody
 // Plays a short tune on the buzzer (pin 8).
 const int BUZZER = 8;
@@ -506,6 +573,7 @@ void loop() {
   ),
   Example(
     id: 'rgb',
+    v2: 'RgbColours',
     name: 'RGB colour cycle',
     proj: 'RGB colours',
     file: null,
@@ -535,6 +603,7 @@ void loop() {
   ),
   Example(
     id: 'line',
+    v2: 'LineFollower',
     name: 'Line follower',
     proj: 'Line follower',
     file: null,
@@ -574,6 +643,7 @@ void loop() {
   ),
   Example(
     id: 'servo',
+    v2: 'ServoSweep',
     name: 'Servo sweep',
     proj: 'Servo sweep',
     file: null,
@@ -581,7 +651,7 @@ void loop() {
     level: 'Beginner',
     desc: 'Sweep a servo from 0° to 180° and back.',
     tag: 'Hobby servo on PWM',
-    boards: 'ESP32 boards',
+    boards: 'V2 · ESP32 boards',
     blocks: null,
     code: r'''// Servo sweep
 // Sweeps a servo on pin 18 from 0 to 180 degrees and back.
@@ -609,6 +679,7 @@ void loop() {
   ),
   Example(
     id: 'distance',
+    v2: 'DistanceMonitor',
     name: 'Distance monitor',
     proj: 'Distance monitor',
     file: null,
@@ -622,6 +693,7 @@ void loop() {
   ),
   Example(
     id: 'logger',
+    v2: 'SensorLogger',
     name: 'Sensor logger',
     proj: 'Sensor logger',
     file: null,
@@ -651,6 +723,7 @@ void loop() {
   ),
   Example(
     id: 'echo',
+    v2: 'SerialEcho',
     name: 'Serial echo',
     proj: 'Serial echo',
     file: null,
@@ -719,6 +792,27 @@ const Map<String, List<int>> kColors = {
   'off': [0, 0, 0],
 };
 const kPins = ['2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '18', '48'];
+
+/// Pins the "set pin" and "tone" blocks offer on [board]. On the RoboCore V2 almost every GPIO
+/// already drives a motor, reads a sensor or carries USB / I²C, so only the free ones are offered
+/// (and the buzzer, IO47, for tones).
+List<String> pinOptions(String board, {bool tone = false}) {
+  if (board != 'v2') return kPins;
+  return [
+    if (tone) '${RoboCoreV2Pins.buzzer}',
+    for (final p in RoboCoreV2Pins.freePins) '$p',
+  ];
+}
+
+/// A new block's starting values on [board].
+Map<String, dynamic> blockDefaults(String type, String board) {
+  final d = <String, dynamic>{...kBlockTypes[type]!.def};
+  if (board == 'v2') {
+    if (type == 'pin') d['pin'] = '${RoboCoreV2Pins.expIo3}';
+    if (type == 'tone') d['pin'] = '${RoboCoreV2Pins.buzzer}';
+  }
+  return d;
+}
 
 /// A block part is either a label (String) or a field.
 class BField {

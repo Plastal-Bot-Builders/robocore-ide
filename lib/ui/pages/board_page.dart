@@ -7,7 +7,20 @@ import '../shell.dart' show ConnStatus;
 import '../widgets/common.dart';
 import 'home_page.dart';
 
-const _ports = [(kPort, kPort), ('/dev/cu.Bluetooth-Incoming-Port', '/dev/cu.Bluetooth-Incoming-Port')];
+/// RoboCore V2 pins (Rev 2.0 schematic), grouped for the pin map card.
+const _v2PinRows = [
+  ('Motor 1 (left)', 'IN1 IO${RoboCoreV2Pins.motor1In1} · IN2 IO${RoboCoreV2Pins.motor1In2} · encoder IO${RoboCoreV2Pins.enc1A}/IO${RoboCoreV2Pins.enc1B} · current IO${RoboCoreV2Pins.motor1Isense}'),
+  ('Motor 2 (right)', 'IN1 IO${RoboCoreV2Pins.motor2In1} · IN2 IO${RoboCoreV2Pins.motor2In2} · encoder IO${RoboCoreV2Pins.enc2A}/IO${RoboCoreV2Pins.enc2B} · current IO${RoboCoreV2Pins.motor2Isense}'),
+  ('Motor fault', 'nFAULT IO${RoboCoreV2Pins.motorNfault} (LOW = fault)'),
+  ('Ultrasonic', 'TRIG IO${RoboCoreV2Pins.sonarTrig} · ECHO IO${RoboCoreV2Pins.sonarEcho}'),
+  ('Line sensor', 'left IO${RoboCoreV2Pins.lineLeft} · centre IO${RoboCoreV2Pins.lineCentre} · right IO${RoboCoreV2Pins.lineRight}'),
+  ('IMU', 'LSM6DSOX on I²C SDA IO${RoboCoreV2Pins.i2cSda} / SCL IO${RoboCoreV2Pins.i2cScl} · INT1 IO${RoboCoreV2Pins.imuInt1}'),
+  ('Servos', '1 IO${RoboCoreV2Pins.servo1} · 2 IO${RoboCoreV2Pins.servo2} · 3 IO${RoboCoreV2Pins.servo3} · 4 IO${RoboCoreV2Pins.servo4}'),
+  ('Buttons', 'USER IO${RoboCoreV2Pins.userButton} · BOOT IO${RoboCoreV2Pins.bootButton} (LOW when pressed)'),
+  ('Buzzer · RGB', 'buzzer IO${RoboCoreV2Pins.buzzer} · RGB LED IO${RoboCoreV2Pins.rgbLed}'),
+  ('Battery', 'IO${RoboCoreV2Pins.batterySense} reads battery ÷ 2'),
+  ('Free pins', 'IO3, IO37, IO43 (TX), IO44 (RX) on the expansion headers'),
+];
 
 class BoardPage extends StatelessWidget {
   const BoardPage({super.key});
@@ -84,7 +97,7 @@ class BoardPage extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           active
-              ? ConnStatus(connected: s.connected)
+              ? ConnStatus(connected: s.linked)
               : Btn('Use this board', kind: BtnKind.primary, small: true, onTap: () => s.setDefaultBoard(sel)),
         ]),
         const SizedBox(height: 16),
@@ -112,7 +125,7 @@ class BoardPage extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text('CONNECTION', style: tH2(c)),
         const SizedBox(height: 14),
-        field('Port', RcSelect<String>(value: s.port, height: 36, width: double.infinity, items: _ports, onChanged: (v) => s.setPort(v))),
+        field('Port', RcSelect<String>(value: s.port, height: 36, width: double.infinity, items: s.portItems, onChanged: (v) => s.setPort(v))),
         const SizedBox(height: 14),
         field(
             'Baud rate',
@@ -125,8 +138,22 @@ class BoardPage extends StatelessWidget {
         const SizedBox(height: 14),
         Wrap(spacing: 8, runSpacing: 8, children: [
           Btn('Test connection', onTap: s.testConnection),
-          s.connected ? Btn('Disconnect', kind: BtnKind.plain, onTap: s.disconnect) : Btn('Connect', kind: BtnKind.primary, onTap: s.connect),
+          s.linked
+              ? Btn('Disconnect', kind: BtnKind.plain, onTap: s.disconnect)
+              : Btn(s.onUsb ? 'Connect USB-C' : 'Connect', kind: BtnKind.primary, onTap: s.connect),
+          if (s.onUsb && s.usbOpen) Btn('Reset board', kind: BtnKind.plain, onTap: s.resetUsbBoard),
+          if (!s.onUsb) Btn('Use a real board (USB-C)', kind: BtnKind.plain, onTap: () => s.setPort(kPortUsb)),
         ]),
+        const SizedBox(height: 10),
+        Text(
+          !s.usb.supported
+              ? 'Real boards connect through Web Serial: open the web app in Chrome or Edge on a computer.'
+              : s.onUsb
+                  ? 'Plug the RoboCore into USB-C, press Connect and pick “USB JTAG/serial debug unit” (ESP32-S3). '
+                      'It reconnects by itself after an upload or if you unplug it.'
+                  : 'Sketches run on the preview board. Pick USB-C to use the real RoboCore.',
+          style: tCaption(c),
+        ),
         if (s.conn != null) ...[
           const SizedBox(height: 10),
           Text(s.conn!.text,
@@ -166,6 +193,26 @@ class BoardPage extends StatelessWidget {
       ]),
     );
 
+    final pinMap = b.id == 'v2'
+        ? RcCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text('PIN MAP (REV 2.0)', style: tH2(c)),
+              const SizedBox(height: 4),
+              Text('From the schematic. Sketches use these names from RoboCore.h, e.g. RC_PIN_BUZZER.', style: tCaption(c)),
+              const SizedBox(height: 12),
+              for (final r in _v2PinRows)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(width: 120, child: Text(r.$1, style: tCaption(c))),
+                    Expanded(child: Text(r.$2, style: tMono(c, size: 12, height: 18 / 12))),
+                  ]),
+                ),
+            ]),
+          )
+        : null;
+
     final cfg = width >= 900
         ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: connection),
@@ -180,12 +227,19 @@ class BoardPage extends StatelessWidget {
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 280, child: list),
           const SizedBox(width: 24),
-          Expanded(child: Column(children: [detail, const SizedBox(height: 24), cfg])),
+          Expanded(
+              child: Column(children: [
+            detail,
+            const SizedBox(height: 24),
+            cfg,
+            if (pinMap != null) ...[const SizedBox(height: 24), pinMap],
+          ])),
         ])
       else ...[
         list,
         detail,
         cfg,
+        if (pinMap != null) pinMap,
       ],
     ]);
   }

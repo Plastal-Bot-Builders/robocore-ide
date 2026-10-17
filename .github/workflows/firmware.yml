@@ -1,0 +1,108 @@
+name: Firmware and compile server
+
+on:
+  push:
+    branches: [main]
+    paths: ['firmware/**', 'server/**', 'tools/**', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
+  pull_request:
+    paths: ['firmware/**', 'server/**', 'tools/**', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ARDUINO_CLI_VERSION: 1.5.1
+  ESP32_CORE: esp32:esp32@3.3.12
+  ESP32_INDEX: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+  FQBN_V2: esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=enabled,CPUFreq=240
+
+jobs:
+  host:
+    name: Library logic and pin map
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Pin map matches the app
+        run: python3 tools/gen_pins.py --check
+      - name: The app's RoboCore V2 examples match the library's
+        run: python3 tools/gen_examples.py --check
+      - name: Library and examples on a PC (syntax, -Werror, logic tests)
+        run: bash firmware/tests/host/run.sh
+
+  esp32s3:
+    name: Compile for RoboCore V2 (ESP32-S3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.arduino15
+            ~/.cache/arduino
+            ~/Arduino/libraries
+          key: arduino-${{ env.ARDUINO_CLI_VERSION }}-${{ env.ESP32_CORE }}-esp32servo-3.2.1
+      - uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: ${{ env.ARDUINO_CLI_VERSION }}
+      - name: Install the esp32 core and libraries
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config set board_manager.additional_urls "$ESP32_INDEX"
+          arduino-cli core update-index
+          arduino-cli core install "$ESP32_CORE"
+          arduino-cli lib update-index
+          arduino-cli lib install "ESP32Servo@3.2.1"
+      - name: Compile the board test and every example
+        run: |
+          set -o pipefail
+          failed=0
+          for d in firmware/RoboCore/examples/*/; do
+            n=$(basename "$d")
+            echo "::group::$n"
+            if arduino-cli compile --fqbn "$FQBN_V2" --library firmware/RoboCore --warnings all "$d" 2>&1 | tee "/tmp/$n.log"; then
+              echo "ok $n"
+            else
+              echo "::error title=Compile failed::$n"
+              failed=1
+            fi
+            # Warnings that come from our own code (not the esp32 core) are reported too.
+            grep -E "(firmware/RoboCore|examples/$n)[^:]*:[0-9]+:[0-9]+: warning:" "/tmp/$n.log" | while IFS= read -r w; do
+              echo "::warning title=$n::$w"
+            done || true
+            echo "::endgroup::"
+          done
+          exit $failed
+      - name: Library must not warn
+        run: |
+          if grep -hE "firmware/RoboCore/src/[^:]+:[0-9]+:[0-9]+: warning:" /tmp/*.log; then
+            echo "::error::The RoboCore library compiles with warnings (above)"; exit 1
+          fi
+
+  server:
+    name: Compile server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Unit tests (fake arduino-cli)
+        working-directory: server
+        run: npm test
+      - name: Build the Docker image (real arduino-cli and cores)
+        run: docker build -f server/Dockerfile -t robocore-compile .
+      - name: Start it
+        run: |
+          docker run -d --name rc -p 8080:8080 robocore-compile
+          for i in $(seq 1 60); do curl -fsS http://localhost:8080/health && exit 0; sleep 2; done
+          docker logs rc; exit 1
+      - name: Compile every example through the server
+        run: node server/test/smoke.mjs http://localhost:8080
+      - name: Server log
+        if: always()
+        run: docker logs rc || true

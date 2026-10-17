@@ -1,0 +1,6 @@
+# The compile server image only needs the RoboCore library and the server code.
+*
+!firmware/RoboCore/
+!server/
+server/node_modules
+server/test/

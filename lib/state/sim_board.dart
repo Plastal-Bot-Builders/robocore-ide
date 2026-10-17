@@ -130,6 +130,8 @@ class SimBoard extends ChangeNotifier implements BoardIO {
   void digitalWrite(int pin, int v) {
     if (pin == board.led) {
       led = v;
+      // The RoboCore V2 has no plain LED: LED_BUILTIN is the RGB LED, and HIGH lights it white.
+      if (board.id == 'v2') rgbColor = v != 0 ? const [255, 255, 255] : const [0, 0, 0];
     } else {
       pins[pin] = v;
     }
@@ -138,7 +140,13 @@ class SimBoard extends ChangeNotifier implements BoardIO {
 
   @override
   int digitalRead(int pin) {
-    if (modes[pin] == 2 || pin == 0) return user ? 0 : 1;
+    if (board.id == 'v2') {
+      // USER (IO42) and BOOT (IO0) have pull-ups on the board and read LOW when pressed.
+      if (pin == RoboCoreV2Pins.userButton || modes[pin] == 2) return user ? 0 : 1;
+      if (pin == RoboCoreV2Pins.bootButton) return 1;
+    } else if (modes[pin] == 2 || pin == 0) {
+      return user ? 0 : 1;
+    }
     return (pins[pin] ?? 0) != 0 ? 1 : 0;
   }
 
@@ -212,6 +220,12 @@ class SimBoard extends ChangeNotifier implements BoardIO {
   num temperature() {
     final t = millis();
     return ((24.6 + math.sin(t / 9000) * .6 + (_rnd.nextDouble() - .5) * .2) * 10).round() / 10;
+  }
+
+  @override
+  num batteryVolts() {
+    final t = millis();
+    return ((3.92 - t / 3600000 * .05 + (_rnd.nextDouble() - .5) * .02) * 100).round() / 100;
   }
 
   @override

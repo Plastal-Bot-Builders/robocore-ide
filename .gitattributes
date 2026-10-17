@@ -1,0 +1,15 @@
+# Arduino sketches are C++: count and highlight them as C++ on GitHub.
+*.ino linguist-language=C++
+*.h   linguist-language=C++
+
+# Vendored and generated files stay out of the language stats and diffs.
+web/vendor/** linguist-vendored
+lib/data/robocore_v2_pins.dart linguist-generated
+lib/data/robocore_v2_examples.dart linguist-generated
+
+# Keep text files with LF line endings everywhere (the generators compare byte for byte).
+* text=auto eol=lf
+*.png binary
+*.webp binary
+*.ttf binary
+*.pdf binary

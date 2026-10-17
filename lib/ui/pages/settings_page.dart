@@ -112,6 +112,8 @@ class SettingsPage extends StatelessWidget {
               row('Word wrap', RcSwitch(value: st.wrap, label: 'Word wrap', onChanged: (v) => s.updateSettings((x) => x.wrap = v))),
             ]),
             const SizedBox(height: 20),
+            card('Real board and upload', [const _CompileServerRow()]),
+            const SizedBox(height: 20),
             card('General', [
               row('Language',
                   RcSelect<String>(value: st.lang, width: 130, label: 'Language', items: const [('English', 'English')], onChanged: (_) {})),
@@ -122,5 +124,92 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
     ]);
+  }
+}
+
+/// Settings → Compile server: the address of the server that compiles C++ for the real board.
+class _CompileServerRow extends StatefulWidget {
+  const _CompileServerRow();
+  @override
+  State<_CompileServerRow> createState() => _CompileServerRowState();
+}
+
+class _CompileServerRowState extends State<_CompileServerRow> {
+  final _ctl = TextEditingController();
+  bool _testing = false;
+  (bool, String)? _result;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl.text = AppScope.read(context).settings.compileServer;
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!mounted) return;
+    final s = AppScope.read(context);
+    s.setCompileServer(_ctl.text);
+    _ctl.text = s.settings.compileServer;
+  }
+
+  Future<void> _test() async {
+    _save();
+    setState(() {
+      _testing = true;
+      _result = null;
+    });
+    final r = await AppScope.read(context).checkServer();
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _result = r;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final r = _result;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Compile server', style: tLabel(c, w: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text(
+          'Verify and Upload use it to compile your C++ with arduino-cli and the esp32 core, then the IDE flashes '
+          'the board over USB-C. Without it, Verify uses the built-in preview check and Upload runs the preview board. '
+          'server/README.md shows how to run one (Docker, Render or Cloud Run).',
+          style: tCaption(c),
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: Focus(
+              onFocusChange: (has) {
+                if (!has) _save();
+              },
+              child: RcInput(
+                controller: _ctl,
+                hint: 'https://robocore-compile.example.com',
+                height: 36,
+                onSubmitted: (_) => _save(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Btn(_testing ? 'Testing…' : 'Test', height: 36, onTap: _testing ? null : _test),
+        ]),
+        if (r != null) ...[
+          const SizedBox(height: 8),
+          Text(r.$2, style: tCaption(c, color: r.$1 ? c.ok : c.err)),
+        ],
+      ]),
+    );
   }
 }

@@ -5,9 +5,9 @@ One codebase for the RoboCore IDE on **web, Android, iPhone/iPad, Windows and ma
 ## What's in it
 
 - **Home, Projects, Examples, Libraries, Board Setup, Serial Monitor, Settings**: every screen from the Figma file, in the Paper (cream) and Navy themes.
-- **Blocks editor**: drag blocks from the palette, reorder them, drop them on the palette to delete, undo and redo, and zoom. Blocks generate Arduino code.
-- **Code editor**: syntax highlighting, line numbers, find, auto-indent, Arduino autocomplete and multiple files.
-- **Verify and Upload**: checks the sketch like the Arduino compiler (missing includes, undeclared names, types and board support), then runs it on a **simulated RoboCore board** (LED, RGB LED, USER button, motors, servo, sonar, line sensor, IMU and serial in and out).
+- **Blocks editor**: drag blocks from the palette, reorder them, drop them on the palette to delete, undo and redo, and zoom. Blocks generate Arduino C++ code.
+- **C++ editor**: syntax highlighting, line numbers, find, auto-indent, Arduino autocomplete and multiple files.
+- **Verify and Upload**: with a compile server, a real C++ build (arduino-cli) and an upload over USB-C to the RoboCore V2. Without one, a built-in check like the Arduino compiler's (missing includes, undeclared names, types and board support), then a run on a **simulated RoboCore board** (RGB LED, USER button, motors, servo, sonar, line sensor, IMU, battery and serial in and out).
 - Projects and settings are saved on the device.
 
 ## Run it
@@ -15,7 +15,7 @@ One codebase for the RoboCore IDE on **web, Android, iPhone/iPad, Windows and ma
 You need the Flutter SDK (stable channel).
 
 ```bash
-# first time only: generate the platform folders
+# first time only: generate the platform folders (keeps web/robocore_usb.js and web/vendor)
 flutter create --platforms=web,android,ios,windows,macos --project-name robocore_ide --org com.robocore .
 
 flutter pub get
@@ -49,11 +49,38 @@ lib/
 assets/                    fonts (Barlow, Barlow Condensed, JetBrains Mono) and images
 ```
 
-## Next: the real RoboCore PCB
+## The real RoboCore V2
 
-Talking to the real board will plug in behind the simulated board (`lib/state/sim_board.dart` implements `BoardIO`):
+The IDE talks to a real RoboCore V2 (schematic Rev 2.0, ESP32-S3-WROOM-1-N8R2) over USB-C.
 
-- **Serial**: Web Serial on web, USB serial on Android and desktop, and Bluetooth LE on iPhone/iPad (iOS doesn't allow USB serial).
-- **Upload**: a small compile server running `arduino-cli`, then flashing over USB.
+| Part | Where |
+| --- | --- |
+| Pin map | `hardware/pinout.md`, from `hardware/RoboCore_V2_schematic_rev2.0.pdf`. In code: `firmware/RoboCore/src/RoboCoreV2Pins.h` (the single source of truth), generated into `lib/data/robocore_v2_pins.dart` by `tools/gen_pins.py` |
+| Arduino library | `firmware/RoboCore`: `RoboCoreMotors`, `Sonar`, `LineSensor`, `IMU`, `RoboCore::` helpers, `RC_PIN_…` names |
+| Board test and examples | `firmware/RoboCore/examples`. The IDE's RoboCore V2 examples are these files (`tools/gen_examples.py` writes `lib/data/robocore_v2_examples.dart`) |
+| Compile server | `server/`: arduino-cli 1.5.1, esp32 core 3.3.12, Docker. Deploy with `render.yaml` or Cloud Run (`server/README.md`) |
+| Connect and Serial Monitor | Web Serial in Chrome or Edge (`web/robocore_usb.js`): plug-in and unplug notices, automatic reconnect |
+| Upload | The project goes to the compile server, then esptool-js (`web/vendor/esptool-js`) writes it over the same USB-C port, resets the board and reopens the Serial Monitor |
 
-These need the board's schematic, chip, USB details and pin map.
+To use it:
+
+1. Run the compile server (`server/README.md`) and put its address in **Settings → Compile server**. Press **Test**.
+2. Open the web app in Chrome or Edge, plug in the RoboCore, and in **Board Setup** pick **USB-C** and press **Connect**
+   (the ESP32-S3 shows up as “USB JTAG/serial debug unit”).
+3. **Upload** compiles and flashes. If the board doesn't answer, hold **BOOT**, tap **RESET**, release **BOOT**, and upload again.
+
+Without a board the IDE keeps using the **preview board** (the simulator), and without a compile server **Verify** uses the
+built-in preview check. The native apps (Android, Windows, macOS, iOS) use the preview board for now; USB serial there is a later step.
+
+`docs/robocore-v2-support.md` has the full status and the test checklist for the real board.
+
+## Checks
+
+| Workflow | What it runs |
+| --- | --- |
+| `build.yml` | USB bridge tests (`node --test test/js/robocore_usb.test.mjs`), `dart analyze`, `flutter test`, and the web, Android, Windows, macOS and iOS builds. Flutter is pinned (`FLUTTER_VERSION`) and every action is pinned to a commit |
+| `firmware.yml` | Pin map and examples in sync with the app, the library and examples on a PC (`-Werror` plus logic tests), a real ESP32-S3 compile of every example, the compile server's tests, and its Docker image compiling every example end to end |
+
+**GitHub Pages:** the web app is published by the *Publish web app* job. It needs Pages switched on once:
+**Settings → Pages → Build and deployment → Source: GitHub Actions**. Until then that job skips with a warning, and the
+web build is still saved to the `web-build` branch.

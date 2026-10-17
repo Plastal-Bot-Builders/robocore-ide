@@ -105,7 +105,7 @@ class Thumb extends StatelessWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               RcIcon(blocks ? 'blocks' : 'code', size: 14, color: c.ink),
               const SizedBox(width: 4),
-              Text(blocks ? 'Blocks' : 'Code', style: tCaption(c, color: c.ink, w: FontWeight.w500)),
+              Text(blocks ? 'Blocks' : 'C++', style: tCaption(c, color: c.ink, w: FontWeight.w500)),
             ]),
           ),
         ),
@@ -144,9 +144,9 @@ class BoardSummary extends StatelessWidget {
         child: Row(children: [
           Text('BOARD', style: tH2(c)),
           const Spacer(),
-          Dot(color: s.connected ? c.ok : c.disabled),
+          Dot(color: s.linked ? c.ok : c.disabled),
           const SizedBox(width: 6),
-          Text(s.connected ? 'Connected' : 'Not connected', style: tLabel(c, w: FontWeight.w500)),
+          Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : 'Not connected', style: tLabel(c, w: FontWeight.w500)),
         ]),
       ),
       Padding(
@@ -154,7 +154,7 @@ class BoardSummary extends StatelessWidget {
         child: Column(children: [
           row('Board', b.name),
           row('MCU', b.mcu),
-          row('Port', s.connected ? s.port : '—', mono: true),
+          row('Port', s.linked ? s.portLabel : '—', mono: true),
         ]),
       ),
       Padding(

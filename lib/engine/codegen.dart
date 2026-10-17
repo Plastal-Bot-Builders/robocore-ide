@@ -23,7 +23,9 @@ List<String> _uniq(Iterable<String> xs) {
   return [for (final x in xs) if (seen.add(x)) x];
 }
 
-String genBlocks(String name, List<Map<String, dynamic>> setupBlocks, List<Map<String, dynamic>> loopBlocks) {
+String genBlocks(String name, List<Map<String, dynamic>> setupBlocks, List<Map<String, dynamic>> loopBlocks,
+    {String board = 'v2'}) {
+  final v2 = board == 'v2';
   final all = [...setupBlocks, ...loopBlocks];
   bool has(String t) => all.any((b) => b['t'] == t);
   final usesLed = has('led'),
@@ -39,7 +41,8 @@ String genBlocks(String name, List<Map<String, dynamic>> setupBlocks, List<Map<S
   final l = <String>['// $name', '// Made with blocks in RoboCore IDE.', ''];
   if (usesMot) l.add('#include <RoboCoreMotors.h>');
   if (usesSonar || usesLine) l.add('#include <RoboCoreSensors.h>');
-  if (usesBtn) l.add('#define USER_BUTTON 0');
+  // RoboCore V2: USER is IO42 with a pull-up on the board. Other boards: the BOOT button on pin 0.
+  if (usesBtn) l.add(v2 ? '#define USER_BUTTON ${RoboCoreV2Pins.userButton}' : '#define USER_BUTTON 0');
   final g = <String>[];
   if (usesMot) g.add('RoboCoreMotors motors;');
   if (usesSonar) g.add('Sonar sonar;');
@@ -113,7 +116,7 @@ String genBlocks(String name, List<Map<String, dynamic>> setupBlocks, List<Map<S
   for (final n in tonePins) {
     if (!pins.contains(n)) setup.add('pinMode($n, OUTPUT);');
   }
-  if (usesBtn) setup.add('pinMode(USER_BUTTON, INPUT_PULLUP);');
+  if (usesBtn) setup.add(v2 ? 'pinMode(USER_BUTTON, INPUT);' : 'pinMode(USER_BUTTON, INPUT_PULLUP);');
   if (usesMot) setup.add('motors.begin();');
   if (usesSonar) setup.add('sonar.begin();');
   if (usesLine) setup.add('line.begin();');

@@ -265,9 +265,12 @@ class _BlockBody extends StatelessWidget {
       final f = part as BField;
       final v = values[f.k] ?? d.def[f.k];
       if (f.type == 'sel') {
+        // Pin lists depend on the board (on the RoboCore V2 only the free pins are offered).
+        final board = AppScope.of(context).cur?.board ?? 'v2';
+        final opts = f.k == 'pin' ? pinOptions(board, tone: type == 'tone') : f.opts;
         kids.add(_SelectPill(
           value: '$v',
-          opts: f.opts,
+          opts: opts,
           control: ctl,
           onChanged: pal ? null : (nv) => AppScope.read(context).setBlockField(stack!, index!, f.k, nv),
         ));

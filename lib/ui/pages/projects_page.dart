@@ -72,7 +72,7 @@ class ProjectsPage extends StatelessWidget {
         trailing: FilterBox(hint: 'Filter projects', value: s.pfilter, onChanged: (v) => s.setFilter(pfilter: v)),
       ),
       Pills(
-        items: const [('all', 'All'), ('blocks', 'Blocks'), ('code', 'Code')],
+        items: const [('all', 'All'), ('blocks', 'Blocks'), ('code', 'C++')],
         value: s.ptab,
         onChanged: (v) => s.setFilter(ptab: v),
       ),

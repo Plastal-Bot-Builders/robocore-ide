@@ -8,7 +8,12 @@ class Problem {
   final String file;
   final int line;
   final String msg;
-  const Problem(this.file, this.line, this.msg);
+
+  /// error | warning | note. Only errors stop a build.
+  final String severity;
+  final int column;
+  const Problem(this.file, this.line, this.msg, {this.severity = 'error', this.column = 0});
+  bool get isError => severity == 'error';
 }
 
 class DefineInfo {
@@ -23,6 +28,9 @@ class CompileResult {
   final Map<String, DefineInfo> defines;
   final int size, ram, tokens;
   final BoardDef board;
+
+  /// Names the included libraries add (the RoboCore V2 RC_PIN_… values).
+  final Map<String, num> extraConsts;
   const CompileResult({
     required this.errors,
     required this.board,
@@ -31,6 +39,7 @@ class CompileResult {
     this.size = 0,
     this.ram = 0,
     this.tokens = 0,
+    this.extraConsts = const {},
   });
 }
 
@@ -66,9 +75,12 @@ Map<String, num> baseConsts(BoardDef b) {
     c['A6'] = 34;
     c['A7'] = 35;
   }
-  if (b.id == 'v2') c['RGB_BUILTIN'] = 48;
+  if (b.id == 'v2') c['RGB_BUILTIN'] = RoboCoreV2Pins.rgbLed;
   return c;
 }
+
+/// Pointer and reference marks are not type names.
+bool _typeWord(String w) => w.isNotEmpty && w != '*' && w != '&' && w != '**';
 
 final _defineRe = RegExp(r'^\s*#\s*define\s+(\w+)(?:\s+(.*?))?\s*(?:\/\/.*)?$');
 final _includeRe = RegExp(r'^\s*#\s*include\s*([<"])([^>"]+)[>"]');
@@ -110,7 +122,8 @@ CompileResult compileSketch({
   final libsIn = <String>{};
   for (final i in includes.where((i) => !i.local)) {
     if (i.h == 'Arduino.h') continue;
-    final libs = kLibs.where((l) => l.h == i.h);
+    final h = kHeaderAlias[i.h] ?? i.h;
+    final libs = kLibs.where((l) => l.h == h);
     if (libs.isEmpty) {
       err(i.file, i.line, '${i.h}: No such file or directory. Check the spelling, or install the library from Libraries.');
       continue;
@@ -118,6 +131,10 @@ CompileResult compileSketch({
     final lib = libs.first;
     if (lib.kind == 'opt' && !installedLibs.contains(lib.id)) {
       err(i.file, i.line, '${i.h}: No such file or directory. Install ${lib.name} from Libraries.');
+      continue;
+    }
+    if (lib.arch == 'v2' && b.id != 'v2') {
+      err(i.file, i.line, 'The ${lib.name} library is made for the RoboCore V2. Pick RoboCore V2 as the board, or remove this #include.');
       continue;
     }
     if (lib.arch == 'esp32' && b.arch != 'esp32') {
@@ -140,7 +157,8 @@ CompileResult compileSketch({
   if (!fns.containsKey('setup')) err(main.name, 1, "undefined reference to 'setup()'. Every sketch needs a setup() function.");
   if (!fns.containsKey('loop')) err(main.name, 1, "undefined reference to 'loop()'. Every sketch needs a loop() function.");
 
-  final consts = baseConsts(b);
+  final extra = <String, num>{if (libsIn.any(kRoboCoreLibs.contains)) ...RoboCoreV2Pins.byCName};
+  final consts = {...baseConsts(b), ...extra};
   final declared = <String>{...defines.keys};
   walk(prog, (n) {
     if (n['k'] == 'decl') {
@@ -162,7 +180,7 @@ CompileResult compileSketch({
   }
   void checkType(String type, int line) {
     for (final w in type.split(RegExp(r'\s+'))) {
-      if (w.isEmpty || qualifiers.contains(w) || primTypes.contains(w)) continue;
+      if (!_typeWord(w) || qualifiers.contains(w) || primTypes.contains(w)) continue;
       final lib = libTypes[w];
       if (lib == null) {
         err(main.name, line, "'$w' does not name a type");
@@ -191,7 +209,11 @@ CompileResult compileSketch({
       final name = n['name'] as String;
       if (name.contains('.')) {
         final base = name.split('.').first;
-        if (base != 'Serial' && base != 'Wire' && !declared.contains(base)) {
+        if (base == 'RoboCore') {
+          if (!libsIn.contains('robocore')) {
+            err(main.name, n['line'] as int, "'RoboCore' has not been declared. Add #include <RoboCore.h> at the top of the sketch.");
+          }
+        } else if (base != 'Serial' && base != 'Wire' && !declared.contains(base)) {
           err(main.name, n['line'] as int, "'$base' was not declared in this scope");
         }
       } else if (!builtinFns.contains(name) && !fns.containsKey(name) && !castTypes.contains(name) && !declared.contains(name)) {
@@ -223,5 +245,6 @@ CompileResult compileSketch({
     ram: ram,
     board: b,
     tokens: toks.length,
+    extraConsts: extra,
   );
 }
