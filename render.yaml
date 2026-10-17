@@ -1,0 +1,18 @@
+# Render blueprint for the RoboCore compile server.
+# In Render: New > Blueprint > pick this repo. It builds server/Dockerfile from the repo root.
+services:
+  - type: web
+    name: robocore-compile
+    runtime: docker
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://plastal-bot-builders.github.io,http://localhost:*,http://127.0.0.1:*
+      - key: MAX_RUNNING
+        value: "1"
+      - key: COMPILE_JOBS
+        value: "1"
