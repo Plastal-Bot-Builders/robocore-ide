@@ -27,7 +27,7 @@ class RoboCoreApp extends StatelessWidget {
         listenable: state,
         builder: (context, _) {
           return MaterialApp(
-            title: 'RoboCore IDE',
+            title: 'RoboCore',
             debugShowCheckedModeBanner: false,
             theme: state.settings.theme == 'navy' ? _navyTheme : _paperTheme,
             home: const Shell(),
