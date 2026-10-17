@@ -1,0 +1,55 @@
+00:00 +0: loading /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart
+00:00 +0: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: one damaged project does not throw away the others
+00:00 +1: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: unreadable saved data is kept aside before the samples are restored
+00:00 +2: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: old port names become the preview board
+00:00 +3: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile a new device has no name until the welcome screen is filled in
+00:00 +4: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile saves from before profiles (sample name "Fredrick") ask for a name once, and keep the projects
+00:00 +5: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile one-word names give one initial
+00:00 +6: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board reconnects to the allowed board at start-up
+00:00 +7: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board compiles on the server, flashes every part and reopens the monitor
+00:00 +8: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board compile errors go to Problems and nothing is flashed
+00:00 +9: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board no bootloader answer shows the BOOT + RESET tip
+00:00 +10: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board without a compile server, Upload says how to set one up
+00:00 +11: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board Verify uses the server when one is set
+00:00 +12: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board serial text goes to the board; unplug and replug are reported
+00:00 +13: /home/runner/work/robocore-ide/robocore-ide/test/widget_test.dart: first start asks for a name, then Home greets that user
+00:00 +14: /home/runner/work/robocore-ide/robocore-ide/test/widget_test.dart: first start asks for a name, then Home greets that user
+00:01 +15: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example blink compiles and runs
+00:01 +16: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:01 +17: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:01 +18: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:02 +19: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:02 +20: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:02 +21: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:02 +22: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example traffic compiles and runs
+00:02 +23: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example ultrasonic compiles and runs
+00:03 +24: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example tones compiles and runs
+00:03 +25: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example motors compiles and runs
+00:04 +26: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:04 +27: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example obstacle compiles and runs
+00:04 +28: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example melody compiles and runs
+00:05 +29: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example rgb compiles and runs
+00:05 +30: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:06 +31: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example servo compiles and runs
+00:06 +32: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example distance compiles and runs
+00:06 +33: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example logger compiles and runs
+00:07 +34: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:07 +35: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: reports a missing loop()
+00:07 +36: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: rgbLedWrite is ESP32-only
+00:07 +37: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: blink toggles the LED
+00:08 +38: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every V2 example is the library example from firmware/RoboCore/examples
+00:08 +39: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every library example except the board test passes the preview check and runs
+00:10 +40: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 V2 projects use V2 pins, other boards keep theirs
+00:10 +41: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 generic examples still compile on the boards they list
+00:10 +42: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 the block pin list offers only free pins (and the buzzer for tones)
+00:10 +43: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 the USER button block reads IO42 without the internal pull-up
+00:10 +44: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 RC_PIN names come with the RoboCore headers
+00:10 +45: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 the RoboCore library is refused on other boards
+00:10 +46: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 RoboCore:: helpers need RoboCore.h and run in the preview
+00:10 +47: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 const char * parameters keep their text
+00:10 +48: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 USER on IO42 reads HIGH until pressed
+00:10 +49: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 LED_BUILTIN lights the RGB LED white on the V2
+00:11 +50: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 imu.begin() reports success in the preview
+00:11 +51: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: runaway recursion stops with a clear message instead of hanging
+00:13 +52: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: bounded recursion still works
+00:13 +53: All tests passed!
