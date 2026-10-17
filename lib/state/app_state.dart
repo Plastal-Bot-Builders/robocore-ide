@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/catalog.dart';
 import '../engine/compiler.dart';
+import '../hw/compile_client.dart';
+import '../hw/usb_link.dart';
 import 'models.dart';
 import 'sim_board.dart';
 
@@ -26,8 +28,14 @@ class ConnMsg {
 
 const _storeKey = 'robocore-ide-v1';
 
+/// Shown when esptool-js cannot put the board into its bootloader.
+const kBootTip = 'Could not start the board’s bootloader. Hold BOOT, tap RESET, release BOOT, then press Upload again. '
+    '(When the upload finishes, press RESET once to run the new sketch.)';
+
 class AppState extends ChangeNotifier {
-  AppState() {
+  AppState({UsbLink? usbLink, CompileClient? compileClient})
+      : usb = usbLink ?? createUsbLink(),
+        compiler = compileClient ?? CompileClient() {
     sim = SimBoard(
       onSerial: (t, d) => serialPush(t, d),
       onNote: (t) {
@@ -35,9 +43,17 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       },
     );
+    usb.onText = _onUsbText;
+    usb.onEvent = _onUsbEvent;
   }
 
   late final SimBoard sim;
+
+  /// The real board on USB-C (Web Serial + esptool-js on the web).
+  final UsbLink usb;
+
+  /// The compile server client (arduino-cli in a container, see server/).
+  final CompileClient compiler;
   SharedPreferences? _prefs;
   Timer? _persistTimer;
   Timer? _saveTimer;
@@ -46,8 +62,12 @@ class AppState extends ChangeNotifier {
   // ---- persisted ----
   String user = 'Fredrick';
   String board = 'v2';
-  String port = kPort;
+
+  /// kPortSim (the preview board) or kPortUsb (a real board on USB-C).
+  String port = kPortSim;
   int baud = 115200;
+
+  /// The preview board is switched on (Connect / Disconnect while on the simulator).
   bool connected = true;
   String cpu = '240 MHz';
   String partition = '8 MB · 3 MB app / 1.5 MB SPIFFS';
@@ -87,6 +107,17 @@ class AppState extends ChangeNotifier {
   Timer? _toastTimer;
   int logVersion = 0;
 
+  // ---- USB board ----
+  bool usbOpen = false;
+  String? usbLabel;
+  int? uploadPct;
+  int _lastPctLine = -10;
+  String _rxBuf = '';
+  Timer? _rxTimer;
+
+  /// Set when stored projects could not be read; shown once after loading.
+  String? loadNotice;
+
   /// Bumped on every serial line, so only log views rebuild.
   final ValueNotifier<int> logTick = ValueNotifier(0);
 
@@ -101,34 +132,103 @@ class AppState extends ChangeNotifier {
   String get boardId => (view == Screen.editor && cur != null) ? cur!.board : board;
   Set<String> get installedLibs => {for (final e in libs.entries) if (e.value) e.key};
 
+  bool get onUsb => port == kPortUsb;
+  bool get hasServer => settings.compileServer.trim().isNotEmpty;
+
+  /// Something is there to talk to: the open USB port, or the preview board when it is switched on.
+  bool get linked => onUsb ? usbOpen : connected;
+
+  String get portLabel => onUsb
+      ? (usbOpen ? 'USB-C · ${usbLabel ?? 'board'}' : 'USB-C (not connected)')
+      : 'Preview board (simulator)';
+
+  String get portShort => onUsb ? (usbOpen ? 'USB-C' : 'no port') : (connected ? 'preview' : 'off');
+
+  List<(String, String)> get portItems => [
+        (kPortSim, 'Preview board (simulator)'),
+        (kPortUsb, usbOpen ? 'USB-C · ${usbLabel ?? 'board'}' : (usb.supported ? 'USB-C board…' : 'USB-C board (Chrome or Edge only)')),
+      ];
+
   // ---------- persistence ----------
   Future<void> load() async {
+    String? raw;
     try {
       _prefs = await SharedPreferences.getInstance();
-      final raw = _prefs!.getString(_storeKey);
-      if (raw != null) {
-        final o = jsonDecode(raw) as Map<String, dynamic>;
-        if (o['v'] == 1 && o['projects'] is List) {
-          user = o['user'] as String? ?? user;
-          board = o['board'] as String? ?? board;
-          port = o['port'] as String? ?? port;
-          baud = (o['baud'] as num?)?.toInt() ?? baud;
-          connected = o['connected'] as bool? ?? connected;
-          cpu = o['cpu'] as String? ?? cpu;
-          partition = o['partition'] as String? ?? partition;
-          settings = Settings.fromJson(((o['settings'] as Map?) ?? const {}).cast<String, dynamic>());
-          libs = {...libs, ...((o['libs'] as Map?) ?? const {}).cast<String, bool>()};
-          projects = [for (final p in o['projects'] as List) Project.fromJson((p as Map).cast<String, dynamic>())];
-          sideCollapsed = _prefs!.getBool('rc-side') ?? false;
+      raw = _prefs!.getString(_storeKey);
+    } catch (_) {
+      raw = null;
+    }
+    if (raw != null) _restore(raw);
+    if (projects.isEmpty) _seed();
+    if (onUsb) {
+      serialPush('Looking for the board on USB-C…', 'sys');
+      unawaited(_autoReconnect());
+    } else {
+      serialPush('Preview board ready at $baud baud. Plug in a RoboCore and pick USB-C in Board Setup to use the real one.', 'sys');
+      _bootBoard();
+    }
+    if (loadNotice != null) showToast(loadNotice!);
+    notifyListeners();
+  }
+
+  /// Reads the saved state one piece at a time, so one damaged project (or setting) never
+  /// throws away the rest. Anything that can't be read is kept under a backup key, not deleted.
+  void _restore(String raw) {
+    Map<String, dynamic> o;
+    try {
+      o = (jsonDecode(raw) as Map).cast<String, dynamic>();
+    } catch (_) {
+      _keepAside('$_storeKey-unreadable', raw);
+      loadNotice = 'Your saved projects could not be read. A copy was kept on this device; the samples were restored.';
+      return;
+    }
+    if (o['v'] != 1) return;
+    T? field<T>(T? Function() f) {
+      try {
+        return f();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    user = field(() => o['user'] as String?) ?? user;
+    board = field(() => o['board'] as String?) ?? board;
+    if (!kBoards.containsKey(board)) board = 'v2';
+    port = field(() => o['port'] as String?) == kPortUsb ? kPortUsb : kPortSim;
+    baud = field(() => (o['baud'] as num?)?.toInt()) ?? baud;
+    connected = field(() => o['connected'] as bool?) ?? connected;
+    cpu = field(() => o['cpu'] as String?) ?? cpu;
+    partition = field(() => o['partition'] as String?) ?? partition;
+    settings = field(() => Settings.fromJson(((o['settings'] as Map?) ?? const {}).cast<String, dynamic>())) ?? settings;
+    libs = field(() => {...libs, ...((o['libs'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', v == true))}) ?? libs;
+    sideCollapsed = field(() => _prefs?.getBool('rc-side')) ?? false;
+
+    final list = o['projects'];
+    final bad = <dynamic>[];
+    if (list is List) {
+      for (final item in list) {
+        try {
+          final pr = Project.fromJson((item as Map).cast<String, dynamic>());
+          if (!kBoards.containsKey(pr.board)) pr.board = 'v2';
+          if (pr.files.isEmpty) throw const FormatException('no files');
+          projects.add(pr);
+        } catch (_) {
+          bad.add(item);
         }
       }
-    } catch (_) {
-      projects = [];
     }
-    if (projects.isEmpty) _seed();
-    serialPush('Connected to $port at $baud baud', 'sys');
-    _bootBoard();
-    notifyListeners();
+    if (bad.isNotEmpty) {
+      _keepAside('$_storeKey-damaged', jsonEncode(bad));
+      final n = bad.length;
+      loadNotice = '$n saved project${n == 1 ? '' : 's'} could not be opened and ${n == 1 ? 'was' : 'were'} set aside. '
+          'Your other projects are fine.';
+    }
+  }
+
+  void _keepAside(String key, String value) {
+    try {
+      _prefs?.setString('$key-${DateTime.now().millisecondsSinceEpoch}', value);
+    } catch (_) {}
   }
 
   void _seed() {
@@ -361,38 +461,76 @@ class AppState extends ChangeNotifier {
   }
 
   void testConnection() {
+    if (onUsb) {
+      conn = usbOpen
+          ? ConnMsg('ok', 'The board on USB-C is connected (${usbLabel ?? 'USB'}). Its output shows in the Serial Monitor.')
+          : ConnMsg('err', usb.supported ? 'No board on USB-C. Plug it in and press Connect.' : UsbResult.unsupported.message);
+      notifyListeners();
+      return;
+    }
     conn = const ConnMsg('', 'Testing…');
     notifyListeners();
     Timer(const Duration(milliseconds: 700), () {
-      conn = connected && port == kPort
-          ? ConnMsg('ok', '${kBoards[board]!.name} answered on $port in ${8 + _rnd.nextInt(10)} ms.')
-          : ConnMsg('err', connected ? 'No board answered on $port. Pick the usbmodem port.' : 'The board is disconnected. Press Connect first.');
+      conn = connected
+          ? ConnMsg('ok', 'The preview ${kBoards[board]!.name} answered in ${8 + _rnd.nextInt(10)} ms.')
+          : const ConnMsg('err', 'The preview board is switched off. Press Connect first.');
       notifyListeners();
     });
   }
 
+  /// Disconnect button: closes the USB port, or switches the preview board off.
   void disconnect() {
+    if (onUsb) {
+      unawaited(disconnectUsb());
+      return;
+    }
     connected = false;
     sim.stop();
     persist(now: true);
-    serialPush('Disconnected from $port.', 'sys');
+    serialPush('Preview board switched off.', 'sys');
     conn = null;
     notifyListeners();
   }
 
+  /// Connect button: opens the browser's port chooser for USB, or switches the preview board on.
   void connect() {
+    if (onUsb) {
+      unawaited(connectUsb());
+      return;
+    }
     connected = true;
     persist(now: true);
-    serialPush('Connected to $port at $baud baud', 'sys');
-    conn = ConnMsg('ok', 'Connected to $port.');
+    serialPush('Preview board ready at $baud baud.', 'sys');
+    conn = const ConnMsg('ok', 'Preview board switched on.');
     notifyListeners();
   }
 
   void setPort(String v, {bool fromMenu = false}) {
-    port = v;
-    persist(now: true);
     conn = null;
-    serialPush(v == kPort ? 'Connected to $port at $baud baud' : 'No board on $v. Choose the usbmodem port.', v == kPort ? 'sys' : 'err');
+    if (v == kPortUsb && !usb.supported) {
+      // Stay on the preview board and say why (no Web Serial here).
+      unawaited(connectUsb());
+      notifyListeners();
+      return;
+    }
+    if (v == kPortUsb) {
+      final changed = port != kPortUsb;
+      port = kPortUsb;
+      persist(now: true);
+      if (sim.running) sim.stop();
+      if (!usbOpen) {
+        unawaited(connectUsb());
+      } else if (changed) {
+        serialPush('Using the board on USB-C.', 'sys');
+      }
+    } else {
+      if (port == kPortSim) return;
+      port = kPortSim;
+      persist(now: true);
+      if (usbOpen) unawaited(disconnectUsb(quiet: true));
+      serialPush('Using the preview board (simulator).', 'sys');
+      setStatus('Ready');
+    }
     notifyListeners();
   }
 
@@ -400,8 +538,171 @@ class AppState extends ChangeNotifier {
     baud = v;
     persist(now: true);
     serialPush('Baud rate set to $baud.', 'sys');
-    if (baud != 115200 && sim.running) serialPush('The sketch prints at 115200 baud, so text may look garbled at this rate.', 'err');
+    if (onUsb && usbOpen) {
+      usb.setBaud(v).then((r) {
+        if (!r.ok) serialPush('Could not change the baud rate: ${r.message}', 'err');
+      });
+    } else if (baud != 115200 && sim.running) {
+      serialPush('The sketch prints at 115200 baud, so text may look garbled at this rate.', 'err');
+    }
     notifyListeners();
+  }
+
+  // ---------- USB board ----------
+  /// Opens the browser's port chooser. Call it straight from a click (browsers require that).
+  Future<void> connectUsb() async {
+    if (!usb.supported) {
+      conn = ConnMsg('err', UsbResult.unsupported.message);
+      serialPush(UsbResult.unsupported.message, 'err');
+      showToast(UsbResult.unsupported.message);
+      return;
+    }
+    conn = const ConnMsg('', 'Pick the board in the browser’s list (ESP32-S3: “USB JTAG/serial debug unit”)…');
+    notifyListeners();
+    final r = await usb.connect(baud: baud);
+    if (!r.ok) {
+      conn = r.code == 'cancelled' ? const ConnMsg('', 'No port chosen.') : ConnMsg('err', r.message);
+      if (r.code != 'cancelled') serialPush(r.message, 'err');
+      notifyListeners();
+      return;
+    }
+    _usbUp(r.data['label'] as String?, 'Connected to');
+  }
+
+  Future<void> disconnectUsb({bool quiet = false}) async {
+    await usb.disconnect();
+    _flushRx();
+    usbOpen = false;
+    if (!quiet) serialPush('Disconnected from ${usbLabel ?? 'the USB board'}.', 'sys');
+    conn = null;
+    notifyListeners();
+  }
+
+  /// Restarts the sketch on the real board (RESET through the USB serial lines).
+  Future<void> resetUsbBoard() async {
+    if (!usbOpen) return;
+    final r = await usb.reset();
+    if (!r.ok) serialPush('Could not reset the board: ${r.message}', 'err');
+  }
+
+  Future<void> _autoReconnect() async {
+    if (!usb.supported) {
+      serialPush('${UsbResult.unsupported.message} Using the preview board until then.', 'sys');
+      return;
+    }
+    final r = await usb.reconnect(baud: baud);
+    if (r.ok) {
+      _usbUp(r.data['label'] as String?, 'Reconnected to');
+    } else {
+      serialPush('No board on USB-C yet. Plug in the RoboCore and press Connect in Board Setup.', 'sys');
+      notifyListeners();
+    }
+  }
+
+  void _usbUp(String? label, String verb) {
+    usbOpen = true;
+    usbLabel = label ?? 'USB board';
+    port = kPortUsb;
+    if (sim.running) sim.stop();
+    persist(now: true);
+    serialPush('$verb $usbLabel at $baud baud.', 'sys');
+    conn = ConnMsg('ok', '$verb $usbLabel.');
+    setStatus('Ready');
+    notifyListeners();
+  }
+
+  void _onUsbText(String t) {
+    _rxBuf += t;
+    var k = _rxBuf.indexOf('\n');
+    while (k >= 0) {
+      var line = _rxBuf.substring(0, k);
+      if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
+      serialPush(line, 'out');
+      _rxBuf = _rxBuf.substring(k + 1);
+      k = _rxBuf.indexOf('\n');
+    }
+    _rxTimer?.cancel();
+    if (_rxBuf.length > 2000) {
+      _flushRx();
+    } else if (_rxBuf.isNotEmpty) {
+      // Text without a newline yet (a prompt): show it if nothing more comes soon.
+      _rxTimer = Timer(const Duration(milliseconds: 300), _flushRx);
+    }
+  }
+
+  void _flushRx() {
+    _rxTimer?.cancel();
+    if (_rxBuf.isEmpty) return;
+    var line = _rxBuf;
+    if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
+    _rxBuf = '';
+    serialPush(line, 'out');
+  }
+
+  void _onUsbEvent(String type, String msg) {
+    switch (type) {
+      case 'unplugged':
+        _flushRx();
+        usbOpen = false;
+        serialPush('Board unplugged ($msg). Plug it back in and it reconnects by itself.', 'err');
+        setStatus('Not connected', 'err');
+        showToast('The board was unplugged. Plug it back in to reconnect.');
+        break;
+      case 'reconnected':
+        usbOpen = true;
+        usbLabel = msg;
+        serialPush('Board reconnected ($msg).', 'sys');
+        setStatus('Ready');
+        showToast('Board reconnected.');
+        break;
+      case 'restarted':
+        usbOpen = true;
+        serialPush('— board restarted —', 'sys');
+        break;
+      case 'plugged':
+        if (!usbOpen) showToast('A board was plugged in ($msg). Press Connect in Board Setup to use it.');
+        break;
+      case 'error':
+        serialPush(msg, 'err');
+        break;
+      case 'log':
+        // esptool-js output; the progress lines come from 'progress' below.
+        final line = msg.trimRight();
+        if (busy == 'upload' && line.isNotEmpty && !line.startsWith('Writing at')) outLine(line, 'sys');
+        break;
+      case 'stage':
+        if (busy != 'upload') break;
+        switch (msg) {
+          case 'connecting':
+            outLine('Resetting the board into its bootloader…');
+          case 'writing':
+            outLine('Writing the program…');
+          case 'resetting':
+            outLine('Restarting the board…');
+          case 'reopening':
+            outLine('Reopening the Serial Monitor…');
+        }
+        break;
+      case 'progress':
+        _onProgress(msg);
+        break;
+    }
+    notifyListeners();
+  }
+
+  void _onProgress(String json) {
+    try {
+      final m = (jsonDecode(json) as Map).cast<String, dynamic>();
+      final done = (m['done'] as num).toDouble(), total = (m['total'] as num).toDouble();
+      final pct = total <= 0 ? 0 : (done * 100 / total).floor().clamp(0, 100).toInt();
+      uploadPct = pct;
+      setStatus('Uploading $pct %', 'busy');
+      if (pct >= _lastPctLine + 10 || pct == 100 && _lastPctLine < 100) {
+        _lastPctLine = pct - pct % 10;
+        final addr = ((m['address'] as num?)?.toInt() ?? 0).toRadixString(16).padLeft(8, '0');
+        outLine('Writing ${m['name'] ?? ''} at 0x$addr… ($pct %)');
+      }
+    } catch (_) {}
   }
 
   void setCpu(String v) {
@@ -442,6 +743,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCompileServer(String url) {
+    settings.compileServer = normalizeServerUrl(url);
+    persist(now: true);
+    notifyListeners();
+  }
+
+  /// Settings → Compile server → Test.
+  Future<(bool, String)> checkServer([String? url]) => compiler.health(url ?? settings.compileServer);
+
   // ---------- serial ----------
   void serialPush(String text, [String dir = 'out']) {
     log.add(LogLine(stamp(), text, dir));
@@ -458,11 +768,22 @@ class AppState extends ChangeNotifier {
   }
 
   void sendSerial(String text) {
-    if (!connected) {
-      serialPush('Board not connected. Connect it in Board Setup.', 'err');
+    final end = const {'nl': '\n', 'none': '', 'cr': '\r', 'both': '\r\n'}[lineEnd] ?? '\n';
+    if (onUsb) {
+      if (!usbOpen) {
+        serialPush('The board is not connected. Press Connect in Board Setup.', 'err');
+        return;
+      }
+      serialPush(text, 'in');
+      usb.write(text + end).then((r) {
+        if (!r.ok) serialPush('Could not send: ${r.message}', 'err');
+      });
       return;
     }
-    final end = const {'nl': '\n', 'none': '', 'cr': '\r', 'both': '\r\n'}[lineEnd] ?? '\n';
+    if (!connected) {
+      serialPush('Preview board switched off. Connect it in Board Setup.', 'err');
+      return;
+    }
     serialPush(text, 'in');
     sim.queueInput(text + end);
     final b = kBoards[sim.running ? sim.boardId : boardId]!;
@@ -491,9 +812,15 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- build ----------
+  /// Verify: a real C++ compile on the compile server when one is set, otherwise the built-in
+  /// preview check. Returns the preview result (used to run the sketch on the preview board).
   Future<CompileResult?> verify({bool fromUpload = false}) async {
     final p = cur;
     if (p == null || busy != null) return null;
+    if (!fromUpload && hasServer) {
+      await _buildOnServer(p, flash: false);
+      return null;
+    }
     p.syncCode();
     busy = 'verify';
     problems = [];
@@ -501,7 +828,7 @@ class AppState extends ChangeNotifier {
     if (!fromUpload) output.clear();
     final b = kBoards[p.board]!;
     final sw = Stopwatch()..start();
-    outLine('Compiling sketch for ${b.full}…', 'info');
+    outLine('Checking the sketch for ${b.full} (preview check)…', 'info');
     setStatus('Verifying…', 'busy');
     panelOpen = true;
     if (panelTab == 'problems' || !fromUpload) panelTab = 'output';
@@ -524,6 +851,9 @@ class AppState extends ChangeNotifier {
         outLine('${e.file}:${e.line}: error: ${e.msg}', 'err');
       }
       outLine('Compilation failed with ${r.errors.length} error${r.errors.length > 1 ? 's' : ''}.', 'err');
+      if (!hasServer) {
+        outLine('This was the built-in preview check. For a full C++ compile, add a compile server in Settings.', 'sys');
+      }
       panelTab = 'problems';
       setStatus('Errors', 'err');
       notifyListeners();
@@ -543,9 +873,14 @@ class AppState extends ChangeNotifier {
   Future<void> upload() async {
     final p = cur;
     if (p == null || busy != null) return;
+    if (onUsb) {
+      if (!p.autosave) saveNow(p);
+      await _buildOnServer(p, flash: true);
+      return;
+    }
     if (!connected) {
       output.clear();
-      outLine('Upload needs a connected board. Connect it in Board Setup, then try again.', 'err');
+      outLine('The preview board is switched off. Connect it in Board Setup, or pick USB-C for a real board.', 'err');
       panelTab = 'output';
       panelOpen = true;
       setStatus('Not connected', 'err');
@@ -559,7 +894,7 @@ class AppState extends ChangeNotifier {
     final b = r.board;
     busy = 'upload';
     setStatus('Uploading…', 'busy');
-    outLine('Connecting to ${b.name} on $port…');
+    outLine('Connecting to the preview ${b.name}…');
     notifyListeners();
     await Future<void>.delayed(const Duration(milliseconds: 380));
     outLine('Chip is ${b.chip}. Writing ${fmtN(r.size)} bytes…');
@@ -579,6 +914,133 @@ class AppState extends ChangeNotifier {
     setStatus('Running');
     notifyListeners();
     _run(r, p.name);
+  }
+
+  /// Compiles on the compile server, shows the problems, and (for Upload) flashes the board on USB-C.
+  Future<void> _buildOnServer(Project p, {required bool flash}) async {
+    p.syncCode();
+    final b = kBoards[p.board]!;
+    output.clear();
+    problems = [];
+    verified = null;
+    panelOpen = true;
+    panelTab = 'output';
+    if (!hasServer) {
+      outLine('Uploading to a real board needs the compile server. Add its address in Settings → Compile server '
+          '(server/README.md shows how to run one).', 'err');
+      setStatus('No compile server', 'err');
+      showToast('Add a compile server in Settings to upload to the real board.');
+      notifyListeners();
+      return;
+    }
+    busy = flash ? 'upload' : 'verify';
+    final sw = Stopwatch()..start();
+    outLine('Compiling ${p.files.first.name} for ${b.full} on the compile server…', 'info');
+    setStatus('Compiling…', 'busy');
+    notifyListeners();
+    final r = await compiler.compile(
+      serverUrl: settings.compileServer,
+      board: p.board,
+      files: [for (final f in p.files) SourceFile(f.name, f.content)],
+    );
+    if (r.error != null) {
+      busy = null;
+      outLine(r.error!, 'err');
+      setStatus(r.retry ? 'Server not reachable' : 'Build failed', 'err');
+      notifyListeners();
+      return;
+    }
+    final logLines = r.log.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    for (final l in logLines.skip(math.max(0, logLines.length - 20))) {
+      outLine(l.trimRight());
+    }
+    problems = r.problems;
+    for (final e in r.problems) {
+      outLine('${e.file}:${e.line}${e.column > 0 ? ':${e.column}' : ''}: ${e.severity}: ${e.msg}', e.isError ? 'err' : 'sys');
+    }
+    if (!r.ok) {
+      busy = null;
+      final n = math.max(1, r.errors.length);
+      outLine('Compilation failed with $n error${n == 1 ? '' : 's'}.', 'err');
+      panelTab = 'problems';
+      setStatus('Errors', 'err');
+      notifyListeners();
+      return;
+    }
+    if (r.flashUsed != null) {
+      final max = r.flashMax ?? b.max;
+      final pct = math.max(1, (r.flashUsed! / max * 100).round());
+      final rp = r.ramUsed == null ? 0 : math.max(1, (r.ramUsed! / (r.ramMax ?? b.ram) * 100).round());
+      verified = Verified(r.flashUsed!, pct, rp);
+    }
+    outLine('Compiled in ${(sw.elapsedMilliseconds / 1000).toStringAsFixed(1)} s${flash ? '' : ' — ready to upload'}', 'ok');
+    if (!flash) {
+      busy = null;
+      setStatus('Verified');
+      notifyListeners();
+      return;
+    }
+    await _flash(p, b, r);
+  }
+
+  Future<void> _flash(Project p, BoardDef b, ServerBuild r) async {
+    final img = r.image;
+    if (img == null || img['format'] != 'esp32' || img['parts'] is! List) {
+      busy = null;
+      outLine(
+          img?['format'] == 'hex'
+              ? 'The sketch compiled, but uploading to an Arduino Uno from the browser is not built yet.'
+              : 'The compile server sent no program image for this board.',
+          'err');
+      setStatus('Not uploaded', 'err');
+      notifyListeners();
+      return;
+    }
+    if (!usbOpen) {
+      final rc = await usb.reconnect(baud: baud);
+      if (rc.ok) {
+        _usbUp(rc.data['label'] as String?, 'Reconnected to');
+      } else {
+        busy = null;
+        outLine('No board on USB-C. Plug in the RoboCore, press Connect (Board Setup), then Upload again.', 'err');
+        setStatus('Not connected', 'err');
+        notifyListeners();
+        return;
+      }
+    }
+    _flushRx();
+    uploadPct = 0;
+    _lastPctLine = -10;
+    setStatus('Uploading…', 'busy');
+    outLine('Uploading to the ${b.name} on USB-C…');
+    notifyListeners();
+    final res = await usb.flash({
+      'parts': img['parts'],
+      'chip': img['chip'] ?? b.chip,
+      'boardName': b.name,
+      'baud': 921600,
+      'monitorBaud': baud,
+    });
+    busy = null;
+    uploadPct = null;
+    usbOpen = usb.isOpen;
+    if (res.ok) {
+      final bytes = (res.data['bytes'] as num?)?.toInt() ?? 0;
+      outLine('Upload complete: ${fmtN(bytes)} bytes written to the ${res.data['chip'] ?? b.chip}. '
+          'The board restarted and is running ${p.name}.', 'ok');
+      serialPush('— ${b.name} restarted with ${p.name} —', 'sys');
+      if (!usbOpen) outLine('The Serial Monitor did not reopen by itself. Press Connect in Board Setup to see the output.', 'sys');
+      lastRunName = p.name;
+      setStatus('Uploaded');
+    } else {
+      outLine('Upload failed: ${res.message}', 'err');
+      if (res.code == 'bootloader') {
+        outLine(kBootTip, 'err');
+        showToast('Hold BOOT, tap RESET, release BOOT, then Upload again.');
+      }
+      setStatus('Upload failed', 'err');
+    }
+    notifyListeners();
   }
 
   void _bootBanner(BoardDef b) {
@@ -617,7 +1079,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _bootBoard() {
-    if (!connected) return;
+    if (!connected || onUsb) return;
     final p = projects.where((x) => x.name == 'Blink LED').firstOrNull ?? sortedProjects.firstOrNull;
     if (p == null) return;
     p.syncCode();
@@ -751,7 +1213,7 @@ class AppState extends ChangeNotifier {
     snap();
     final s = stack ?? target;
     final list = p.stack(s);
-    final b = <String, dynamic>{'t': t, ...kBlockTypes[t]!.def};
+    final b = <String, dynamic>{'t': t, ...blockDefaults(t, p.board)};
     list.insert((index ?? list.length).clamp(0, list.length).toInt(), b);
     target = s;
     _afterBlocks(p);

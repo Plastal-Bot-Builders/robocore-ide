@@ -351,7 +351,7 @@ class _BoardChipState extends State<BoardChip> {
     final s = AppScope.of(context);
     final c = RC.of(context);
     final b = kBoards[s.boardId]!;
-    final portShort = s.connected ? s.port.split('/').last.replaceFirst('cu.', '') : 'no port';
+    final portShort = s.portShort;
     return Popover(
       open: open,
       onClose: () => setState(() => open = false),
@@ -384,10 +384,10 @@ class _BoardChipState extends State<BoardChip> {
               Container(width: 1, height: 20, color: const Color(0xFFE7E5E0)),
             ],
             const SizedBox(width: 10),
-            Dot(color: s.connected ? c.ok : const Color(0xFFA4A8AD)),
+            Dot(color: s.linked ? c.ok : const Color(0xFFA4A8AD)),
             if (!widget.compact) ...[
               const SizedBox(width: 6),
-              Text(s.connected ? 'Connected' : 'Not connected',
+              Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : 'Not connected',
                   style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: kNavy)),
             ],
             const SizedBox(width: 10),
@@ -453,19 +453,26 @@ class BoardMenu extends StatelessWidget {
             Row(children: [
               Text('Port', style: tLabel(c, w: FontWeight.w500)),
               const Spacer(),
-              ConnStatus(connected: s.connected),
+              ConnStatus(connected: s.linked),
             ]),
             const SizedBox(height: 6),
             RcSelect<String>(
               value: s.port,
               width: 314,
               label: 'Port',
-              items: const [(kPort, kPort), ('/dev/cu.Bluetooth-Incoming-Port', '/dev/cu.Bluetooth-Incoming-Port')],
+              items: s.portItems,
               onChanged: (v) {
                 s.setPort(v);
                 onDone();
               },
             ),
+            if (s.onUsb && !s.usbOpen) ...[
+              const SizedBox(height: 8),
+              Btn('Connect USB-C board', icon: 'chip', kind: BtnKind.primary, small: true, onTap: () {
+                s.connectUsb();
+                onDone();
+              }),
+            ],
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerLeft,
@@ -665,7 +672,7 @@ class SideBar extends StatelessWidget {
               label: n.$2,
               on: s.view == n.$1,
               collapsed: collapsed,
-              dot: n.$1 == Screen.serial && s.sim.running,
+              dot: n.$1 == Screen.serial && (s.onUsb ? s.usbOpen : s.sim.running),
               onTap: () => nav(n.$1),
             ),
         const Spacer(),
@@ -780,7 +787,7 @@ class StatusBar extends StatelessWidget {
           ),
         ),
         if (!phone)
-          Text('${b.name} · ${s.connected ? s.port : 'not connected'} · ${s.baud} baud', style: tCaption(c, color: c.faint)),
+          Text('${b.name} · ${s.linked ? s.portLabel : 'not connected'} · ${s.baud} baud', style: tCaption(c, color: c.faint)),
         if (s.view == Screen.editor && p != null && p.mode == 'code') ...[
           const SizedBox(width: 16),
           Text(s.cursorPos, style: tCaption(c, color: c.faint)),
@@ -802,7 +809,7 @@ class StatusBar extends StatelessWidget {
         final ins = kLibs.where((l) => l.kind == 'opt' && (s.libs[l.id] ?? false)).length;
         return '$inc included · $ins installed';
       case Screen.board:
-        return 'Board package 1.0 · esp32 core 3.0.7';
+        return 'RoboCore library 1.0 · esp32 core 3.3.12 · schematic rev 2.0';
       case Screen.serial:
         return '${s.log.length} lines received';
       case Screen.settings:
@@ -816,7 +823,7 @@ class StatusBar extends StatelessWidget {
           final n = p.setup.length + p.loop.length;
           return '$n block${n == 1 ? '' : 's'} · saved $t';
         }
-        return '${p.files[s.file.clamp(0, p.files.length - 1).toInt()].name} · saved $t';
+        return '${p.files[s.file.clamp(0, p.files.length - 1).toInt()].name} · C++ · saved $t';
     }
   }
 }

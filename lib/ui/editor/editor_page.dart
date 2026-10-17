@@ -98,7 +98,7 @@ class _EditorPageState extends State<EditorPage> {
         Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
-          child: Row(children: [seg('blocks', 'Blocks'), const SizedBox(width: 2), seg('code', 'Code')]),
+          child: Row(children: [seg('blocks', 'Blocks'), const SizedBox(width: 2), seg('code', 'C++')]),
         ),
         const SizedBox(width: 12),
         if (tabs != null) tabs else const Spacer(),
@@ -127,7 +127,7 @@ class _EditorPageState extends State<EditorPage> {
       ]),
     );
 
-    final errLines = {for (final e in s.problems) if (e.file == f.name) e.line};
+    final errLines = {for (final e in s.problems) if (e.file == f.name && e.isError) e.line};
     final main = p.mode == 'blocks'
         ? const BlocksView()
         : CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines);
@@ -217,7 +217,7 @@ class ConsolePanel extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                   decoration: BoxDecoration(color: h ? c.raised : Colors.transparent, borderRadius: BorderRadius.circular(7)),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Padding(padding: const EdgeInsets.only(top: 2), child: RcIcon('alert', size: 15, color: c.err)),
+                    Padding(padding: const EdgeInsets.only(top: 2), child: RcIcon(e.isError ? 'alert' : 'info', size: 15, color: e.isError ? c.err : c.muted)),
                     const SizedBox(width: 10),
                     Expanded(child: Text(e.msg, style: tBody(c, size: 13, height: 18 / 13))),
                     const SizedBox(width: 10),
@@ -273,7 +273,8 @@ class ConsolePanel extends StatelessWidget {
   }
 }
 
-/// Live view of the simulated board: LED, RGB, USER button, motors, buzzer.
+/// Live view of the simulated board (LED, RGB, USER button, motors, buzzer),
+/// or the real board's status when it is on USB-C.
 class LiveBoard extends StatelessWidget {
   const LiveBoard({super.key});
 
@@ -281,6 +282,7 @@ class LiveBoard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = RC.of(context);
+    if (s.onUsb) return const _UsbBoardStatus();
     final sim = s.sim;
     final b = kBoards[s.cur?.board ?? s.board]!;
     return ListenableBuilder(
@@ -315,7 +317,8 @@ class LiveBoard extends StatelessWidget {
           decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              lamp(led ? kBrand : null, 'LED'),
+              // The RoboCore V2 has no plain LED: LED_BUILTIN is the RGB LED.
+              if (b.id != 'v2') lamp(led ? kBrand : null, 'LED'),
               if (b.id == 'v2') lamp(rgbOn ? Color.fromARGB(255, rgb[0], rgb[1], rgb[2]) : null, 'RGB'),
               _UserButton(label: b.id == 'v2' ? 'USER' : 'BUTTON'),
             ]),
@@ -338,6 +341,58 @@ class LiveBoard extends StatelessWidget {
           ]),
         );
       },
+    );
+  }
+}
+
+/// The editor's board card while the real board is on USB-C.
+class _UsbBoardStatus extends StatelessWidget {
+  const _UsbBoardStatus();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = RC.of(context);
+    final pct = s.uploadPct;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Dot(color: s.usbOpen ? c.ok : c.disabled, size: 7),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(s.usbOpen ? 'Real board on USB-C' : 'Real board not connected',
+                style: tCaption(c, color: s.usbOpen ? c.ok : c.muted, w: FontWeight.w600), overflow: TextOverflow.ellipsis),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        if (pct != null) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(value: pct / 100, minHeight: 6, backgroundColor: c.sunk, color: kBrand),
+          ),
+          const SizedBox(height: 6),
+          Text('Uploading $pct %', style: tCaption(c)),
+        ] else
+          Text(
+            s.usbOpen
+                ? '${s.usbLabel ?? 'USB'} · Upload compiles on the server and flashes it here.'
+                : 'Plug in the RoboCore and press Connect.',
+            style: tCaption(c),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        const SizedBox(height: 8),
+        Row(children: [
+          if (s.usbOpen)
+            Btn('Reset board', kind: BtnKind.plain, small: true, onTap: s.busy == null ? s.resetUsbBoard : null)
+          else
+            Btn('Connect', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
+          const SizedBox(width: 8),
+          if (!s.hasServer) Expanded(child: Text('Set a compile server in Settings', style: tCaption(c, color: c.err), overflow: TextOverflow.ellipsis)),
+        ]),
+      ]),
     );
   }
 }

@@ -70,7 +70,7 @@ class ExampleCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(e.desc, style: tBody(c, size: 13, color: c.muted, height: 18 / 13), maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 10),
-          Text('${e.blocks != null ? 'Blocks + Code' : 'Code'} · ${e.boards}', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
+          Text('${e.blocks != null ? 'Blocks + C++' : 'C++'} · ${e.boards}', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
         ]),
       ),
     );

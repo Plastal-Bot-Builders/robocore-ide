@@ -134,7 +134,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
         LayoutBuilder(builder: (context, k) {
           final narrow = k.maxWidth < 360;
           final a = _ModeOption(icon: 'blocks', title: 'Blocks', sub: 'Drag and drop', on: mode == 'blocks', onTap: () => setState(() => mode = 'blocks'));
-          final b = _ModeOption(icon: 'code', title: 'Code', sub: 'Arduino C++', on: mode == 'code', onTap: () => setState(() => mode = 'code'));
+          final b = _ModeOption(icon: 'code', title: 'C++', sub: 'Arduino-style C++ code', on: mode == 'code', onTap: () => setState(() => mode = 'code'));
           return narrow
               ? Column(children: [a, const SizedBox(height: 12), b])
               : Row(children: [Expanded(child: a), const SizedBox(width: 12), Expanded(child: b)]);
