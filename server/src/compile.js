@@ -85,7 +85,8 @@ function run(cmd, args, opts) {
 
 // Environment for arduino-cli: only what it needs, so no server settings leak into builds.
 function cliEnv(cfg) {
-  const env = { PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin', HOME: cfg.home, LANG: 'C.UTF-8' };
+  // TMPDIR: on macOS the core's ctags step fails without it ("cannot open temporary file").
+  const env = { PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin', HOME: cfg.home, LANG: 'C.UTF-8', TMPDIR: cfg.tmpDir ?? os.tmpdir() };
   for (const [k, v] of Object.entries(process.env)) {
     if (k.startsWith('ARDUINO_')) env[k] = v;
   }

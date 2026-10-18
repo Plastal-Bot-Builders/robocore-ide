@@ -19,7 +19,9 @@ export function loadConfig(over = {}) {
     port: Number(env.PORT || 8080),
     cli: env.ARDUINO_CLI || 'arduino-cli',
     libraryDir: path.resolve(env.ROBOCORE_LIBRARY || path.join(here, '..', '..', 'firmware', 'RoboCore')),
-    dataDir: env.ARDUINO_DIRECTORIES_DATA || path.join(home, '.arduino15'),
+    // arduino-cli's default data folder: ~/Library/Arduino15 on macOS, ~/.arduino15 on Linux.
+    dataDir: env.ARDUINO_DIRECTORIES_DATA
+      || (process.platform === 'darwin' ? path.join(home, 'Library', 'Arduino15') : path.join(home, '.arduino15')),
     home,
     bootApp0: env.BOOT_APP0 || null,
     tmpDir: env.COMPILE_TMP || os.tmpdir(),
