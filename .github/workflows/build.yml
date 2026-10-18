@@ -16,7 +16,6 @@ concurrency:
 env:
   # Pinned so a new Flutter release can't change or break a build by surprise. Update on purpose.
   FLUTTER_VERSION: 3.47.7
-  CREATE: flutter create --platforms=web,android,ios,windows,macos --project-name robocore_ide --org com.robocore .
 
 jobs:
   check:
@@ -31,7 +30,6 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: ${{ env.CREATE }}
       - run: flutter pub get
       - name: USB bridge (web/robocore_usb.js) with a fake Web Serial and esptool
         run: node --test test/js/robocore_usb.test.mjs
@@ -76,7 +74,6 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: ${{ env.CREATE }}
       - run: flutter build web --release --no-web-resources-cdn --base-href "/${{ github.event.repository.name }}/"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -137,7 +134,6 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: ${{ env.CREATE }}
       - run: flutter build apk --release
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -158,12 +154,33 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: ${{ env.CREATE }}
       - run: flutter build windows --release
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: robocore-ide-windows
           path: build/windows/x64/runner/Release/
+
+  linux:
+    name: Linux
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Linux desktop build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter build linux --release
+      - run: tar -czf robocore-ide-linux-x64.tar.gz -C build/linux/x64/release bundle
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: robocore-ide-linux
+          path: robocore-ide-linux-x64.tar.gz
 
   macos:
     name: macOS
@@ -176,7 +193,6 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: ${{ env.CREATE }}
       - run: flutter build macos --release
       - run: cd build/macos/Build/Products/Release && zip -qry "$GITHUB_WORKSPACE/robocore-ide-macos.zip" *.app
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -195,7 +211,6 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: ${{ env.CREATE }}
       - run: flutter build ios --release --no-codesign
       - run: cd build/ios/iphoneos && zip -qry "$GITHUB_WORKSPACE/robocore-ide-ios-unsigned.zip" Runner.app
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
