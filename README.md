@@ -1,6 +1,6 @@
 # RoboCore IDE (Flutter)
 
-One codebase for the RoboCore IDE on **web, Android, iPhone/iPad, Windows and macOS**, built from the Plastal-bot Builders Figma design.
+One codebase for the RoboCore IDE on **web, Windows, macOS, Linux, Android and iPhone/iPad**, built from the Plastal-bot Builders Figma design.
 
 ## What's in it
 
@@ -12,17 +12,20 @@ One codebase for the RoboCore IDE on **web, Android, iPhone/iPad, Windows and ma
 
 ## Run it
 
-You need the Flutter SDK (stable channel).
+You need the Flutter SDK (stable channel, the version in `FLUTTER_VERSION` in `.github/workflows/build.yml`).
+Desktop and phone builds also need that platform's tools: Xcode for macOS and iOS, Visual Studio (Desktop C++) for
+Windows, `clang cmake ninja-build pkg-config libgtk-3-dev` for Linux, Android Studio for Android. `flutter doctor` lists what's missing.
 
 ```bash
-# first time only: generate the platform folders (keeps web/robocore_usb.js and web/vendor)
-flutter create --platforms=web,android,ios,windows,macos --project-name robocore_ide --org com.robocore .
-
 flutter pub get
 flutter run -d chrome      # web
-flutter run -d windows     # or macos, or an Android / iOS device
+flutter run -d macos       # or windows, linux, or an Android / iOS device
 flutter test               # compiles and runs every example sketch
 ```
+
+The platform folders (`android/ ios/ macos/ windows/ linux/`) are committed: they hold the app name (RoboCore),
+icons, window size and permissions (internet for the compile server; the macOS sandbox's outgoing-connections
+entitlement). `python3 tools/gen_app_icons.py` redraws every platform's icon from the web icon's gear.
 
 ## Automatic builds
 
@@ -32,8 +35,9 @@ Every push to `main` runs `.github/workflows/build.yml`. It analyzes and tests t
 | --- | --- |
 | Web | Published to GitHub Pages (Settings → Pages → Source: **GitHub Actions**) |
 | Android | `app-release.apk` (download it from the workflow run's artifacts) |
-| Windows | `robocore-ide-windows` folder (artifact) |
-| macOS | `robocore-ide-macos.zip` (artifact) |
+| Windows | `robocore-ide-windows` folder with `RoboCore.exe` (artifact) |
+| Linux | `robocore-ide-linux-x64.tar.gz`: run `bundle/robocore` (artifact) |
+| macOS | `robocore-ide-macos.zip` with `RoboCore.app` (artifact). It isn't notarized: the first time, right-click it and choose **Open** |
 | iOS | Unsigned `Runner.app` (artifact). Store or TestFlight builds need an Apple developer account and signing. |
 
 ## Project layout
@@ -70,7 +74,7 @@ To use it:
 3. **Upload** compiles and flashes. If the board doesn't answer, hold **BOOT**, tap **RESET**, release **BOOT**, and upload again.
 
 Without a board the IDE keeps using the **preview board** (the simulator), and without a compile server **Verify** uses the
-built-in preview check. The native apps (Android, Windows, macOS, iOS) use the preview board for now; USB serial there is a later step.
+built-in preview check. The native apps (Windows, macOS, Linux, Android, iOS) use the preview board for now; USB serial there is a later step.
 
 `docs/robocore-v2-support.md` has the full status and the test checklist for the real board.
 
@@ -78,7 +82,7 @@ built-in preview check. The native apps (Android, Windows, macOS, iOS) use the p
 
 | Workflow | What it runs |
 | --- | --- |
-| `build.yml` | USB bridge tests (`node --test test/js/robocore_usb.test.mjs`), `dart analyze`, `flutter test`, and the web, Android, Windows, macOS and iOS builds. Flutter is pinned (`FLUTTER_VERSION`) and every action is pinned to a commit |
+| `build.yml` | USB bridge tests (`node --test test/js/robocore_usb.test.mjs`), `dart analyze`, `flutter test`, and the web, Android, Windows, Linux, macOS and iOS builds. Flutter is pinned (`FLUTTER_VERSION`) and every action is pinned to a commit |
 | `firmware.yml` | Pin map and examples in sync with the app, the library and examples on a PC (`-Werror` plus logic tests), a real ESP32-S3 compile of every example, the compile server's tests, and its Docker image compiling every example end to end |
 
 **GitHub Pages:** the web app is published by the *Publish web app* job. It needs Pages switched on once:
