@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""App icons for every platform (web, macOS, iOS, Android, Windows, Linux) from the icon master.
+"""App icons for every platform (web, macOS, iOS, Android, Windows, Linux) and the in-app logo, from the icon master.
 
 The icon is "Geared Ring": a navy planet whose ring is the RoboCore gear seen edge-on, in one
 flat ink on the RoboCore-yellow plate. tools/app_icon/layout.js lays the master geometry out on
@@ -226,12 +226,38 @@ def favicon_svg(layout):
     """Small glyph on the rounded plate; switches to the Dark look with the browser's theme."""
     spec = layout['icons']['Rounded/small']
     d, n = layout['looks']['Default'], layout['looks']['Dark']
-    one_decimal = lambda s: re.sub(r'(\.\d)\d+', r'\1', s)
     return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">\n'
             f'<style>.p{{fill:{d["plate"]}}}.i{{fill:{d["ink"]}}}'
             f'@media (prefers-color-scheme:dark){{.p{{fill:{n["plate"]}}}.i{{fill:{n["ink"]}}}}}</style>\n'
             f'<path class="p" d="{one_decimal(spec["plate"])}"/>\n'
             f'<path class="i" d="{one_decimal(spec["glyph"])}"/>\n'
+            '</svg>\n')
+
+
+def one_decimal(d):
+    return re.sub(r'(\.\d)\d+', r'\1', d)
+
+
+def layout_ink(layout):
+    return layout['looks']['Default']['ink']
+
+
+def mark_svg(layout, fit, ink):
+    """The glyph alone, cropped to its bounds: the in-app logo mark (recoloured by the app)."""
+    m = layout['marks'][fit]
+    x0, y0, x1, y1 = m['box']
+    paths = ''.join(f'<path fill="{ink}" fill-rule="evenodd" d="{one_decimal(l["d"])}"/>\n' for l in m['layers'])
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{x0:g} {y0:g} {x1 - x0:.1f} {y1 - y0:.1f}">\n'
+            f'{paths}</svg>\n')
+
+
+def app_icon_svg(layout):
+    """The Rounded app icon (Default look) as the app shows it, e.g. on the Welcome card."""
+    look, k = layout['looks']['Default'], layout['roundedScale']
+    paths = ''.join(f'<path fill-rule="evenodd" d="{one_decimal(l["d"])}"/>\n' for l in layout['marks']['master']['layers'])
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">\n'
+            f'<path fill="{look["plate"]}" d="{one_decimal(layout["icons"]["Rounded"]["plate"])}"/>\n'
+            f'<g fill="{look["ink"]}" transform="translate(512 512) scale({k:.4f}) translate(-512 -512)">\n{paths}</g>\n'
             '</svg>\n')
 
 
@@ -303,6 +329,10 @@ def main():
         save(render_icon(L, 'Rounded', n), 'web', 'icons', f'Icon-{n}.png')
         save(render_icon(L, 'Maskable', n), 'web', 'icons', f'Icon-maskable-{n}.png')
     save(render_icon(L, 'Square', 180), 'web', 'icons', 'apple-touch-icon.png')
+
+    # In-app logo (top bar, Welcome card): the small mark and the app icon, as SVG.
+    write_text(mark_svg(L, 'small', layout_ink(L)), 'assets', 'images', 'app_mark.svg')
+    write_text(app_icon_svg(L), 'assets', 'images', 'app_icon.svg')
 
     for shape in L['icons']:
         print(f'{shape:14} glyph {edge_margin(L, shape):5.1f} px from the plate edge (1024 grid)')

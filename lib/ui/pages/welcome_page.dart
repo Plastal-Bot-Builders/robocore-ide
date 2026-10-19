@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../dialogs.dart' show FieldLabel;
+import '../widgets/brand.dart';
 import '../widgets/common.dart';
 
 class WelcomePage extends StatefulWidget {
@@ -56,10 +57,9 @@ class _WelcomePageState extends State<WelcomePage> {
                 boxShadow: modalShadow,
               ),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Image.asset('assets/images/wordmark.png', width: 150, filterQuality: FilterQuality.medium),
-                ),
+                const Align(alignment: Alignment.centerLeft, child: AppIconTile()),
+                const SizedBox(height: 14),
+                Align(alignment: Alignment.centerLeft, child: ProductLockup(color: c.ink)),
                 const SizedBox(height: 22),
                 Text('WELCOME TO ROBOCORE', style: tH1(c)),
                 const SizedBox(height: 6),

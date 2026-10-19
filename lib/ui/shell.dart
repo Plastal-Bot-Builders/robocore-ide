@@ -18,6 +18,7 @@ import 'pages/projects_page.dart';
 import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/welcome_page.dart';
+import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/popover.dart';
 
@@ -185,14 +186,7 @@ class TopBar extends StatelessWidget {
               Hover(
                 onTap: () => s.go(Screen.home),
                 tooltip: 'RoboCore IDE home',
-                builder: (context, h) => Row(children: [
-                  Image.asset('assets/images/wordmark.png', width: phone ? 96 : 126, filterQuality: FilterQuality.medium),
-                  if (!phone) ...[
-                    const SizedBox(width: 10),
-                    const Text('IDE',
-                        style: TextStyle(fontFamily: fDisplay, fontSize: 20, height: 24 / 20, fontWeight: FontWeight.w700, letterSpacing: .4, color: kNavy)),
-                  ],
-                ]),
+                builder: (context, h) => ProductLockup(scale: phone ? .76 : 1, product: !phone),
               ),
             if (!phone) ...[const SizedBox(width: 12), Container(width: 1, height: 24, color: kNavy.withValues(alpha: .2)), const SizedBox(width: 12)],
             if (p != null) ...[

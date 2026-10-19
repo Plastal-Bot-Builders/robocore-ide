@@ -71,4 +71,14 @@ const glyphOnly = {
   android: { glyph: place(GLYPHS.master, ANDROID_FG, 512, 512), scale: ANDROID_FG },
 };
 
-process.stdout.write(JSON.stringify({ looks: LOOKS, icons, glyphOnly }));
+// the glyph's separate layers (planet, ring pieces), for the in-app logo SVGs: drawn one on top of
+// another with the even-odd rule, as the Figma components are
+const marks = {};
+for (const [fit, o] of [['master', undefined], ['small', GLYPH.small]]) {
+  const layers = GLYPH.glyph(o).map((l) => ({ name: l.name, d: l.d }));
+  const nums = layers.flatMap((l) => l.d.replace(/[MLCZ]/g, ' ').trim().split(/[\s,]+/).map(Number));
+  const xs = nums.filter((_, i) => i % 2 === 0), ys = nums.filter((_, i) => i % 2 === 1);
+  marks[fit] = { box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], layers };
+}
+
+process.stdout.write(JSON.stringify({ looks: LOOKS, icons, glyphOnly, marks, roundedScale: icons.Rounded.scale }));
