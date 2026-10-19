@@ -5,8 +5,8 @@ One codebase for the RoboCore IDE on **web, Windows, macOS, Linux, Android and i
 ## What's in it
 
 - **Home, Projects, Examples, Libraries, Board Setup, Serial Monitor, Settings**: every screen from the Figma file, in the Paper (cream) and Navy themes.
-- **Blocks editor**: drag blocks from the palette, reorder them, drop them on the palette to delete, undo and redo, and zoom. Blocks generate Arduino C++ code.
-- **C++ editor**: syntax highlighting, line numbers, find, auto-indent, Arduino autocomplete and multiple files.
+- **Blocks editor**: Google Blockly in the web app (RoboCore blocks plus if / else, loops, comparisons and variables; C++ updates live beside the blocks). The native apps keep a simpler Flutter block editor for now. Blocks generate Arduino C++ code. See `docs/blockly-monaco.md`.
+- **C++ editor**: Monaco (the editor in VS Code) in the web app: C++ highlighting, Arduino and RoboCore suggestions and hovers, find, compile problems in the code, multiple files. The native apps use a Flutter code editor.
 - **Verify and Upload**: with a compile server, a real C++ build (arduino-cli) and an upload over USB-C to the RoboCore V2. Without one, a built-in check like the Arduino compiler's (missing includes, undeclared names, types and board support), then a run on a **simulated RoboCore board** (RGB LED, USER button, motors, servo, sonar, line sensor, IMU, battery and serial in and out).
 - Projects and settings are saved on the device.
 

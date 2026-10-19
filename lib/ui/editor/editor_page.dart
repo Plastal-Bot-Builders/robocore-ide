@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 
 import '../../data/catalog.dart';
+import '../../engine/blockly_convert.dart';
+import '../../state/app_state.dart';
+import '../../state/models.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../widgets/cards.dart';
@@ -9,6 +12,7 @@ import '../widgets/common.dart';
 import '../widgets/serial_log.dart';
 import 'blocks_view.dart';
 import 'code_view.dart';
+import 'web_editors.dart';
 
 class EditorPage extends StatefulWidget {
   const EditorPage({super.key});
@@ -20,6 +24,12 @@ class _EditorPageState extends State<EditorPage> {
   bool confirmClear = false;
   final Map<String, GlobalKey<CodeViewState>> _keys = {};
   GlobalKey<CodeViewState>? _active;
+
+  // Web app: Blockly and Monaco (web_editors.dart) instead of BlocksView and CodeView.
+  final _blockly = GlobalKey<BlocklyEditorState>();
+  final _monaco = GlobalKey<MonacoEditorState>();
+  final _preview = GlobalKey<MonacoEditorState>();
+  bool _showCpp = true;
 
   // One CodeView per project + file, so switching tabs loads the right text.
   GlobalKey<CodeViewState> _codeKeyFor(String pid, int fi) =>
@@ -104,10 +114,16 @@ class _EditorPageState extends State<EditorPage> {
         if (tabs != null) tabs else const Spacer(),
         if (tabs != null) const SizedBox(width: 8),
         if (p.mode == 'code')
-          IconBtn('search', onTap: () => _active?.currentState?.toggleFind(), tip: 'Find')
+          IconBtn('search',
+              onTap: () => kWebEditors ? _monaco.currentState?.find() : _active?.currentState?.toggleFind(), tip: 'Find')
         else ...[
-          IconBtn('undo', onTap: s.undo, tip: 'Undo'),
-          IconBtn('redo', onTap: s.redo, tip: 'Redo'),
+          if (kWebEditors && width >= 1100)
+            IconBtn('code',
+                onTap: () => setState(() => _showCpp = !_showCpp),
+                active: _showCpp,
+                tip: _showCpp ? 'Hide the C++ from the blocks' : 'Show the C++ from the blocks'),
+          IconBtn('undo', onTap: kWebEditors ? () => _blockly.currentState?.undo() : s.undo, tip: 'Undo'),
+          IconBtn('redo', onTap: kWebEditors ? () => _blockly.currentState?.redo() : s.redo, tip: 'Redo'),
           IconBtn('trash',
               tip: confirmClear ? 'Click again to remove every block' : 'Clear all blocks',
               active: confirmClear,
@@ -121,16 +137,27 @@ class _EditorPageState extends State<EditorPage> {
               return;
             }
             setState(() => confirmClear = false);
-            s.clearBlocks();
+            if (kWebEditors) {
+              _blockly.currentState?.clear();
+              s.showToast('All blocks removed. Press Undo to bring them back.');
+            } else {
+              s.clearBlocks();
+            }
           }),
         ],
       ]),
     );
 
     final errLines = {for (final e in s.problems) if (e.file == f.name && e.isError) e.line};
-    final main = p.mode == 'blocks'
-        ? const BlocksView()
-        : CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines);
+    final Widget main;
+    if (!kWebEditors) {
+      main = p.mode == 'blocks'
+          ? const BlocksView()
+          : CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines);
+    } else {
+      main = p.mode == 'blocks' ? _blocklyArea(s, c, p, width) : _monacoFor(s, c, p, fi);
+      _takeGotoLine(s, p);
+    }
 
     final edCard = RcCard(child: Column(children: [toolbar, Expanded(child: main)]));
     final panel = ConsolePanel(boardTab: !showBoard);
@@ -156,6 +183,106 @@ class _EditorPageState extends State<EditorPage> {
           ),
       ]),
     );
+  }
+
+  Map<String, Object?> _monacoOptions(AppState s, RC c) => {
+        'theme': c.dark ? 'navy' : 'paper',
+        'fontSize': s.settings.fontSize,
+        'wrap': s.settings.wrap,
+        'autocomplete': s.settings.autocomplete,
+        'words': [
+          for (final w in acWords) [w.$1, w.$2]
+        ],
+      };
+
+  /// Blockly, and beside it (wide windows) the C++ the blocks make, read-only.
+  Widget _blocklyArea(AppState s, RC c, Project p, double width) {
+    final editor = BlocklyEditor(
+      key: _blockly,
+      projectId: p.id,
+      json: p.blockly ?? blocklyFromLists(p.setup, p.loop),
+      tidy: p.blockly == null,
+      options: {
+        'name': p.name,
+        'board': p.board,
+        'pins': pinOptions(p.board),
+        'tonePins': pinOptions(p.board, tone: true),
+        'userPin': RoboCoreV2Pins.userButton,
+        'theme': c.dark ? 'navy' : 'paper',
+      },
+      onChange: (json, code, count) => s.setBlockly(json, code, count: count),
+    );
+    final show = _showCpp && width >= 1100;
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Expanded(child: editor),
+      if (show) ...[
+        Container(width: 1, color: c.line2),
+        SizedBox(
+          width: 400,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              alignment: Alignment.centerLeft,
+              color: c.surface,
+              child: Row(children: [
+                Text('C++ FROM THE BLOCKS', style: tOverline(c)),
+                const Spacer(),
+                if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: s.rebuildFromBlocks),
+              ]),
+            ),
+            if (p.codeEdited)
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                color: c.surface,
+                child: Text('${p.files.first.name} was edited by hand, so these blocks don\'t change it.',
+                    style: tCaption(c, color: c.muted)),
+              ),
+            Expanded(
+              child: MonacoEditor(
+                key: _preview,
+                fileKey: '${p.id}/blocks.cpp',
+                text: p.blocklyCode ?? p.generate(),
+                readOnly: true,
+                options: _monacoOptions(s, c),
+              ),
+            ),
+          ]),
+        ),
+      ],
+    ]);
+  }
+
+  Widget _monacoFor(AppState s, RC c, Project p, int fi) {
+    final f = p.files[fi];
+    return MonacoEditor(
+      key: _monaco,
+      fileKey: '${p.id}/${f.name}',
+      text: f.content,
+      options: _monacoOptions(s, c),
+      problems: [
+        for (final e in s.problems)
+          if (e.file == f.name) {'line': e.line, 'column': e.column, 'message': e.msg, 'severity': e.severity}
+      ],
+      onChange: (text) {
+        final handEdit = !p.codeEdited && s.file == 0;
+        s.editCode(text);
+        if (handEdit) s.showToast('Code edited by hand. The blocks will stop updating it.');
+      },
+      onCursor: (line, column) => s.setCursor('Ln $line, Col $column'),
+    );
+  }
+
+  /// A click on a problem (AppState.gotoProblem) moves Monaco's cursor there once it is showing.
+  void _takeGotoLine(AppState s, Project p) {
+    final line = s.gotoLine;
+    if (line == null || p.mode != 'code') return;
+    s.gotoLine = null;
+    void go() => _monaco.currentState?.reveal(line);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      go();
+      Future<void>.delayed(const Duration(milliseconds: 800), go); // in case the editor was still loading
+    });
   }
 }
 
