@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!-- Hosts one editor inside the RoboCore IDE: Blockly (#blocks) or Monaco (#code).
+     The Flutter app shows this page in an iframe and talks to window.rcEditor (robocore_editors.js).
+     Keeping each editor in its own page keeps its scripts, styles and keyboard shortcuts apart from Flutter's. -->
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>RoboCore editor</title>
+  <style>
+    @font-face { font-family: 'Barlow'; font-weight: 500; src: url('assets/assets/fonts/Barlow-500.ttf'); }
+    @font-face { font-family: 'Barlow'; font-weight: 600; src: url('assets/assets/fonts/Barlow-600.ttf'); }
+    @font-face { font-family: 'Barlow'; font-weight: 700; src: url('assets/assets/fonts/Barlow-700.ttf'); }
+    @font-face { font-family: 'JetBrains Mono'; font-weight: 400; src: url('assets/assets/fonts/JetBrainsMono-400.ttf'); }
+    @font-face { font-family: 'JetBrains Mono'; font-weight: 700; src: url('assets/assets/fonts/JetBrainsMono-700.ttf'); }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--rc-bg, #FFFCF5); }
+    #host { position: absolute; inset: 0; }
+  </style>
+</head>
+<body>
+  <div id="host"></div>
+  <script src="robocore_editors.js"></script>
+</body>
+</html>

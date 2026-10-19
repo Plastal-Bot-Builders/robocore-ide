@@ -27,6 +27,14 @@ class Project {
   String mode; // blocks | code
   List<Block> setup;
   List<Block> loop;
+
+  /// The Blockly workspace (Blockly's JSON) and the C++ it generates, once the project has been
+  /// edited in the Blockly editor (web app). Until then the old [setup] / [loop] lists are the blocks.
+  String? blockly;
+  String? blocklyCode;
+
+  /// Blocks in the Blockly workspace, for the status bar (not saved).
+  int? blocklyCount;
   List<ProjectFile> files;
   bool codeEdited;
   bool autosave;
@@ -44,12 +52,14 @@ class Project {
     required this.codeEdited,
     required this.autosave,
     required this.updated,
+    this.blockly,
+    this.blocklyCode,
   });
 
   bool get hasBlocks => mode == 'blocks' || !codeEdited;
   List<Block> stack(String s) => s == 'setup' ? setup : loop;
 
-  String generate() => genBlocks(name, setup, loop, board: board);
+  String generate() => blockly != null && blocklyCode != null ? blocklyCode! : genBlocks(name, setup, loop, board: board);
   void syncCode() {
     if (!codeEdited) files.first.content = generate();
   }
@@ -60,6 +70,8 @@ class Project {
         'board': board,
         'mode': mode,
         'blocks': {'setup': setup, 'loop': loop},
+        if (blockly != null) 'blockly': blockly,
+        if (blocklyCode != null) 'blocklyCode': blocklyCode,
         'files': files.map((f) => f.toJson()).toList(),
         'codeEdited': codeEdited,
         'autosave': autosave,
@@ -79,6 +91,8 @@ class Project {
       codeEdited: j['codeEdited'] as bool? ?? true,
       autosave: j['autosave'] as bool? ?? true,
       updated: (j['updated'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      blockly: j['blockly'] as String?,
+      blocklyCode: j['blocklyCode'] as String?,
     );
   }
 

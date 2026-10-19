@@ -818,7 +818,7 @@ class StatusBar extends StatelessWidget {
         if (v != null) return '${fmtN(v.size)} bytes (${v.pct}%) · RAM ${v.rp}%';
         final t = clock(DateTime.fromMillisecondsSinceEpoch(p.updated));
         if (p.mode == 'blocks') {
-          final n = p.setup.length + p.loop.length;
+          final n = p.blocklyCount ?? p.setup.length + p.loop.length;
           return '$n block${n == 1 ? '' : 's'} · saved $t';
         }
         return '${p.files[s.file.clamp(0, p.files.length - 1).toInt()].name} · C++ · saved $t';

@@ -1239,6 +1239,35 @@ class AppState extends ChangeNotifier {
   }
 
   void _afterBlocks(Project p) {
+    // The old block editor changed the lists, so they are the blocks again (not the Blockly workspace).
+    p.blockly = null;
+    p.blocklyCode = null;
+    verified = null;
+    touch(p);
+  }
+
+  /// The Blockly editor changed the blocks: keep its workspace and C++, and update the main file
+  /// unless it was edited by hand.
+  void setBlockly(String json, String code, {int? count}) {
+    final p = cur;
+    if (p == null) return;
+    if (count != null && count != p.blocklyCount) {
+      p.blocklyCount = count;
+      if (p.blockly == json && p.blocklyCode == code) return notifyListeners();
+    }
+    if (p.blockly == json && p.blocklyCode == code) return;
+    final first = p.blockly == null;
+    p.blockly = json;
+    p.blocklyCode = code;
+    if (!p.codeEdited && p.files.first.content != code) {
+      p.files.first.content = code;
+      verified = null;
+    }
+    if (first) {
+      // Just opened in Blockly (converted from the old lists): saved with the next real change.
+      notifyListeners();
+      return;
+    }
     verified = null;
     touch(p);
   }
