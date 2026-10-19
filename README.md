@@ -25,7 +25,9 @@ flutter test               # compiles and runs every example sketch
 
 The platform folders (`android/ ios/ macos/ windows/ linux/`) are committed: they hold the app name (RoboCore),
 icons, window size and permissions (internet for the compile server; the macOS sandbox's outgoing-connections
-entitlement). `python3 tools/gen_app_icons.py` redraws every platform's icon from the web icon's gear.
+entitlement). `python3 tools/gen_app_icons.py` (needs Node, Pillow and numpy) draws every platform's icon, the
+"Geared Ring", from the master geometry in `tools/app_icon/` (a copy of the design in the Figma file
+"RoboCore IDE — App Icon").
 
 ## Automatic builds
 
