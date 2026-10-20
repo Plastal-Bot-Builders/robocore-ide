@@ -79,11 +79,16 @@
     ['myblocks', 'My Blocks', '#5B6577', 'blocks'],
     ['pins', 'Pins & Serial', INK, 'plug'],
   ];
-  const svgUri = (paths, stroke, size = 24) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  // Lucide icons are drawn on a 24 px grid; at 14-18 px they need a heavier line to read like the design's.
+  const svgUri = (paths, stroke, size = 24, weight = 2) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" ` +
-    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`);
+    `stroke-width="${weight}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`);
   // The robot and gauge marks at the start of Movement and Motors blocks.
-  const iconField = (name) => ({ type: 'field_image', src: svgUri(ICONS[name], CREAM), width: 18, height: 18, alt: '' });
+  const iconField = (name) => ({ type: 'field_image', src: svgUri(ICONS[name], CREAM, 24, 2.4), width: 18, height: 18, alt: '' });
+  const CHEVRON = '<path d="m6 9 6 6 6-6"/>';
+  const FIT = '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>';
+  const ZOOM_IN = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>';
+  const ZOOM_OUT = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M8 11h6"/>';
 
   function theme(navy) {
     const styles = {};
@@ -118,13 +123,28 @@
         cursorColour: YELLOW,
         markerColour: YELLOW,
       },
-      fontStyle: { family: 'Barlow, sans-serif', weight: '600', size: 13 },
+      // Blockly's size is in points: 9.75 pt = 13 px, the design's Block/Label.
+      fontStyle: { family: 'Barlow, sans-serif', weight: '600', size: 9.75 },
       startHats: true,
     });
   }
 
-  // Zelos, plus a class on yellow (Events) blocks so their labels can be navy instead of cream.
+  // Zelos, plus a class on yellow (Events) blocks so their labels can be navy instead of cream, and the design's
+  // block metrics (RoboCore_IDE_Design 05_blocks.js): 40 px statements, 24 px fields, a chevron on dropdowns.
+  // Zelos sizes everything from its grid unit: 4 px makes 48 px statements, 10/3 px makes 40.
   function registerRenderer() {
+    class RcConstants extends Blockly.zelos.ConstantProvider {
+      constructor() {
+        super(10 / 3);
+        this.FIELD_BORDER_RECT_HEIGHT = 24;
+        this.FIELD_DROPDOWN_BORDER_RECT_HEIGHT = 24;
+        this.FIELD_BORDER_RECT_X_PADDING = 8;
+        this.FIELD_DROPDOWN_SVG_ARROW_PADDING = 6;
+        this.FIELD_DROPDOWN_SVG_ARROW_DATAURI = svgUri(CHEVRON, CREAM, 12, 2.5);
+        this.MEDIUM_PADDING = 9; // between the parts of a block and at its ends (the design: 8-12)
+        this.STATEMENT_INPUT_PADDING_LEFT = 20; // the arm of a C-block
+      }
+    }
     class RcPathObject extends Blockly.zelos.PathObject {
       applyColour(block) {
         super.applyColour(block);
@@ -133,6 +153,9 @@
       }
     }
     class RcRenderer extends Blockly.zelos.Renderer {
+      makeConstants_() {
+        return new RcConstants();
+      }
       makePathObject(root, style) {
         return new RcPathObject(root, style, this.getConstants());
       }
@@ -143,11 +166,57 @@
       '.robocore-renderer .blocklyText { fill: ' + CREAM + '; }',
       '.robocore-renderer .rcNavyText > .blocklyText, .robocore-renderer .rcNavyText > g > .blocklyText { fill: ' + INK + '; }',
       '.robocore-renderer .blocklyEditableText > .blocklyText:not(.blocklyDropdownText) { fill: ' + INK + '; }',
-      '.blocklyToolboxCategory, .blocklyTreeRow { border-radius: 6px; margin: 2px 6px; font-weight: 600; border-left: none !important; padding-left: 6px !important; }',
-      '.blocklyToolboxSelected, .blocklyTreeSelected { background: rgba(242,176,30,.22) !important; box-shadow: inset 3px 0 0 ' + YELLOW + '; }',
-      '.blocklyToolboxSelected .blocklyToolboxCategoryLabel, .blocklyTreeSelected .blocklyTreeLabel { color: inherit !important; }',
-      '.blocklyToolboxCategoryLabel, .blocklyTreeLabel { font-family: Barlow, sans-serif; font-size: 14px; }',
+      // Number and text fields are white pills, as in the design (dropdowns keep 4 px corners).
+      '.robocore-renderer .blocklyInputField > .blocklyFieldRect { rx: 12px; ry: 12px; }',
+      // Dropdowns are a darker tint of the block (navy over it), without an outline.
+      '.robocore-renderer .blocklyDropdownField > .blocklyFieldRect { fill: rgba(27,42,65,.28) !important; stroke: none !important; }',
+      '.robocore-renderer .rcNavyText > .blocklyDropdownField > .blocklyFieldRect { fill: rgba(27,42,65,.14) !important; }',
+      // On the yellow Events blocks the dropdown chevron is navy, like their labels.
+      '.robocore-renderer .rcNavyText > .blocklyDropdownField > image { filter: brightness(0.15); }',
+      // The toolbox (the design's Block Category rows): 160 px wide, 34 px rows, 22 px colour chips.
+      '.blocklyToolbox { width: 160px; box-sizing: border-box; padding: 12px 8px !important; border-right: 1px solid rgba(27,42,65,.10); }',
+      '.blocklyToolboxCategoryContainer { margin: 0 0 2px; }',
+      '.blocklyToolboxCategory { position: relative; height: 34px; line-height: 34px; margin: 0; padding: 0 8px 0 10px !important;' +
+        ' border-radius: 6px; border-left: none !important; cursor: pointer; }',
+      '.blocklyTreeRowContentContainer { display: flex; align-items: center; gap: 8px; height: 34px; }',
+      '.blocklyToolboxCategoryLabel { font: 500 13px/16px Barlow, sans-serif; color: #5B6573; white-space: nowrap; }',
+      '.blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(27,42,65,.05); }',
+      '.blocklyToolboxSelected { background: #FCE9BF !important; }',
+      '.blocklyToolboxSelected .blocklyToolboxCategoryLabel { color: ' + INK + ' !important; font-weight: 600; }',
+      '.blocklyToolboxSelected::before { content: ""; position: absolute; left: 0; top: 8px; width: 3px; height: 18px;' +
+        ' border-radius: 0 2px 2px 0; background: ' + YELLOW + '; }',
+      '.robocore-navy-theme .blocklyToolboxCategoryLabel { color: rgba(247,241,227,.78); }',
+      '.robocore-navy-theme .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(247,241,227,.06); }',
+      '.robocore-navy-theme .blocklyToolboxSelected { background: rgba(242,176,30,.20) !important; }',
+      '.robocore-navy-theme .blocklyToolboxSelected .blocklyToolboxCategoryLabel { color: ' + CREAM + ' !important; }',
       '.blocklyWidgetDiv .blocklyMenu, .blocklyDropDownDiv { font-family: Barlow, sans-serif; }',
+      // The flyout: a title (category swatch + name) over the blocks, and the design's buttons.
+      '.injectionDiv .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { font: 600 18px "Barlow Condensed", Barlow, sans-serif;' +
+        ' letter-spacing: .54px; fill: ' + INK + ' !important; }',
+      '.robocore-navy-theme .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { fill: ' + CREAM + ' !important; }',
+      '.blocklyFlyoutButton .blocklyFlyoutButtonBackground { fill: ' + PAPER + '; stroke: ' + INK + '; stroke-width: 1px; }',
+      '.blocklyFlyoutButton:hover .blocklyFlyoutButtonBackground { fill: #FCE9BF; }',
+      '.blocklyFlyoutButton .blocklyText { fill: ' + INK + ' !important; font: 600 13px Barlow, sans-serif; }',
+      '.blocklyFlyoutButtonShadow { display: none; }',
+      // Zoom buttons and trashcan drawn as in the design (Blockly's sprite images hidden).
+      '.blocklyZoom > image, .blocklyZoom > svg > image, .blocklyTrash > image, .blocklyTrashLid > svg { display: none; }',
+      '.blocklyZoom { cursor: pointer; }',
+      '.rcZoomBox { fill: #FFFFFF; stroke: rgba(27,42,65,.16); stroke-width: 1px; }',
+      '.blocklyZoom:hover .rcZoomBox { fill: ' + CREAM + '; }',
+      '.rcIcon { fill: none; stroke: ' + INK + '; stroke-width: 2.25px; stroke-linecap: round; stroke-linejoin: round; }',
+      '.robocore-navy-theme .rcZoomBox { fill: #22344F; stroke: rgba(247,241,227,.2); }',
+      '.robocore-navy-theme .blocklyZoom:hover .rcZoomBox { fill: #2C405E; }',
+      '.robocore-navy-theme .rcIcon { stroke: ' + CREAM + '; }',
+      '.blocklyTrashLid { opacity: 1 !important; }',
+      '.rcTrashPart { fill: ' + PAPER + '; stroke: ' + INK + '; stroke-width: 1.5px; }',
+      '.rcTrashRib { stroke: ' + INK + '; stroke-width: 1.5px; stroke-linecap: round; }',
+      '.blocklyTrashOpen .rcTrashPart { fill: #FCE9BF; }',
+      '.robocore-navy-theme .rcTrashPart { fill: #22344F; stroke: ' + CREAM + '; }',
+      '.robocore-navy-theme .rcTrashRib { stroke: ' + CREAM + '; }',
+      '.rcTrashCount { display: none; }',
+      '.blocklyTrashFull .rcTrashCount { display: inline; }',
+      '.rcTrashCount > rect { fill: ' + INK + '; }',
+      '.rcTrashCount > text { fill: ' + CREAM + '; font: 600 11px Barlow, sans-serif; }',
       // Selection and keyboard focus (BK-16) in the box yellow; on the yellow Events blocks in navy, or they would not show.
       '.robocore-renderer.injectionDiv { --blockly-active-node-color: ' + YELLOW + '; --blockly-active-tree-color: ' + YELLOW + '; }',
       '.robocore-renderer .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + INK + '; stroke-width: 2.5px; }',
@@ -157,14 +226,99 @@
       '.blocklyKeyboardNavigation .robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
         ' .blocklyKeyboardNavigation.robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + CREAM + '; }',
       '.robocore-renderer .blocklyHighlightedConnectionPath { filter: drop-shadow(0 0 1px ' + INK + '); }',
-      '.injectionDiv .blocklyZoom > image, .injectionDiv .blocklyZoom > svg > image { opacity: .7; }',
-      '.injectionDiv .blocklyZoom > image:hover, .injectionDiv .blocklyZoom > svg > image:hover { opacity: 1; }',
-      // A round, coloured icon for each category (the design's toolbox).
-      '.rcCatIcon { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; vertical-align: middle;' +
+      // A round chip in the category's colour with its icon (the design's toolbox).
+      '.rcCatIcon { display: inline-block; flex: none; width: 22px; height: 22px; border-radius: 50%;' +
         ' background-repeat: no-repeat; background-position: center; background-size: 14px 14px; }',
-      ...CATS.map(([k, , c, icon]) => `.rcCat_${k} { background-color: ${c}; background-image: url("${svgUri(ICONS[icon], k === 'events' ? INK : CREAM)}"); }`),
+      ...CATS.map(([k, , c, icon]) => `.rcCat_${k} { background-color: ${c}; background-image: url("${svgUri(ICONS[icon], k === 'events' ? INK : CREAM, 24, 2.6)}"); }`),
+      // On the navy toolbox the navy Pins & Serial chip takes the dark theme's lighter blue.
+      '.robocore-navy-theme .rcCat_pins { background-color: #3E5A86; }',
     ].join('\n');
     document.head.appendChild(css);
+  }
+
+  // The flyout as in the design: 16 px padding and gaps, and a title with the category's colour swatch.
+  function registerFlyout() {
+    class RcFlyout extends Blockly.VerticalFlyout {
+      constructor(options) {
+        super(options);
+        this.MARGIN = 16;
+        this.GAP_Y = 16;
+      }
+      show(contents) {
+        super.show(contents);
+        decorateFlyout(this.getWorkspace().getCanvas());
+      }
+      // At least the design's 288 px; Blockly fits the flyout to its widest block.
+      reflowInternal_() {
+        super.reflowInternal_();
+        if (this.width_ < 288) {
+          this.width_ = 288;
+          this.position();
+          this.targetWorkspace.resizeContents();
+          this.targetWorkspace.recordDragTargets();
+        }
+      }
+    }
+    Blockly.registry.register(Blockly.registry.Type.FLYOUTS_VERTICAL_TOOLBOX, 'rcFlyout', RcFlyout);
+    // "Make a variable…" and "Make a block…": 32 px buttons with 14 px sides (the design's flyout button).
+    Blockly.FlyoutButton.TEXT_MARGIN_X = 14;
+    Blockly.FlyoutButton.TEXT_MARGIN_Y = 8;
+    Blockly.FlyoutButton.BORDER_RADIUS = 6;
+  }
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs, parent, html) {
+    const e = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+    if (html) e.innerHTML = html;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  // Blockly centres a label's text; the title starts at the left, after a 14 px swatch.
+  function decorateFlyout(canvas) {
+    for (const g of canvas.querySelectorAll('.rcFlyoutTitle')) {
+      if (g.querySelector('.rcSwatch')) continue;
+      const text = g.querySelector('.blocklyFlyoutLabelText');
+      const key = [...g.classList].find((c) => c.startsWith('rcTitle_')).slice(8);
+      const navy = CTX.theme === 'navy' && key === 'pins';
+      text.setAttribute('text-anchor', 'start');
+      text.setAttribute('x', '24');
+      const b = text.getBBox();
+      svgEl('rect', { class: 'rcSwatch', x: 0, y: b.y + b.height / 2 - 7, width: 14, height: 14, rx: 4,
+        fill: navy ? '#3E5A86' : CATS.find((x) => x[0] === key)[2] }, g);
+    }
+  }
+
+  // Zoom buttons (fit, zoom in, zoom out) and the trashcan, drawn as in the design inside Blockly's own groups,
+  // so Blockly still places them, handles their clicks and opens the trashcan's lid.
+  function drawControls(w) {
+    const root = w.getParentSvg();
+    for (const [cls, icon] of [['blocklyZoomReset', FIT], ['blocklyZoomIn', ZOOM_IN], ['blocklyZoomOut', ZOOM_OUT]]) {
+      const g = root.querySelector('.' + cls);
+      if (!g || g.querySelector('.rcZoomBox')) continue;
+      svgEl('rect', { class: 'rcZoomBox', x: 0.5, y: 0.5, width: 31, height: 31, rx: 8 }, g);
+      svgEl('g', { class: 'rcIcon', transform: 'translate(7 7) scale(.75)' }, g, icon);
+    }
+    const t = root.querySelector('.blocklyTrash');
+    if (!t || t.querySelector('.rcTrashPart')) return;
+    // In the trashcan's 47 x 60 box; the lid group turns about its right end (Blockly's CSS).
+    const body = svgEl('g', {}, null);
+    svgEl('path', { class: 'rcTrashPart', d: 'M10.5 22H36.5Q38.5 22 38.5 24V50Q38.5 56 32.5 56H14.5Q8.5 56 8.5 50V24Q8.5 22 10.5 22Z' }, body);
+    for (const x of [16.5, 23.5, 30.5]) svgEl('line', { class: 'rcTrashRib', x1: x, y1: 28, x2: x, y2: 50 }, body);
+    const count = svgEl('g', { class: 'rcTrashCount' }, body);
+    svgEl('rect', { x: 28, y: 36, width: 18, height: 16, rx: 8 }, count);
+    svgEl('text', { x: 37, y: 48, 'text-anchor': 'middle' }, count);
+    t.insertBefore(body, t.querySelector('.blocklyTrashLid'));
+    const lid = t.querySelector('.blocklyTrashLid');
+    svgEl('rect', { class: 'rcTrashPart', x: 17.5, y: 12, width: 12, height: 5, rx: 2 }, lid);
+    svgEl('rect', { class: 'rcTrashPart', x: 5.5, y: 16, width: 36, height: 5, rx: 2 }, lid);
+    const update = () => {
+      const n = w.trashcan && w.trashcan.contents ? w.trashcan.contents.length : 0;
+      count.querySelector('text').textContent = n > 9 ? '9+' : String(n);
+    };
+    w.addChangeListener((e) => { if (e.type === Blockly.Events.BLOCK_DELETE || e.type === Blockly.Events.TRASHCAN_OPEN) setTimeout(update, 0); });
+    update();
   }
 
   function dropdown(values) {
@@ -217,6 +371,13 @@
     const stmt = (o) => Object.assign({ previousStatement: null, nextStatement: null }, o);
     const hat = (o) => Object.assign({ message1: '%1', args1: [{ type: 'input_statement', name: 'DO' }] }, o);
     const dd = (name, values) => ({ type: 'field_dropdown', name, options: dropdown(values) });
+    // Text values are white pills like numbers (the design), so Blockly's text block loses its quote marks.
+    Blockly.Blocks['text'] = {
+      init() {
+        this.jsonInit({ type: 'text', message0: '%1', args0: [{ type: 'field_input', name: 'TEXT', text: '' }], output: 'String',
+          style: 'text_blocks', tooltip: Blockly.Msg.TEXT_TEXT_TOOLTIP, helpUrl: Blockly.Msg.TEXT_TEXT_HELPURL });
+      },
+    };
     Blockly.common.defineBlocksWithJsonArray([
       // ---- Events
       hat({ type: 'rc_on_start', message0: 'on start', style: 'rc_events', tooltip: 'Runs once when the robot starts: void setup() { … }' }),
@@ -400,10 +561,12 @@
   const num = (v) => ({ shadow: { type: 'math_number', fields: { NUM: v } } });
   const txt = (v) => ({ shadow: { type: 'text', fields: { TEXT: v } } });
   const blk = (type, inputs, extra) => Object.assign({ kind: 'block', type }, inputs ? { inputs } : {}, extra || {});
+  // Each flyout starts with its category's title (the design's swatch + name; see decorateFlyout).
+  const title = (key) => ({ kind: 'label', text: CATS.find((x) => x[0] === key)[1].toUpperCase(), 'web-class': 'rcFlyoutTitle rcTitle_' + key });
   const category = (key, contents, custom) => {
     const c = CATS.find((x) => x[0] === key);
     return Object.assign({ kind: 'category', name: c[1], categorystyle: key, cssConfig: { icon: 'rcCatIcon rcCat_' + key } },
-      custom ? { custom } : { contents });
+      custom ? { custom } : { contents: [title(key), ...contents] });
   };
   const TOOLBOX = {
     kind: 'categoryToolbox',
@@ -433,7 +596,7 @@
         blk('logic_operation'), blk('logic_negate'), blk('math_random_int', { FROM: num(1), TO: num(10) }),
         blk('rc_between', { X: num(0), LO: num(-10), HI: num(10) }), blk('math_round', { NUM: num(3.6) }),
         blk('text_join', { ADD0: txt('cm: '), ADD1: txt('20') })]),
-      category('variables', null, 'VARIABLE'),
+      category('variables', null, 'RC_VARIABLES'),
       category('myblocks', null, 'RC_MYBLOCKS'),
       category('pins', [
         blk('rc_pin'), blk('rc_read_pin'), blk('rc_read_analog'), blk('rc_serial_begin'),
@@ -443,8 +606,9 @@
 
   // My Blocks: Make a block… and a call block for each block made (Blockly's procedures, no return value).
   function registerMyBlocks(w) {
+    w.registerToolboxCategoryCallback('RC_VARIABLES', (ws) => [title('variables'), ...Blockly.Variables.flyoutCategory(ws)]);
     w.registerToolboxCategoryCallback('RC_MYBLOCKS', (ws) => {
-      const items = [{ kind: 'button', text: 'Make a block…', callbackkey: 'rcMakeBlock' }];
+      const items = [title('myblocks'), { kind: 'button', text: 'Make a block…', callbackkey: 'rcMakeBlock' }];
       for (const [name, params] of Blockly.Procedures.allProcedures(ws)[0]) {
         items.push({ kind: 'block', type: 'procedures_callnoreturn', extraState: { name, params } });
       }
@@ -869,7 +1033,7 @@
   }
 
   let ws = null, onBlocksChange = null, onZoom = null, onSelect = null, onHistory = null, loading = false, timer = 0, lastScale = 0, lastSelection = '', lastHistory = '';
-  const START_SCALE = 0.9;
+  const START_SCALE = 1;
 
   function reportZoom() {
     if (ws && onZoom && ws.scale !== lastScale) { lastScale = ws.scale; onZoom(ws.scale); }
@@ -979,8 +1143,10 @@
         trashcan: true,
         maxTrashcanContents: 32,
         sounds: false,
+        plugins: { flyoutsVerticalToolbox: 'rcFlyout' },
       });
       registerMyBlocks(ws);
+      drawControls(ws);
       // The app hides this frame while the C++ tab is open; re-measure when it shows again.
       new ResizeObserver(() => { if (ws) Blockly.svgResize(ws); }).observe(document.getElementById('host'));
       ws.addChangeListener(Blockly.Events.disableOrphans);
@@ -1310,6 +1476,7 @@
       await loadScript('vendor/blockly/msg/en.js');
       defineBlocks();
       registerRenderer();
+      registerFlyout();
       PAPER_THEME = theme(false);
       NAVY = theme(true);
       cpp = makeGenerator();

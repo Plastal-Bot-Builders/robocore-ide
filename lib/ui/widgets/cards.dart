@@ -73,74 +73,83 @@ class ProjectMenuButton extends StatelessWidget {
   }
 }
 
-/// The little Blocks / Code preview at the top of a project card (exact Figma positions).
+/// The little Blocks / Code preview at the top of a project card (the design's blocksThumb / codeThumb): mini blocks
+/// in the category colours, or code lines, laid out for a 268 px card and stretched with it.
 class Thumb extends StatelessWidget {
   const Thumb({super.key, required this.blocks});
   final bool blocks;
 
+  // Category colours of the blocks (web/robocore_editors.js CATS).
+  static const _events = kBrand, _pins = kNavy, _light = Color(0xFF7A4FB5), _control = Color(0xFF8A5A00);
+  static const _movement = Color(0xFF2F6BBF), _sensors = Color(0xFF0F7680);
+
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    Widget mb(double l, double t, double w, {bool ctl = false, bool hat = false, bool val = false}) => Positioned(
-          left: l,
-          top: t,
-          child: Container(
-            width: w,
-            height: hat ? 14 : 12,
-            decoration: BoxDecoration(
-              color: val ? Colors.white : (ctl ? kBrand : kNavy),
-              border: Border.all(color: kNavy),
-              borderRadius: hat
-                  ? const BorderRadius.vertical(top: Radius.circular(7), bottom: Radius.circular(2))
-                  : BorderRadius.circular(val ? 6 : 2),
-            ),
-          ),
-        );
-    const lines = [
-      [18.0, 42.0, 110.0, .28],
-      [18.0, 52.0, 72.0, .55],
-      [30.0, 62.0, 120.0, .44],
-      [30.0, 72.0, 96.0, .44],
-      [30.0, 82.0, 60.0, .44],
-      [18.0, 92.0, 16.0, .55],
-    ];
-    return Container(
-      color: c.sunk,
-      child: Stack(children: [
-        if (blocks) ...[
-          mb(20, 40, 76, ctl: true, hat: true),
-          mb(28, 56, 104),
-          mb(28, 70, 64, ctl: true),
-          mb(28, 84, 96),
-          mb(150, 40, 72, ctl: true, hat: true),
-          mb(158, 56, 92),
-          mb(158, 70, 62, val: true),
-        ] else
-          for (final l in lines)
-            Positioned(
-              left: l[0],
-              top: l[1],
-              child: Opacity(
-                opacity: l[3],
-                child: Container(width: l[2], height: 5, decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(2.5))),
+    return LayoutBuilder(builder: (context, k) {
+      final sx = k.maxWidth / 268;
+      Widget mb(double l, double t, double w, Color color, {bool hat = false, bool round = false}) => Positioned(
+            left: l,
+            top: t,
+            child: Container(
+              width: w * sx,
+              height: hat ? 14 : 12,
+              decoration: BoxDecoration(
+                color: color,
+                border: Border.all(color: kNavy),
+                borderRadius: hat
+                    ? const BorderRadius.vertical(top: Radius.circular(7), bottom: Radius.circular(2))
+                    : BorderRadius.circular(round ? 6 : 2),
               ),
             ),
-        Positioned(
-          left: 10,
-          top: 10,
-          child: Container(
-            height: 22,
-            padding: const EdgeInsets.only(left: 6, right: 8),
-            decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              RcIcon(blocks ? 'blocks' : 'code', size: 14, color: c.ink),
-              const SizedBox(width: 4),
-              Text(blocks ? 'Blocks' : 'C++', style: tCaption(c, color: c.ink, w: FontWeight.w500)),
-            ]),
+          );
+      // [indent, length, opacity]
+      const lines = [
+        [0.0, 110.0, .5],
+        [0.0, 72.0, 1.0],
+        [12.0, 120.0, .8],
+        [12.0, 96.0, .8],
+        [12.0, 60.0, .8],
+        [0.0, 16.0, 1.0],
+      ];
+      return Container(
+        color: c.sunk,
+        child: Stack(children: [
+          if (blocks) ...[
+            mb(20, 40, 76, _events, hat: true),
+            mb(28, 56, 104, _pins),
+            mb(28, 70, 96, _light),
+            mb(28, 84, 64, _control),
+            mb(150 * sx, 40, 72, _events, hat: true),
+            mb(150 * sx + 8, 56, 92, _movement),
+            mb(150 * sx + 8, 70, 62, _sensors, round: true),
+          ] else
+            for (final (i, l) in lines.indexed)
+              Positioned(
+                left: 18 + l[0],
+                top: 42 + i * 10.0,
+                child: Opacity(
+                  opacity: l[2] * .55,
+                  child: Container(width: l[1] * sx, height: 5, decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(2.5))),
+                ),
+              ),
+          Positioned(
+            left: 10,
+            top: 10,
+            child: Container(
+              height: 22,
+              padding: const EdgeInsets.only(left: 6, right: 8),
+              decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                RcIcon(blocks ? 'blocks' : 'code', size: 14, color: c.ink),
+                const SizedBox(width: 4),
+                Text(blocks ? 'Blocks' : 'Code', style: tCaption(c, color: c.ink, w: FontWeight.w500)),
+              ]),
+            ),
           ),
-        ),
-      ]),
-    );
+        ]),
+      );
+    });
   }
 }
 
