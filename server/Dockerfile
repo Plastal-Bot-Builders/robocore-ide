@@ -42,6 +42,8 @@ RUN set -eux; \
 
 COPY --chown=builder:builder firmware/RoboCore /home/builder/robocore/firmware/RoboCore
 COPY --chown=builder:builder server /home/builder/robocore/server
+# The Anthropic SDK, for Cog (the only package; versions are pinned in package-lock.json).
+RUN cd /home/builder/robocore/server && npm ci --omit=dev --no-audit --no-fund
 
 # Warm the build cache so the first real compile is quick, and prove the toolchain works.
 RUN set -eux; \
