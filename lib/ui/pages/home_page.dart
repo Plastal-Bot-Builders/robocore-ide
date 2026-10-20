@@ -132,7 +132,8 @@ class HomePage extends StatelessWidget {
       else
         LayoutBuilder(builder: (context, k) {
           final cols = k.maxWidth >= 836 ? 3 : (k.maxWidth >= 540 ? 2 : 1);
-          final w = cols == 1 ? k.maxWidth : ((k.maxWidth - 16 * (cols - 1)) / cols).clamp(0, 268).toDouble();
+          // The design's three 268 px cards fill its column; on wider windows they stretch to fill it too.
+          final w = cols == 1 ? k.maxWidth : (k.maxWidth - 16 * (cols - 1)) / cols;
           return Wrap(spacing: 16, runSpacing: 16, children: [
             for (final p in recent.take(cols == 2 ? 2 : 3)) SizedBox(width: w, child: ProjectCard(p: p)),
           ]);

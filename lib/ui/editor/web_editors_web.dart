@@ -214,7 +214,7 @@ class BlocklyEditor extends StatefulWidget {
   final Map<String, Object?> options;
   final void Function(String json, String code, int count) onChange;
 
-  /// The workspace scale after every zoom (0.9 = the starting size).
+  /// The workspace scale after every zoom (1 = the starting size).
   final void Function(double scale)? onZoom;
 
   /// The selected block as JSON {type, label, cpp}, or '' when none is selected.

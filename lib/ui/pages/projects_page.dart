@@ -75,7 +75,7 @@ class ProjectsPage extends StatelessWidget {
             : Row(mainAxisSize: MainAxisSize.min, children: [filter, const SizedBox(width: 12), newProject]),
       ),
       Pills(
-        items: const [('all', 'All'), ('blocks', 'Blocks'), ('code', 'C++')],
+        items: const [('all', 'All'), ('blocks', 'Blocks'), ('code', 'Code')],
         value: s.ptab,
         onChanged: (v) => s.setFilter(ptab: v),
       ),

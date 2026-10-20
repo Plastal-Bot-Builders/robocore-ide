@@ -41,7 +41,7 @@ class _EditorPageState extends State<EditorPage> {
   final _monaco = GlobalKey<MonacoEditorState>();
   final _preview = GlobalKey<MonacoEditorState>();
   bool _showCpp = true;
-  double _zoom = 0.9; // Blockly's scale, shown in the toolbar
+  double _zoom = 1; // Blockly's scale, shown in the toolbar
 
   // Pane sizes while a divider is being dragged; saved to Settings when the drag ends.
   double? _cppWidth, _consoleHeight;
@@ -127,7 +127,7 @@ class _EditorPageState extends State<EditorPage> {
         Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
-          child: Row(children: [seg('blocks', 'Blocks'), const SizedBox(width: 2), seg('code', 'C++')]),
+          child: Row(children: [seg('blocks', 'Blocks'), const SizedBox(width: 2), seg('code', 'Code')]),
         ),
         const SizedBox(width: 12),
         if (tabs != null) tabs else const Spacer(),
