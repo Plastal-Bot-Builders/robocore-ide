@@ -98,7 +98,8 @@ export function mergeProblems(a, b) {
   const seen = new Set();
   const out = [];
   for (const p of [...a, ...b]) {
-    const key = `${p.severity}|${p.file}|${p.line}|${p.message}`;
+    // The text log repeats a diagnostic with the code excerpt under it: compare first lines only.
+    const key = `${p.severity}|${p.file}|${p.line}|${String(p.message).split('\n')[0].trim()}`;
     if (!seen.has(key)) {
       seen.add(key);
       out.push(p);

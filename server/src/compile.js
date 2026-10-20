@@ -1,6 +1,6 @@
 // Validates a compile request, runs arduino-cli in a throwaway folder and collects the program image.
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, readdir, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { BOARDS, ESP32_PARTS } from './boards.js';
@@ -96,7 +96,9 @@ function cliEnv(cfg) {
 // Compiles a validated request. Resolves to the JSON body for the IDE.
 export async function compileSketch(req, cfg) {
   const started = Date.now();
-  const work = await mkdtemp(path.join(cfg.tmpDir ?? os.tmpdir(), 'rc-'));
+  // The real path: on macOS the temp folder is a symlink (/var → /private/var) and the compiler prints
+  // the real one, which must match the paths that get hidden from the output.
+  const work = await realpath(await mkdtemp(path.join(cfg.tmpDir ?? os.tmpdir(), 'rc-')));
   const sketchName = req.main.replace(/\.ino$/, '');
   const sketchDir = path.join(work, sketchName);
   const buildDir = path.join(work, 'build');
