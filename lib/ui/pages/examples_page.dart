@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Thumb;
 
 import '../../data/catalog.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../dialogs.dart';
+import '../widgets/cards.dart' show Thumb;
 import '../widgets/common.dart';
 import 'home_page.dart';
 import 'projects_page.dart';
@@ -39,12 +41,11 @@ class ExampleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppScope.read(context);
     final c = RC.of(context);
     final adv = e.level == 'Advanced';
     return Hover(
-      onTap: () => s.openExample(e.id),
-      tooltip: 'Open a copy of ${e.name}',
+      onTap: () => showExampleDialog(context, e),
+      tooltip: 'Preview ${e.name}',
       builder: (context, h) => Container(
         constraints: const BoxConstraints(minHeight: 156),
         padding: const EdgeInsets.all(16),
@@ -76,3 +77,44 @@ class ExampleCard extends StatelessWidget {
     );
   }
 }
+
+/// An example's preview before it is copied into your projects (EX-03).
+Future<void> showExampleDialog(BuildContext context, Example e) => showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) {
+        final s = AppScope.read(context);
+        final c = RC.of(dctx);
+        final adv = e.level == 'Advanced';
+        void open() {
+          Navigator.of(dctx).pop();
+          s.openExample(e.id);
+        }
+
+        return DialogFrame(
+          title: e.name,
+          subtitle: e.desc,
+          onSubmit: open,
+          body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Wrap(spacing: 8, children: [
+              Badge2(e.level, bg: adv ? c.ink : c.sunk, fg: adv ? c.bg : c.ink),
+              Badge2(e.cat, bg: c.sunk, fg: c.ink),
+            ]),
+            const SizedBox(height: 14),
+            Container(
+              height: 120,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
+              child: Thumb(blocks: e.blocks != null),
+            ),
+            const SizedBox(height: 12),
+            Text(e.blocks != null ? 'Opens as a Blocks project; switch to C++ any time.' : 'Opens as a C++ project.',
+                style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),
+          ]),
+          actions: [
+            Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+            Btn('Open as new project', icon: 'open', kind: BtnKind.primary, onTap: open),
+          ],
+        );
+      },
+    );

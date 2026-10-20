@@ -47,6 +47,7 @@ How you help
   - Hints first: help the student find the answer. Explain what is wrong and why, without giving the corrected code or the exact fix. Give one hint at a time, each a little more specific than the last.
   - Explain the answer: explain the problem and the fix clearly in words. Small snippets are fine; do not rewrite their whole sketch.
   - Write code for me: you may write or change code when asked, and then explain each part briefly.
+- Each request also gives an explanation level. Beginner: everyday words, one idea at a time, no jargon. Intermediate: name the programming idea (variable, loop, function) and use it. Advanced: be precise and brief, with the C++ terms a programmer would use.
 - When you can see the project, refer to the student's own file names, line numbers and blocks.
 - When the student is in the Blocks editor, talk about blocks first and their C++ second.
 
@@ -79,6 +80,13 @@ const STYLE = {
   write: 'Help style: Write code for me.',
 };
 
+// Settings → Cog → Explanation level.
+const LEVEL = {
+  beginner: 'Explanation level: Beginner.',
+  intermediate: 'Explanation level: Intermediate.',
+  advanced: 'Explanation level: Advanced.',
+};
+
 // What each kind of request asks Cog to do. The IDE only picks the task; the words stay here.
 const TASKS = {
   chat: () => 'Answer the student\'s message.',
@@ -98,6 +106,7 @@ const clip = (s, n) => {
 export function validateCog(body, { needTask = true } = {}) {
   if (!body || typeof body !== 'object') throw new RequestError(400, 'Send a JSON object.');
   const style = STYLE[body.style] ? body.style : 'hints';
+  const level = LEVEL[body.level] ? body.level : 'beginner';
   const task = body.task ?? 'chat';
   if (needTask && !TASKS[task]) throw new RequestError(400, `Unknown task ${String(task).slice(0, 40)}.`);
   const raw = Array.isArray(body.messages) ? body.messages : [];
@@ -119,6 +128,7 @@ export function validateCog(body, { needTask = true } = {}) {
   if (total > COG_LIMITS.totalChars) throw new RequestError(413, 'The project is too big for Cog.');
   return {
     style,
+    level,
     task,
     hint: Math.max(1, Math.min(3, Number(body.hint) || 1)),
     messages,
@@ -164,7 +174,7 @@ function apiMessages(job, instruction) {
   const last = msgs.length && msgs[msgs.length - 1].role === 'user' ? msgs.pop() : null;
   const content = [
     { type: 'text', text: contextText(job.context) },
-    { type: 'text', text: `${STYLE[job.style]}\nTask: ${instruction}` },
+    { type: 'text', text: `${STYLE[job.style]}\n${LEVEL[job.level]}\nTask: ${instruction}` },
   ];
   if (last) content.push({ type: 'text', text: `The student: ${last.content}` });
   msgs.push({ role: 'user', content });

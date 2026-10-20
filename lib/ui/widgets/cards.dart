@@ -6,7 +6,9 @@ import '../../state/app_state.dart';
 import '../../state/models.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../dialogs.dart';
 import 'common.dart';
+import 'menu.dart';
 
 class ProjectCard extends StatelessWidget {
   const ProjectCard({super.key, required this.p});
@@ -30,15 +32,43 @@ class ProjectCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(p.name, style: tBody(c, size: 15, w: FontWeight.w700, height: 20 / 15), overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 4),
-              Text('${kBoards[p.board]!.name} · Edited ${ago(p.updated)}',
-                  style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.name, style: tBody(c, size: 15, w: FontWeight.w700, height: 20 / 15), overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text('${kBoards[p.board]!.name} · Edited ${ago(p.updated)}',
+                      style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
+                ]),
+              ),
+              const SizedBox(width: 4),
+              ProjectMenuButton(p: p),
             ]),
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// ⋮ on a project card: Open, Rename…, Duplicate, Download .ino (.zip with more tabs), Delete… (PR-04).
+class ProjectMenuButton extends StatelessWidget {
+  const ProjectMenuButton({super.key, required this.p});
+  final Project p;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.read(context);
+    return MenuButton(
+      entries: () => [
+        MenuEntry('Open', icon: 'open', onTap: () => s.openProject(p.id)),
+        MenuEntry('Rename…', icon: 'pencil', onTap: () => showRenameProjectDialog(context, p)),
+        MenuEntry('Duplicate', icon: 'copy', onTap: () => s.duplicateProject(p)),
+        MenuEntry(p.files.length == 1 ? 'Download .ino' : 'Download .zip', icon: 'download', onTap: () => s.downloadProject(p)),
+        MenuEntry.line,
+        MenuEntry('Delete…', icon: 'trash', onTap: () => showDeleteProjectDialog(context, p)),
+      ],
+      builder: (context, open, toggle) => IconBtn('more', onTap: toggle, tip: 'More for ${p.name}', active: open, size: 28, iconSize: 18),
     );
   }
 }

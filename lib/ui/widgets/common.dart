@@ -1,10 +1,14 @@
 // Shared building blocks: icons, buttons, inputs, selects, switches, cards.
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemMouseCursors;
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme.dart';
 import 'icon_paths.dart';
+
+/// The shortcut key: ⌘ on a Mac (and iPad), Ctrl elsewhere.
+String get kMod => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS ? '⌘' : 'Ctrl';
 
 class RcIcon extends StatelessWidget {
   const RcIcon(this.name, {super.key, this.size = 16, this.color});
@@ -64,9 +68,11 @@ class Btn extends StatelessWidget {
     this.height = 32,
     this.small = false,
     this.expand = false,
+    this.tooltip,
   });
   final String label;
   final String? icon;
+  final String? tooltip;
   final VoidCallback? onTap;
   final BtnKind kind;
   final double height;
@@ -77,6 +83,7 @@ class Btn extends StatelessWidget {
     final c = RC.of(context);
     return Hover(
       onTap: onTap,
+      tooltip: tooltip,
       builder: (context, h) {
         Color bg, fg, border;
         switch (kind) {
