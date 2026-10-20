@@ -91,6 +91,9 @@ class _ShortcutsDialog extends StatelessWidget {
           ('Undo / redo', '$m+Z / $m+Shift+Z'),
           ('Copy / paste a block', '$m+C / $m+V'),
           ('Delete a block', 'Delete'),
+          ('Move between blocks', 'Arrow keys'),
+          ('Edit the field', 'Enter'),
+          ('Open the toolbox', 'T'),
         ]
       ),
       ('Menus and dialogs', [('Close', 'Esc')]),

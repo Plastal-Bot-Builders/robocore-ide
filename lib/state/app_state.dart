@@ -133,6 +133,9 @@ class AppState extends ChangeNotifier {
   String? bsel;
   String stateLabel = 'Ready', stateKind = '';
   String? busy;
+  // Stop cancels a Verify or Upload (E-07): each one checks this is still its number after every wait.
+  int _buildGen = 0;
+  bool _flashing = false;
   final List<OutLine> output = [];
   List<Problem> problems = [];
   Verified? verified;
@@ -613,11 +616,47 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void testConnection() {
+  Future<void> testConnection() async {
     if (onUsb) {
-      conn = usbOpen
-          ? ConnMsg('ok', 'The board on USB-C is connected (${usbLabel ?? 'USB'}). Its output shows in the Serial Monitor.')
-          : ConnMsg('err', usb.supported ? 'No board on USB-C. Plug it in and press Connect.' : UsbResult.unsupported.message);
+      if (!usbOpen || busy != null) {
+        conn = ConnMsg(
+            'err',
+            !usb.supported
+                ? UsbResult.unsupported.message
+                : busy != null
+                    ? 'Wait for the ${busy == 'upload' ? 'upload' : 'build'} to finish, then test again.'
+                    : 'No board on USB-C. Plug it in and press Connect.');
+        notifyListeners();
+        return;
+      }
+      // Ask the chip its name through its bootloader (B-04). The board restarts, so its sketch starts again.
+      busy = 'test';
+      conn = const ConnMsg('', 'Asking the board its name… (it restarts)');
+      _flushRx();
+      notifyListeners();
+      final r = await usb.identify(baud: baud);
+      busy = null;
+      usbOpen = usb.isOpen;
+      if (r.ok) {
+        final chip = '${r.data['chip'] ?? 'the chip'}';
+        final b = kBoards[board]!;
+        final same = chip.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '').startsWith(b.chip.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), ''));
+        if (same) {
+          conn = ConnMsg('ok', 'Board answered: $chip on ${r.data['label'] ?? usbLabel ?? 'USB'}. It restarted and is running its sketch again.');
+          showToast('Board answered · $chip');
+        } else {
+          conn = ConnMsg('err', 'The board answered, but it has an $chip and Board Setup is set to ${b.name} (${b.chip}). Pick the right board.');
+          showToast('Board answered · $chip, not ${b.chip}', error: true);
+        }
+        serialPush('— board restarted —', 'sys');
+      } else {
+        conn = ConnMsg(
+            'err',
+            r.code == 'bootloader'
+                ? 'The board did not answer. Hold BOOT, tap RESET, release BOOT, then press Test connection again.'
+                : r.message);
+        showToast('The board did not answer.', error: true);
+      }
       notifyListeners();
       return;
     }
@@ -976,6 +1015,7 @@ class AppState extends ChangeNotifier {
     }
     p.syncCode();
     busy = 'verify';
+    final gen = ++_buildGen;
     problems = [];
     verified = null;
     if (!fromUpload) output.clear();
@@ -987,6 +1027,7 @@ class AppState extends ChangeNotifier {
     if (panelTab == 'problems' || !fromUpload) panelTab = 'output';
     notifyListeners();
     await Future<void>.delayed(Duration(milliseconds: 650 + _rnd.nextInt(450)));
+    if (gen != _buildGen) return null;
     CompileResult r;
     try {
       r = compileSketch(
@@ -1046,16 +1087,19 @@ class AppState extends ChangeNotifier {
     if (r == null) return;
     final b = r.board;
     busy = 'upload';
+    final gen = _buildGen;
     setStatus('Uploading…', 'busy');
     outLine('Connecting to the preview ${b.name}…');
     notifyListeners();
     await Future<void>.delayed(const Duration(milliseconds: 380));
+    if (gen != _buildGen) return;
     outLine('Chip is ${b.chip}. Writing ${fmtN(r.size)} bytes…');
     for (final pc in const [18, 46, 73, 100]) {
       final addr = (0x10000 + (r.size * pc / 100).round()).toRadixString(16).padLeft(8, '0');
       outLine('Writing at 0x$addr… ($pc %)');
       notifyListeners();
       await Future<void>.delayed(Duration(milliseconds: 170 + _rnd.nextInt(120)));
+      if (gen != _buildGen) return;
     }
     outLine('Hard resetting via RTS pin…');
     outLine('Uploaded to the preview ${b.name}. The sketch is now running in the simulator.', 'ok');
@@ -1099,6 +1143,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     busy = flash ? 'upload' : 'verify';
+    final gen = ++_buildGen;
     final sw = Stopwatch()..start();
     outLine('Compiling ${p.files.first.name} for ${b.full} on the compile server…', 'info');
     setStatus('Compiling…', 'busy');
@@ -1108,6 +1153,7 @@ class AppState extends ChangeNotifier {
       board: p.board,
       files: [for (final f in p.files) SourceFile(f.name, f.content)],
     );
+    if (gen != _buildGen) return;
     if (r.error != null) {
       busy = null;
       outLine(r.error!, 'err');
@@ -1145,10 +1191,10 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    await _flash(p, b, r);
+    await _flash(p, b, r, gen);
   }
 
-  Future<void> _flash(Project p, BoardDef b, ServerBuild r) async {
+  Future<void> _flash(Project p, BoardDef b, ServerBuild r, int gen) async {
     final img = r.image;
     if (img == null || img['format'] != 'esp32' || img['parts'] is! List) {
       busy = null;
@@ -1163,6 +1209,7 @@ class AppState extends ChangeNotifier {
     }
     if (!usbOpen) {
       final rc = await usb.reconnect(baud: baud);
+      if (gen != _buildGen) return;
       if (rc.ok) {
         _usbUp(rc.data['label'] as String?, 'Reconnected to');
       } else {
@@ -1176,6 +1223,7 @@ class AppState extends ChangeNotifier {
     _flushRx();
     uploadPct = 0;
     _lastPctLine = -10;
+    _flashing = true;
     setStatus('Uploading…', 'busy');
     outLine('Uploading to the ${b.name} on USB-C…');
     notifyListeners();
@@ -1186,10 +1234,19 @@ class AppState extends ChangeNotifier {
       'baud': 921600,
       'monitorBaud': baud,
     });
+    _flashing = false;
     busy = null;
     uploadPct = null;
     usbOpen = usb.isOpen;
-    if (res.ok) {
+    if (res.code == 'cancelled') {
+      if (res.data['partial'] == true) {
+        outLine('Upload cancelled part-way, so the board’s program is incomplete and it may not run. '
+            'Upload again before you use it.', 'err');
+      } else {
+        outLine('Upload cancelled before anything was written. The board restarted with its old program.', 'sys');
+      }
+      setStatus('Cancelled');
+    } else if (res.ok) {
       final bytes = (res.data['bytes'] as num?)?.toInt() ?? 0;
       outLine('Upload complete: ${fmtN(bytes)} bytes written to the ${res.data['chip'] ?? b.chip}. '
           'The board restarted and is running ${p.name}.', 'ok');
@@ -1226,6 +1283,36 @@ class AppState extends ChangeNotifier {
       setStatus('Stopped');
       notifyListeners();
     }
+  }
+
+  /// Stop in the top bar: only while a Verify or Upload runs, or the preview board runs a sketch.
+  bool get canStop => busy == 'verify' || busy == 'upload' || sim.running;
+
+  /// Stop in the top bar (E-07): cancels the Verify or Upload, or else stops the preview board.
+  void stop() {
+    if (busy == 'verify' || busy == 'upload') {
+      cancelBuild();
+    } else {
+      stopSketch();
+    }
+  }
+
+  void cancelBuild() {
+    if (busy != 'verify' && busy != 'upload') return;
+    if (_flashing) {
+      // The flasher stops at its next step and restarts the board; _flash reports it.
+      unawaited(usb.cancelFlash());
+      setStatus('Cancelling…', 'busy');
+      notifyListeners();
+      return;
+    }
+    final what = busy == 'upload' ? 'Upload' : 'Verify';
+    _buildGen++;
+    busy = null;
+    uploadPct = null;
+    outLine('$what cancelled.', 'sys');
+    setStatus('Cancelled');
+    notifyListeners();
   }
 
   void stopSketch() {

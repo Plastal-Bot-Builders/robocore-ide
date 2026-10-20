@@ -9,17 +9,17 @@ when you finish it.
 
 | Part | Done | Partly | Missing | Score | At the first audit (20 Oct) |
 |---|---|---|---|---|---|
-| Behaviour spec (145 rows) | 139 | 6 | 0 | **142 / 145 = 98 %** | 117 / 145 = 81 % |
+| Behaviour spec (145 rows) | 145 | 0 | 0 | **145 / 145 = 100 %** | 117 / 145 = 81 % |
 | Block catalogue (74 blocks, 10 categories) | 74 | | 0 | **74 / 74 = 100 %** | 25 / 74 = 34 % |
-| Both together | | | | **216 / 219 = 99 %** | 65 % |
+| Both together | | | | **219 / 219 = 100 %** | 65 % |
 
-Not counted: things only real hardware can prove (upload, reset and unplug on a RoboCore V2, which arrives about
-11 November; how far the robot really moves and turns), and Cog with a real Claude key (tested only against a
-stand-in API).
+Not counted: things only real hardware can prove, and Cog with a real Claude key (tested only against a stand-in
+API). On a RoboCore V2 (arriving about 11 November) still to try: upload, cancelling an upload, Test connection, reset
+and unplug, all tested so far against a stand-in board and flasher; and how far the robot really moves and turns.
 
 ## Behaviour spec, row by row
 
-### G — Everywhere (16.5 / 17)
+### G — Everywhere (17 / 17)
 
 | ID | Status | Note |
 |---|---|---|
@@ -33,7 +33,7 @@ stand-in API).
 | G-08 USB-C | Done | |
 | G-09 Settings icon | Done | |
 | G-10 Account menu | Done | |
-| G-11 Search | Partly | No **Help** group (there are no help pages yet); Esc works |
+| G-11 Search | Done | Projects, Examples and Help (pages and dialogs, found by name or a word like “baud”); Esc works |
 | G-12 New project | Done | |
 | G-13 Status bar · board → Board Setup | Done | |
 | G-14 Tooltips with shortcut | Done | Verify (Ctrl/⌘+R), Upload (Ctrl/⌘+U), Ask Cog, zoom |
@@ -83,19 +83,19 @@ The page also has its **New project** button, as in Figma.
 |---|---|---|
 | L-01 … L-04 | Done | “NewPing is not installed. Install it in Libraries.”, also before a compile on the server |
 
-### B — Board Setup (9.5 / 10)
+### B — Board Setup (10 / 10)
 
 | ID | Status | Note |
 |---|---|---|
 | B-01 … B-03, B-05 … B-10 | Done | Upload/reset/unplug still to try on a real board |
-| B-04 Test connection | Partly | Doesn't ask the chip its name |
+| B-04 Test connection | Done | On USB-C asks the chip its name through its bootloader (“Board answered · ESP32-S3 (QFN56) (revision v0.2)”), warns if it is a different chip; the board restarts |
 
-### SM — Serial Monitor (6.5 / 7)
+### SM — Serial Monitor (7 / 7)
 
 | ID | Status | Note |
 |---|---|---|
 | SM-01 … SM-06 | Done | |
-| SM-07 No board | Partly | Connect button, no empty state |
+| SM-07 No board | Done | Empty state with Connect; with earlier lines in the log, a bar with Connect above them |
 
 ### ST — Settings (12 / 12)
 
@@ -106,21 +106,21 @@ The page also has its **New project** button, as in Figma.
 
 Laid out in two columns on wide windows, as in Figma.
 
-### E — Editor header and build (12.5 / 13)
+### E — Editor header and build (13 / 13)
 
 | ID | Status | Note |
 |---|---|---|
 | E-01 … E-06, E-08 … E-13 | Done | The project name opens Rename…, Project settings…, Duplicate, Download, Delete project… |
-| E-07 Stop | Partly | Stops the simulator; can't cancel an upload |
+| E-07 Stop | Done | In the top bar only while Verify, Upload or the preview sketch runs. Cancels compiling at once; while flashing, the flasher stops at its next block and restarts the board (says if the program is now incomplete) |
 
-### BK — Blocks (22.5 / 23)
+### BK — Blocks (23 / 23)
 
 | ID | Status | Note |
 |---|---|---|
 | BK-01 … BK-08, BK-11 … BK-15, BK-17 | Done | Blockly |
 | BK-09 Undo / Redo | Done | Greyed out when Blockly has nothing to undo or redo |
 | BK-10 Delete all | Done | “Delete all 6 blocks?” dialog; Undo brings them back |
-| BK-16 Selection + keyboard | Partly | Keyboard navigation not checked |
+| BK-16 Selection + keyboard | Done | Yellow outline (navy on the yellow Events blocks, cream in the dark theme); Blockly 13's keyboard navigation: arrows move, Enter edits a field, T opens the toolbox (in the shortcuts dialog) |
 | BK-18 Ten categories | Done | Hardware first, round coloured icons, as in Figma |
 | BK-19 Robot blocks | Done | move / turn / start / steer / stop, speed, wheel size, distance moved (RoboCoreDrive) |
 | BK-20 “When …” hats | Done | Checked at the top of loop() (phase 1 in the spec) |
@@ -147,12 +147,12 @@ Laid out in two columns on wide windows, as in Figma.
 |---|---|---|
 | C-01 … C-06 | Done | Ctrl/⌘+J collapses the console; remembered on this device |
 
-### PB — Preview board (4.5 / 5)
+### PB — Preview board (5 / 5)
 
 | ID | Status | Note |
 |---|---|---|
 | PB-02 … PB-05 | Done | |
-| PB-01 Live parts | Partly | LED, RGB, motors, servo, buzzer; sonar, line, tilt and battery can't be set |
+| PB-01 Live parts | Done | LED, RGB, USER, motors, servo, buzzer; sonar, line, tilt and battery update live, and a click holds any of them at a value (slider, Auto to let go) |
 
 ### CG — Cog (8 / 8), D — Dialogs (3 / 3)
 

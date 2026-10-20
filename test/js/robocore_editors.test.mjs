@@ -60,6 +60,14 @@ test("the editors' own shortcuts and plain typing are left alone", () => {
     { key: 'R', code: 'KeyR', ctrlKey: true, shiftKey: true }, // the browser's hard reload stays the browser's
     { key: 'i', code: 'KeyI', ctrlKey: true, altKey: true },
     { key: 'Meta', code: 'MetaLeft', metaKey: true },
+    // Blockly's keyboard navigation (BK-16): arrows, Enter, Esc, Tab, and the jump keys.
+    { key: 'ArrowDown', code: 'ArrowDown' },
+    { key: 'ArrowRight', code: 'ArrowRight' },
+    { key: 'Enter', code: 'Enter' },
+    { key: 'Escape', code: 'Escape' },
+    { key: 'Tab', code: 'Tab', shiftKey: true },
+    { key: 'Home', code: 'Home', ctrlKey: true },
+    { key: 'ArrowUp', code: 'ArrowUp', metaKey: true },
   ];
   for (const init of passed) {
     const e = press(init);

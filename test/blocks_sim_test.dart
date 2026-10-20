@@ -10,11 +10,13 @@ import 'package:robocore_ide/state/sim_board.dart';
 CompileResult _check(String code) => compileSketch(files: [SourceFile('T.ino', code)], boardId: 'v2', installedLibs: const {});
 
 /// Runs [code] until it prints "done" (or [limit] passes); returns the lines it printed and the notes.
-Future<(List<String>, List<String>, SimBoard)> _run(String code, {Duration limit = const Duration(seconds: 6)}) async {
+Future<(List<String>, List<String>, SimBoard)> _run(String code,
+    {Duration limit = const Duration(seconds: 6), Map<SimSensor, double> hold = const {}}) async {
   final r = _check(code);
   expect(r.errors.map((e) => '${e.line}: ${e.msg}').toList(), isEmpty);
   final out = <String>[], notes = <String>[];
   final sim = SimBoard(onSerial: (t, d) => out.add(t), onNote: notes.add);
+  hold.forEach(sim.hold);
   final run = sim.run(r, 'T');
   final sw = Stopwatch()..start();
   while (!out.contains('done') && sw.elapsed < limit && sim.running) {
@@ -31,6 +33,35 @@ void main() {
     final code = File('test/fixtures/all_blocks.ino').readAsStringSync();
     final (_, notes, _) = await _run(code, limit: const Duration(seconds: 3));
     expect(notes, isEmpty);
+  });
+
+  test('sensors held at a value on the preview board read exactly that (PB-01)', () async {
+    final (out, _, sim) = await _run('''
+#include <RoboCore.h>
+Sonar sonar;
+LineSensor line;
+IMU imu;
+void setup() {
+  Serial.begin(115200);
+  line.begin();
+  imu.begin();
+  Serial.println(sonar.distanceCm());
+  Serial.println(sonar.justCloserThan(15) ? "close" : "far");
+  Serial.println(line.right());
+  Serial.println(line.onLine() ? "on" : "off");
+  Serial.println(imu.tiltDeg());
+  Serial.println(imu.isTilted() ? "tilted" : "flat");
+  Serial.println(RoboCore::batteryVolts());
+  Serial.println("done");
+}
+void loop() {}
+''', hold: {SimSensor.sonar: 12, SimSensor.line: .8, SimSensor.tilt: 40, SimSensor.battery: 3.5});
+    expect(out, ['12.00', 'close', '0.80', 'on', '40.00', 'tilted', '3.50', 'done']);
+    // What the readings show, and back to simulated.
+    expect(sim.reading(SimSensor.sonar), 12);
+    sim.hold(SimSensor.sonar, null);
+    expect(sim.held.containsKey(SimSensor.sonar), isFalse);
+    expect(sim.reading(SimSensor.tilt), 40);
   });
 
   test('move, turn and distance in the preview board', () async {

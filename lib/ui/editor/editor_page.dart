@@ -1,4 +1,5 @@
 // The editor: Blocks / Code card, console panel and the board card.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -11,6 +12,7 @@ import '../../engine/compiler.dart' show Problem;
 import '../../state/app_state.dart';
 import '../../state/cog.dart';
 import '../../state/models.dart';
+import '../../state/sim_board.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../cog/cog_panel.dart';
@@ -224,7 +226,7 @@ class _EditorPageState extends State<EditorPage> {
                   ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Expanded(child: panel),
                       const SizedBox(width: 12),
-                      SizedBox(width: 280, child: RcCard(child: SingleChildScrollView(child: BoardSummary(boardId: p.board, extra: const LiveBoard())))),
+                      SizedBox(width: 280, child: RcCard(child: SingleChildScrollView(child: BoardCard(boardId: p.board)))),
                     ])
                   : panel,
             ),
@@ -531,7 +533,7 @@ class ConsolePanel extends StatelessWidget {
             const Expanded(child: OutputLog()),
           ]);
         case 'board':
-          return SingleChildScrollView(child: BoardSummary(boardId: s.cur?.board ?? s.board, extra: const LiveBoard()));
+          return SingleChildScrollView(child: BoardCard(boardId: s.cur?.board ?? s.board));
         default:
           if (s.problems.isEmpty) {
             return Padding(
@@ -605,75 +607,221 @@ class ConsolePanel extends StatelessWidget {
   }
 }
 
-/// Live view of the simulated board (LED, RGB, USER button, motors, buzzer),
-/// or the real board's status when it is on USB-C.
-class LiveBoard extends StatelessWidget {
+/// The board card beside the console (or in its Board tab): the preview board while the port is the
+/// simulator, else the real board's details and USB status.
+class BoardCard extends StatelessWidget {
+  const BoardCard({super.key, required this.boardId});
+  final String boardId;
+  @override
+  Widget build(BuildContext context) =>
+      AppScope.of(context).onUsb ? BoardSummary(boardId: boardId, extra: const _UsbBoardStatus()) : const LiveBoard();
+}
+
+/// The preview board (the design's Preview Board card): the LED (on the RoboCore V2 the RGB LED) and the USER
+/// button, and the live readings: motors, servo, and on the V2 the sonar, line sensor, tilt and battery, each of
+/// which a click can hold at a value (PB-01).
+class LiveBoard extends StatefulWidget {
   const LiveBoard({super.key});
+  @override
+  State<LiveBoard> createState() => _LiveBoardState();
+}
+
+class _LiveBoardState extends State<LiveBoard> {
+  Timer? _tick;
+  SimSensor? _editing;
+
+  @override
+  void initState() {
+    super.initState();
+    // The sensors drift while a sketch runs without telling anyone, so look again a few times a second.
+    _tick = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      if (mounted && AppScope.read(context).sim.running) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = RC.of(context);
-    if (s.onUsb) return const _UsbBoardStatus();
     final sim = s.sim;
     final b = kBoards[s.cur?.board ?? s.board]!;
+    final v2 = b.id == 'v2';
     return ListenableBuilder(
       listenable: sim,
       builder: (context, _) {
-        final led = sim.running && sim.led != 0;
+        final running = sim.running;
+        // The RoboCore V2 has no plain LED: LED_BUILTIN is the RGB LED.
         final rgb = sim.rgbColor ?? const [0, 0, 0];
-        final rgbOn = sim.running && sim.rgbColor != null && (rgb[0] + rgb[1] + rgb[2]) > 0;
+        final Color? lit = !running
+            ? null
+            : v2
+                ? (rgb[0] + rgb[1] + rgb[2] > 0 ? Color.fromARGB(255, rgb[0], rgb[1], rgb[2]) : null)
+                : (sim.led != 0 ? kBrand : null);
+        final white = lit != null && rgb[0] == rgb[1] && rgb[1] == rgb[2];
         final io = <String>[
-          if (sim.motorSpeeds[0] != 0 || sim.motorSpeeds[1] != 0) 'motors ${sim.motorSpeeds[0]} / ${sim.motorSpeeds[1]}',
-          if (sim.servoAngle != null) 'servo ${sim.servoAngle}°',
+          if (!v2 && (sim.motorSpeeds[0] != 0 || sim.motorSpeeds[1] != 0)) 'motors ${sim.motorSpeeds[0]} / ${sim.motorSpeeds[1]}',
+          if (!v2 && sim.servoAngle != null) 'servo ${sim.servoAngle}°',
           if (sim.toneHz != null) 'tone ${sim.toneHz} Hz',
           for (final e in sim.pins.entries) 'pin ${e.key} ${e.value != 0 ? 'HIGH' : 'LOW'}',
         ];
-        Widget lamp(Color? on, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: on ?? c.sunk,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: kNavy, width: 1.5),
-                  boxShadow: on == null ? null : [BoxShadow(color: on.withValues(alpha: .7), blurRadius: 8)],
-                ),
+        final state = running ? 'Running' : (s.lastRun != null ? 'Stopped' : 'Simulator');
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            height: 40,
+            padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
+            child: Row(children: [
+              Expanded(child: Text('PREVIEW BOARD', style: tH2(c), overflow: TextOverflow.ellipsis)),
+              Tooltip(
+                message: running ? 'Running ${sim.name}. Stop is in the top bar.' : 'Upload runs the sketch here.',
+                child: Badge2(state, bg: running ? kNavy : null, fg: running ? kCream : null),
               ),
-              const SizedBox(width: 6),
-              Text(label, style: tCaption(c)),
-            ]);
-        return Container(
-          margin: const EdgeInsets.only(top: 0),
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              // The RoboCore V2 has no plain LED: LED_BUILTIN is the RGB LED.
-              if (b.id != 'v2') lamp(led ? kBrand : null, 'LED'),
-              if (b.id == 'v2') lamp(rgbOn ? Color.fromARGB(255, rgb[0], rgb[1], rgb[2]) : null, 'RGB'),
-              _UserButton(label: b.id == 'v2' ? 'USER' : 'BUTTON'),
             ]),
-            const SizedBox(height: 8),
-            Text(io.isEmpty ? 'Simulated board · nothing else active' : io.join(' · '),
-                style: tMono(c, size: 12, color: c.faint, height: 16 / 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 6),
-            Row(children: [
-              if (sim.running) ...[
-                Dot(color: c.ok, size: 7),
-                const SizedBox(width: 7),
-                Expanded(child: Text('Running ${sim.name}', style: tCaption(c, color: c.ok, w: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-                Btn('Stop', kind: BtnKind.plain, small: true, onTap: s.stopSketch),
-              ] else if (s.lastRun != null) ...[
-                Expanded(child: Text('Stopped', style: tCaption(c))),
-                Btn('Run again', kind: BtnKind.plain, small: true, onTap: s.rerun),
-              ] else
-                Expanded(child: Text('Upload to run your sketch', style: tCaption(c))),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(
+                width: 64,
+                child: Column(children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: lit ?? c.sunk,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: kNavy, width: 1.5),
+                      boxShadow: lit == null ? null : [BoxShadow(color: lit.withValues(alpha: .6), blurRadius: 16, spreadRadius: 3)],
+                    ),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: lit == null ? c.line2 : Colors.white.withValues(alpha: .85),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: kNavy, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('${v2 ? 'RGB' : 'LED'} · ${lit == null ? 'off' : (v2 && white ? 'white' : 'on')}',
+                      style: tCaption(c, color: c.faint), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  _UserButton(label: v2 ? 'USER' : 'BUTTON'),
+                ]),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (v2) ...[
+                    _reading(c, 'Motors', 'L ${sim.motorSpeeds[0]} % · R ${sim.motorSpeeds[1]} %'),
+                    _reading(c, 'Servo 1', sim.servoAngle == null ? '—' : '${sim.servoAngle}°'),
+                    for (final k in SimSensor.values) ..._sensor(c, sim, k),
+                  ],
+                  if (io.isNotEmpty || !v2)
+                    Padding(
+                      padding: EdgeInsets.only(top: v2 ? 4 : 0),
+                      child: Text(io.isEmpty ? 'Nothing else active' : io.join(' · '),
+                          style: tMono(c, size: 11, color: c.faint, height: 16 / 11), maxLines: 3, overflow: TextOverflow.ellipsis),
+                    ),
+                ]),
+              ),
             ]),
-          ]),
-        );
+          ),
+        ]);
       },
     );
+  }
+
+  // A reading: name, then the value (bold while held at a value).
+  Widget _reading(RC c, String k, String v, {bool held = false}) => SizedBox(
+        height: 20,
+        child: Row(children: [
+          SizedBox(width: 50, child: Text(k, style: tCaption(c, color: c.faint), maxLines: 1)),
+          Expanded(
+            child: Text(v,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tMono(c, size: 11, height: 16 / 11, color: c.ink, w: held ? FontWeight.w800 : FontWeight.w400)),
+          ),
+        ]),
+      );
+
+  static const _names = {SimSensor.sonar: 'Sonar', SimSensor.line: 'Line', SimSensor.tilt: 'Tilt', SimSensor.battery: 'Battery'};
+
+  // Each sensor's slider: range, steps and how the value reads.
+  static (double, double, int, String Function(double)) _range(SimSensor k) => switch (k) {
+        SimSensor.sonar => (2, 200, 198, (v) => '${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1)} cm'),
+        SimSensor.line => (-1, 1, 40, _lineText),
+        SimSensor.tilt => (0, 90, 180, (v) => '${v.toStringAsFixed(1)}°'),
+        SimSensor.battery => (3, 4.2, 120, (v) => '${v.toStringAsFixed(2)} V'),
+      };
+
+  // The line position as the three sensors see it: how dark it is under the left, centre and right one.
+  static String _lineText(double pos) {
+    String f(num v) => v.clamp(0, 1).toStringAsFixed(1);
+    return 'L ${f(-pos)} C ${f(1 - pos.abs())} R ${f(pos)}';
+  }
+
+  List<Widget> _sensor(RC c, SimBoard sim, SimSensor k) {
+    final (lo, hi, steps, text) = _range(k);
+    final held = sim.held.containsKey(k);
+    final v = sim.reading(k).clamp(lo, hi).toDouble();
+    final open = _editing == k;
+    final name = _names[k]!;
+    return [
+      Hover(
+        onTap: () => setState(() => _editing = open ? null : k),
+        tooltip: open
+            ? null
+            : held
+                ? 'Held at ${text(v)}. Click to change it.'
+                : 'Click to set what the ${name.toLowerCase()} reads',
+        builder: (context, h) => Container(
+          decoration: BoxDecoration(color: h || open ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+          child: _reading(c, name, text(v), held: held),
+        ),
+      ),
+      if (open)
+        Container(
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 2),
+          decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
+          child: Row(children: [
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  activeTrackColor: c.ink,
+                  inactiveTrackColor: c.line,
+                  thumbColor: c.ink,
+                  overlayColor: c.ink.withValues(alpha: .08),
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                ),
+                child: SizedBox(
+                  height: 26,
+                  child: Slider(
+                    value: v,
+                    min: lo,
+                    max: hi,
+                    divisions: steps,
+                    semanticFormatterCallback: text,
+                    onChanged: (x) => sim.hold(k, x),
+                  ),
+                ),
+              ),
+            ),
+            Btn('Auto', kind: BtnKind.plain, small: true, tooltip: 'Back to the simulated reading', onTap: held ? () => sim.hold(k, null) : null),
+          ]),
+        ),
+    ];
   }
 }
 

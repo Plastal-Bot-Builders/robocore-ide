@@ -51,7 +51,14 @@ abstract class UsbLink {
   Future<UsbResult> reset();
 
   /// Writes a compiled program: `{parts: [{name, offset, data(base64)}], chip, boardName, baud, monitorBaud}`.
+  /// Stopped with [cancelFlash], it fails with code `cancelled` (`partial` true if writing had started).
   Future<UsbResult> flash(Map<String, dynamic> job);
+
+  /// Stops a running [flash] at its next step.
+  Future<UsbResult> cancelFlash();
+
+  /// Asks the chip its name through its bootloader (`chip`, `label`), then restarts it.
+  Future<UsbResult> identify({required int baud});
 }
 
 UsbLink createUsbLink() => impl.createUsbLink();

@@ -8,6 +8,9 @@ import '../data/catalog.dart';
 import '../engine/compiler.dart';
 import '../engine/interpreter.dart';
 
+/// The preview board's sensors that the student can hold at a value (PB-01).
+enum SimSensor { sonar, line, tilt, battery }
+
 class SimBoard extends ChangeNotifier implements BoardIO {
   SimBoard({required this.onSerial, required this.onNote});
 
@@ -35,6 +38,32 @@ class SimBoard extends ChangeNotifier implements BoardIO {
   bool user = false;
   bool readsSerial = false;
   double _dist = 42, _lineT = 0, _analog = 1800;
+
+  /// Readings held at a value from the preview board; the others are simulated. Kept across runs.
+  final Map<SimSensor, double> held = {};
+
+  void hold(SimSensor k, double? v) {
+    if (v == null) {
+      held.remove(k);
+    } else {
+      held[k] = v;
+    }
+    _changed();
+  }
+
+  /// What a sensor reads now, for the preview board's readings (no noise, and reading it changes nothing).
+  double reading(SimSensor k) =>
+      held[k] ??
+      switch (k) {
+        SimSensor.sonar => (_dist * 10).round() / 10,
+        SimSensor.line => _linePos(),
+        SimSensor.tilt => _tiltAuto(),
+        SimSensor.battery => _voltsAuto(),
+      };
+
+  double _linePos() => (math.sin(_lineT) * .7).clamp(-1.0, 1.0);
+  double _tiltAuto() => 2 + math.sin(millis() / 2500) * 6;
+  double _voltsAuto() => 3.92 - millis() / 3600000 * .05;
 
   // The robot's wheels and heading, worked out from the motor speeds over time (SimBoardPhysics).
   final List<double> _turns = [0, 0];
@@ -226,6 +255,8 @@ class SimBoard extends ChangeNotifier implements BoardIO {
 
   @override
   num distance() {
+    final h = held[SimSensor.sonar];
+    if (h != null) return _dist = h;
     final fwd = (motorSpeeds[0] + motorSpeeds[1]) / 2;
     final turning = motorSpeeds[0] * motorSpeeds[1] < 0;
     var d = _dist;
@@ -244,8 +275,10 @@ class SimBoard extends ChangeNotifier implements BoardIO {
 
   @override
   num lineRead() {
+    final h = held[SimSensor.line];
+    if (h != null) return h;
     _lineT += .18;
-    final v = math.sin(_lineT) * .7 + (_rnd.nextDouble() - .5) * .2;
+    final v = _linePos() + (_rnd.nextDouble() - .5) * .2;
     return (v.clamp(-1.0, 1.0) * 100).round() / 100;
   }
 
@@ -256,16 +289,10 @@ class SimBoard extends ChangeNotifier implements BoardIO {
   }
 
   @override
-  num batteryVolts() {
-    final t = millis();
-    return ((3.92 - t / 3600000 * .05 + (_rnd.nextDouble() - .5) * .02) * 100).round() / 100;
-  }
+  num batteryVolts() => held[SimSensor.battery] ?? ((_voltsAuto() + (_rnd.nextDouble() - .5) * .02) * 100).round() / 100;
 
   @override
-  num tilt() {
-    final t = millis();
-    return ((2 + math.sin(t / 2500) * 6 + (_rnd.nextDouble() - .5)) * 10).round() / 10;
-  }
+  num tilt() => held[SimSensor.tilt] ?? ((_tiltAuto() + (_rnd.nextDouble() - .5)) * 10).round() / 10;
 
   void _splitLines() {
     var k = _lineBuf.indexOf('\n');
