@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { BOARDS } from './boards.js';
 import { validateRequest, compileSketch, RequestError, LIMITS } from './compile.js';
+import { cogConfig, makeCog, validateCog } from './cog.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -33,6 +34,7 @@ export function loadConfig(over = {}) {
     allowedOrigins: (env.ALLOWED_ORIGINS || 'https://plastal-bot-builders.github.io,http://localhost:*,http://127.0.0.1:*')
       .split(',').map((s) => s.trim()).filter(Boolean),
     bodyLimit: 1_000_000,
+    cog: cogConfig(env),
     ...over,
   };
 }
@@ -144,6 +146,8 @@ export function createServer(cfg = loadConfig()) {
   const allowed = originMatcher(cfg.allowedOrigins);
   const queue = makeQueue(cfg.maxRunning, cfg.maxQueued);
   const limit = makeLimiter(cfg.ratePerMin);
+  const cog = makeCog(cfg.cog);
+  const cogLimit = makeLimiter(cfg.cog.ratePerMin);
   let versions = { arduinoCli: null, cores: [] };
   toolVersions(cfg).then((v) => { versions = v; });
 
@@ -171,7 +175,7 @@ export function createServer(cfg = loadConfig()) {
         return res.end();
       }
       if (req.method === 'GET' && url.pathname === '/health') {
-        return send(res, 200, { ok: true, ...versions, running: queue.running, queued: queue.queued }, cors);
+        return send(res, 200, { ok: true, ...versions, running: queue.running, queued: queue.queued, cog: { ready: cog.ready, model: cog.model } }, cors);
       }
       if (req.method === 'GET' && url.pathname === '/boards') {
         return send(res, 200, { boards: Object.entries(BOARDS).map(([id, b]) => ({ id, name: b.name, fqbn: b.fqbn, arch: b.arch })), limits: LIMITS }, cors);
@@ -195,6 +199,28 @@ export function createServer(cfg = loadConfig()) {
         if (!pending) return send(res, 503, { error: 'The compile server is busy. Try again in a few seconds.' }, { ...cors, 'Retry-After': '5' });
         const result = await pending;
         return send(res, 200, result, cors);
+      }
+      if (req.method === 'POST' && url.pathname.startsWith('/cog/')) {
+        const kind = url.pathname.slice(5);
+        if (!['chat', 'fix', 'check'].includes(kind)) return send(res, 404, { error: 'Not found.' }, cors);
+        if (origin && !cors['Access-Control-Allow-Origin']) return send(res, 403, { error: 'Origin not allowed.' });
+        const ip = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+        if (!cogLimit(ip)) return send(res, 429, { error: 'Cog needs a short break. Wait a minute and ask again.' }, { ...cors, 'Retry-After': '60' });
+        if (!String(req.headers['content-type'] ?? '').includes('application/json')) {
+          throw new RequestError(415, 'Send JSON (Content-Type: application/json).');
+        }
+        let body;
+        try {
+          body = JSON.parse(await readBody(req, cfg.bodyLimit));
+        } catch (e) {
+          if (e instanceof RequestError) throw e;
+          throw new RequestError(400, 'The request is not valid JSON.');
+        }
+        const job = validateCog(body, { needTask: kind === 'chat' });
+        if (kind === 'chat') {
+          return await cog.chat(job, res, cors, (stop) => res.on('close', () => { if (!res.writableEnded) stop(); }));
+        }
+        return send(res, 200, kind === 'fix' ? await cog.fix(job) : await cog.check(job), cors);
       }
       return send(res, 404, { error: 'Not found.' }, cors);
     } catch (e) {

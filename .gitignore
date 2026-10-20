@@ -15,3 +15,6 @@ build/
 **/ephemeral/
 **/.gradle/
 local.properties
+
+# Compile server packages (installed by npm ci)
+server/node_modules/

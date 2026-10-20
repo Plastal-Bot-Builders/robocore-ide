@@ -5,7 +5,8 @@ It runs the official **arduino-cli** with the **esp32 by Espressif 3.3.12** core
 and the optional libraries the IDE lists (ESP32Servo, Adafruit NeoPixel, NewPing, LiquidCrystal I2C).
 The IDE then flashes the result over USB-C with esptool-js.
 
-No outside npm packages: only Node 22's built-in modules.
+It also runs **Cog**, the IDE's learning partner, through the Anthropic API (below). Compiling uses only Node 22's
+built-in modules; Cog uses the official Anthropic SDK (`@anthropic-ai/sdk`, pinned in `package-lock.json`; `npm ci`).
 
 ## API
 
@@ -61,7 +62,23 @@ Other errors return `{ "error": "message" }` with HTTP 400 (bad request), 403 (s
 
 ### `GET /health`, `GET /boards`
 
-Health shows the arduino-cli and core versions and the queue. Boards lists ids, names and FQBNs.
+Health shows the arduino-cli and core versions, the queue, and `cog: {ready, model}`. Boards lists ids, names and FQBNs.
+
+### Cog: `POST /cog/chat`, `/cog/fix`, `/cog/check`
+
+The IDE sends the help style (`hints`, `explain`, `write`), the task (`chat`, `explain_error`, `hint`, `explain_block`,
+`challenge`, `review_try`), the conversation so far, and what Cog may see (`context`: files, problems, the end of the
+Output and the Serial Monitor, the selected block; `{"read": false}` when the student turned reading off).
+
+- `/cog/chat` streams server-sent events: `{"t":"text","v":"…"}` pieces, then `{"t":"done"}`, `{"t":"refusal"}` or `{"t":"error"}`.
+- `/cog/fix` returns `{explanation, file, newContent}` (structured output): the smallest change to one file.
+- `/cog/check` returns `{question, options, answer, explanation, concept}`: one multiple-choice question after a fix.
+
+The wording of every task and the system prompt live on the server (`src/cog.js`), so the IDE can't change what Cog is
+asked to do. Requests use adaptive thinking with the effort below, prompt caching for the system prompt, and
+`fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), which re-runs a request on Anthropic's recommended
+model if the first one declines it. Without `ANTHROPIC_API_KEY`, `/health` says `cog.ready: false` and the Cog routes
+answer 503; compiling keeps working.
 
 ## Settings (environment variables)
 
@@ -73,6 +90,10 @@ Health shows the arduino-cli and core versions and the queue. Boards lists ids, 
 | `COMPILE_JOBS` | 2 | Compiler threads per build |
 | `COMPILE_TIMEOUT_MS` | 120000 | |
 | `RATE_PER_MIN` | 20 | Per client |
+| `ANTHROPIC_API_KEY` | (none) | Turns Cog on. Keep it secret: set it in the host's dashboard, never in the repo |
+| `COG_MODEL` | `claude-opus-5-5` | The model Cog uses. See `docs/cog.md` for cost |
+| `COG_EFFORT` / `COG_FIX_EFFORT` | `low` / `medium` | How much the model thinks for chat / for suggested fixes |
+| `COG_RATE_PER_MIN` | 12 | Cog requests per client per minute |
 
 ## Run it
 
@@ -83,8 +104,9 @@ docker run --rm -p 8080:8080 robocore-compile
 node server/test/smoke.mjs http://localhost:8080      # compiles every example for real
 ```
 
-Without Docker (arduino-cli and the cores installed locally): `cd server && npm start`.
-`npm test` runs the unit tests with a fake arduino-cli.
+Without Docker (arduino-cli and the cores installed locally): `cd server && npm ci && npm start`
+(add `ANTHROPIC_API_KEY=…` in front of `npm start` for Cog). `npm test` runs the unit tests with a fake arduino-cli and a
+fake Anthropic API.
 
 ## Put it online
 

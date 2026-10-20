@@ -91,7 +91,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Unit tests (fake arduino-cli)
+      - name: Install the server's packages (the Anthropic SDK, for Cog)
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests (fake arduino-cli, fake Anthropic API)
         working-directory: server
         run: npm test
       - name: Build the Docker image (real arduino-cli and cores)

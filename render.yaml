@@ -16,3 +16,8 @@ services:
         value: "1"
       - key: COMPILE_JOBS
         value: "1"
+      # Cog: paste the Anthropic API key in Render's dashboard when it asks (it is never stored in this repo).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: COG_MODEL
+        value: claude-opus-5-5
