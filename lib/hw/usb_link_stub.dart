@@ -20,6 +20,10 @@ class _NoUsb extends UsbLink {
   Future<UsbResult> reset() async => UsbResult.unsupported;
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) async => UsbResult.unsupported;
+  @override
+  Future<UsbResult> cancelFlash() async => const UsbResult(true);
+  @override
+  Future<UsbResult> identify({required int baud}) async => UsbResult.unsupported;
 }
 
 UsbLink createUsbLink() => _NoUsb();

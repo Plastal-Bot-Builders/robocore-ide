@@ -148,6 +148,15 @@
       '.blocklyToolboxSelected .blocklyToolboxCategoryLabel, .blocklyTreeSelected .blocklyTreeLabel { color: inherit !important; }',
       '.blocklyToolboxCategoryLabel, .blocklyTreeLabel { font-family: Barlow, sans-serif; font-size: 14px; }',
       '.blocklyWidgetDiv .blocklyMenu, .blocklyDropDownDiv { font-family: Barlow, sans-serif; }',
+      // Selection and keyboard focus (BK-16) in the box yellow; on the yellow Events blocks in navy, or they would not show.
+      '.robocore-renderer.injectionDiv { --blockly-active-node-color: ' + YELLOW + '; --blockly-active-tree-color: ' + YELLOW + '; }',
+      '.robocore-renderer .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + INK + '; stroke-width: 2.5px; }',
+      '.blocklyKeyboardNavigation .robocore-renderer .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
+        ' .blocklyKeyboardNavigation.robocore-renderer .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + INK + '; }',
+      '.robocore-navy-theme .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { stroke: ' + CREAM + '; }',
+      '.blocklyKeyboardNavigation .robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
+        ' .blocklyKeyboardNavigation.robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + CREAM + '; }',
+      '.robocore-renderer .blocklyHighlightedConnectionPath { filter: drop-shadow(0 0 1px ' + INK + '); }',
       '.injectionDiv .blocklyZoom > image, .injectionDiv .blocklyZoom > svg > image { opacity: .7; }',
       '.injectionDiv .blocklyZoom > image:hover, .injectionDiv .blocklyZoom > svg > image:hover { opacity: 1; }',
       // A round, coloured icon for each category (the design's toolbox).

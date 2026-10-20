@@ -137,11 +137,11 @@ class BoardPage extends StatelessWidget {
                 onChanged: s.setBaud)),
         const SizedBox(height: 14),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          Btn('Test connection', onTap: s.testConnection),
+          Btn(s.busy == 'test' ? 'Testing…' : 'Test connection', onTap: s.busy == null ? s.testConnection : null),
           s.linked
-              ? Btn('Disconnect', kind: BtnKind.plain, onTap: s.disconnect)
+              ? Btn('Disconnect', kind: BtnKind.plain, onTap: s.busy == 'test' ? null : s.disconnect)
               : Btn(s.onUsb ? 'Connect USB-C' : 'Connect', kind: BtnKind.primary, onTap: s.connect),
-          if (s.onUsb && s.usbOpen) Btn('Reset board', kind: BtnKind.plain, onTap: s.resetUsbBoard),
+          if (s.onUsb && s.usbOpen) Btn('Reset board', kind: BtnKind.plain, onTap: s.busy == null ? s.resetUsbBoard : null),
           if (!s.onUsb) Btn('Use a real board (USB-C)', kind: BtnKind.plain, onTap: () => s.setPort(kPortUsb)),
         ]),
         const SizedBox(height: 10),

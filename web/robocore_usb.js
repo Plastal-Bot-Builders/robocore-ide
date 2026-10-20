@@ -8,6 +8,7 @@
 // Every call resolves with a JSON string { ok, ... } and never rejects, so errors reach Dart as data.
 // Events go to the onEvent(type, message) handler:
 //   unplugged, reconnected, plugged, error, log (flash output), progress (JSON), stage (flash step)
+// identify() asks the chip its name (Test connection); cancelFlash() stops an upload.
 
 const ESPRESSIF_VID = 0x303a;
 const ESPTOOL_URL = new URL('./vendor/esptool-js/bundle.js', import.meta.url).href;
@@ -19,7 +20,8 @@ const state = {
   baud: 115200,
   want: false, // the user asked to stay connected (drives auto-reconnect)
   last: null, // { vid, pid } of the last board, to find it again after a reset or re-plug
-  busy: false, // flashing
+  busy: false, // flashing, or asking the chip its name
+  cancel: false, // Stop pressed during an upload
   opening: false,
   quietUntil: 0, // a reset we asked for: the board drops off USB for a moment, so no unplug notice
   onText: null,
@@ -224,6 +226,38 @@ function chipKey(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// Stop pressed during an upload (E-07): the flasher gives up at its next step.
+class Cancelled extends Error {}
+
+function checkCancel() {
+  if (state.cancel) throw new Cancelled('Upload cancelled.');
+}
+
+async function loadEsptool() {
+  try {
+    return await import(ESPTOOL_URL);
+  } catch (e) {
+    throw Object.assign(new Error(`Could not load the flasher (esptool-js): ${errText(e)}`), { code: 'esptool' });
+  }
+}
+
+// After flashing or asking the chip its name: let go of the bootloader and give the Serial Monitor back.
+async function release(transport, monitorBaud, ms) {
+  if (transport) {
+    try {
+      await transport.disconnect();
+    } catch (e) {
+      /* the chip may already have dropped off USB */
+    }
+  }
+  if (state.busy) {
+    state.busy = false;
+    state.cancel = false;
+    // In the background, so the answer is not held up while the board restarts.
+    if (state.want && !state.port && state.last) waitAndOpen(state.last, monitorBaud, ms);
+  }
+}
+
 async function flash(jobJson) {
   if (!supported()) return fail('unsupported', 'This browser has no Web Serial. Use Chrome or Edge on a computer.');
   if (state.busy) return fail('busy', 'An upload is already running.');
@@ -237,9 +271,13 @@ async function flash(jobJson) {
   if (!parts.length) return fail('bad-job', 'The compile server sent no program image.');
 
   state.busy = true;
+  state.cancel = false;
   const monitorBaud = job.monitorBaud || state.baud || 115200;
   let port = state.port;
   let transport = null;
+  let loader = null;
+  let writing = false;
+  let reopenMs = 3000;
   try {
     if (!port) port = await grantedPort(state.last);
     if (!port) return fail('no-port', 'No board connected. Press Connect and pick the RoboCore.');
@@ -249,15 +287,11 @@ async function flash(jobJson) {
     // 1. Free the port: stop the Serial Monitor reader and close it.
     emit('stage', 'connecting');
     await closePort();
+    checkCancel();
 
     // 2. Load esptool-js and put the chip into its bootloader.
-    let mod;
-    try {
-      mod = await import(ESPTOOL_URL);
-    } catch (e) {
-      return fail('esptool', `Could not load the flasher (esptool-js): ${errText(e)}`);
-    }
-    const { ESPLoader, Transport } = mod;
+    const { ESPLoader, Transport } = await loadEsptool();
+    checkCancel();
     transport = new Transport(port, false);
     const terminal = {
       clean() {},
@@ -268,12 +302,13 @@ async function flash(jobJson) {
         emit('log', s);
       },
     };
-    const loader = new ESPLoader({ transport, baudrate: job.baud || 921600, terminal, debugLogging: false });
+    loader = new ESPLoader({ transport, baudrate: job.baud || 921600, terminal, debugLogging: false });
     let chipName;
     try {
       await loader.main('default_reset');
       chipName = loader.chip && loader.chip.CHIP_NAME ? loader.chip.CHIP_NAME : '';
     } catch (e) {
+      loader = null;
       return fail('bootloader', errText(e));
     }
     if (job.chip && chipKey(chipName) && chipKey(chipName) !== chipKey(job.chip)) {
@@ -284,9 +319,11 @@ async function flash(jobJson) {
       }
       return fail('wrong-chip', `This board has an ${chipName}, but the project is set to ${job.boardName || job.chip}. Pick the right board and upload again.`);
     }
+    checkCancel();
 
     // 3. Write every part (bootloader, partition table, boot_app0, app) at its offset.
     emit('stage', 'writing');
+    writing = true;
     const fileArray = parts.map((p) => ({ address: Number(p.offset), data: b64ToBytes(p.data) }));
     const sizes = fileArray.map((f) => f.data.length);
     const total = sizes.reduce((a, b) => a + b, 0);
@@ -299,10 +336,12 @@ async function flash(jobJson) {
       eraseAll: false,
       compress: true,
       reportProgress: (i, written, size) => {
+        checkCancel();
         const done = before[i] + Math.round((sizes[i] * written) / Math.max(1, size));
         emit('progress', JSON.stringify({ part: i, parts: fileArray.length, name: parts[i].name || '', address: fileArray[i].address, done, total }));
       },
     });
+    writing = false;
 
     // 4. Restart the board so the new sketch runs.
     emit('stage', 'resetting');
@@ -318,6 +357,7 @@ async function flash(jobJson) {
     emit('stage', 'reopening');
     state.want = true;
     state.busy = false;
+    state.cancel = false;
     state.opening = true;
     let reopened = false;
     try {
@@ -327,20 +367,78 @@ async function flash(jobJson) {
     }
     return result({ ok: true, chip: chipName, bytes: total, reopened, label: labelOf(info) });
   } catch (e) {
-    return fail('flash', errText(e));
-  } finally {
-    if (transport) {
-      try {
-        await transport.disconnect();
-      } catch (e) {
-        /* ignore */
+    if (e instanceof Cancelled) {
+      // Restart the board out of its bootloader. Stopped while writing, its program is now incomplete.
+      if (loader) {
+        try {
+          state.quietUntil = Date.now() + 9000;
+          await loader.after('hard_reset');
+        } catch (err) {
+          /* ignore */
+        }
       }
+      reopenMs = 9000;
+      return result({ ok: false, code: 'cancelled', message: 'Upload cancelled.', partial: writing });
     }
-    if (state.busy) {
-      state.busy = false;
-      // A failed upload leaves the port closed: try to give the Serial Monitor back.
-      if (state.want && !state.port && state.last) waitAndOpen(state.last, monitorBaud, 3000);
+    return fail(e && e.code === 'esptool' ? 'esptool' : 'flash', errText(e));
+  } finally {
+    await release(transport, monitorBaud, reopenMs);
+  }
+}
+
+// Test connection (B-04): asks the chip its name through the bootloader, then restarts it.
+async function identify(baud) {
+  if (!supported()) return fail('unsupported', 'This browser has no Web Serial. Use Chrome or Edge on a computer.');
+  if (state.busy) return fail('busy', 'An upload is running. Wait for it to finish.');
+  state.busy = true;
+  state.cancel = false;
+  const monitorBaud = baud || state.baud || 115200;
+  let port = state.port;
+  let transport = null;
+  try {
+    if (!port) port = await grantedPort(state.last);
+    if (!port) return fail('no-port', 'No board connected. Press Connect and pick the RoboCore.');
+    const info = infoOf(port);
+    state.last = info;
+    await closePort();
+    const { ESPLoader, Transport } = await loadEsptool();
+    transport = new Transport(port, false);
+    const quiet = { clean() {}, writeLine() {}, write() {} };
+    const loader = new ESPLoader({ transport, baudrate: 115200, terminal: quiet, debugLogging: false });
+    let chip;
+    try {
+      await loader.main('default_reset');
+      const c = loader.chip || {};
+      chip = c.getChipDescription ? await c.getChipDescription(loader) : c.CHIP_NAME || 'an unknown chip';
+    } catch (e) {
+      return fail('bootloader', errText(e));
     }
+    state.quietUntil = Date.now() + 9000;
+    try {
+      await loader.after('hard_reset');
+    } catch (e) {
+      /* it answered; the restart is best effort */
+    }
+    try {
+      await transport.disconnect();
+    } catch (e) {
+      /* the chip may already have dropped off USB */
+    }
+    transport = null;
+    state.want = true;
+    state.busy = false;
+    state.opening = true;
+    let reopened = false;
+    try {
+      reopened = await waitAndOpen(info, monitorBaud, 9000);
+    } finally {
+      state.opening = false;
+    }
+    return result({ ok: true, chip, label: labelOf(info), reopened });
+  } catch (e) {
+    return fail(e && e.code === 'esptool' ? 'esptool' : 'identify', errText(e));
+  } finally {
+    await release(transport, monitorBaud, 3000);
   }
 }
 
@@ -460,4 +558,12 @@ window.robocoreUsb = {
   },
 
   flash,
+
+  // Stop during an upload. Resolves at once; flash() then resolves with code 'cancelled'.
+  cancelFlash() {
+    if (state.busy) state.cancel = true;
+    return Promise.resolve(result({ ok: true, cancelling: state.busy }));
+  },
+
+  identify,
 };

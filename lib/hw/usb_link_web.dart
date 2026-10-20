@@ -37,6 +37,8 @@ extension type _RcUsb._(JSObject _) implements JSObject {
   external JSPromise<JSString> write(String text);
   external JSPromise<JSString> reset();
   external JSPromise<JSString> flash(String job);
+  external JSPromise<JSString> cancelFlash();
+  external JSPromise<JSString> identify(int baud);
 }
 
 class _WebUsb extends UsbLink {
@@ -112,6 +114,12 @@ class _WebUsb extends UsbLink {
 
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) => _call((a) => a.flash(jsonEncode(job)));
+
+  @override
+  Future<UsbResult> cancelFlash() => _call((a) => a.cancelFlash());
+
+  @override
+  Future<UsbResult> identify({required int baud}) => _call((a) => a.identify(baud));
 }
 
 UsbLink createUsbLink() => _WebUsb();

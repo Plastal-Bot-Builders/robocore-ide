@@ -40,13 +40,30 @@ class _SerialLogState extends State<SerialLog> {
         builder: (context, _, __) {
           final log = s.log.length > 1200 ? s.log.sublist(s.log.length - 1200) : s.log;
           if (s.autoscroll) _toEnd();
+          // USB-C picked but no port open: say so, with Connect (SM-07). Earlier lines stay readable under a bar.
+          final noBoard = s.onUsb && !s.usbOpen;
+          if (log.isEmpty && noBoard) {
+            return Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('No board connected', style: tH2(c)),
+                  const SizedBox(height: 10),
+                  Text('Plug RoboCore V2 in with a USB-C data cable, then press Connect.',
+                      style: tBody(c, size: 13, color: c.muted), textAlign: TextAlign.center),
+                  const SizedBox(height: 10),
+                  Btn('Connect', icon: 'chip', kind: BtnKind.primary, onTap: s.connectUsb),
+                ]),
+              ),
+            );
+          }
           if (log.isEmpty) {
             return Padding(
               padding: const EdgeInsets.all(16),
               child: Text('Nothing yet. Upload a sketch, or send a message to the board.', style: tCaption(c)),
             );
           }
-          return SelectionArea(
+          final list = SelectionArea(
             child: ListView.builder(
               controller: _scroll,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -55,6 +72,28 @@ class _SerialLogState extends State<SerialLog> {
               itemBuilder: (context, i) => _line(c, log[i], s.timestamps),
             ),
           );
+          if (!noBoard) return list;
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+              decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
+              child: Row(children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: 'No board connected. ', style: tLabel(c)),
+                      TextSpan(text: 'Plug RoboCore V2 in with a USB-C data cable, then press Connect.', style: tCaption(c)),
+                    ]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Btn('Connect', icon: 'chip', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
+              ]),
+            ),
+            Expanded(child: list),
+          ]);
         },
       ),
     );

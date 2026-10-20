@@ -32,7 +32,7 @@ class SerialPage extends StatelessWidget {
         const SizedBox(height: 24),
         Expanded(
           child: RcCard(
-            child: Column(children: [
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Container(
                 constraints: const BoxConstraints(minHeight: 52),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -49,7 +49,6 @@ class SerialPage extends StatelessWidget {
                       items: s.portItems,
                       onChanged: (v) => s.setPort(v),
                     ),
-                    if (s.onUsb && !s.usbOpen) Btn('Connect', icon: 'chip', kind: BtnKind.primary, onTap: s.connectUsb),
                     if (s.onUsb && s.usbOpen) Btn('Reset board', kind: BtnKind.plain, onTap: s.resetUsbBoard),
                     RcSelect<int>(
                       value: s.baud,

@@ -106,13 +106,15 @@ export class ESPLoader {
   async main(mode) {
     esp.log.push('main:' + mode);
     await this.o.transport.port.open({ baudRate: 115200 });
+    if (esp.onMain) await esp.onMain();
     if (esp.failMain) throw new Error('Failed to connect with the device');
-    this.chip = { CHIP_NAME: esp.chipName || 'ESP32-S3' };
+    this.chip = { CHIP_NAME: esp.chipName || 'ESP32-S3', async getChipDescription() { return (esp.chipName || 'ESP32-S3') + ' (QFN56) (revision v0.2)'; } };
     this.o.terminal.writeLine('Chip is ' + this.chip.CHIP_NAME);
     return this.chip.CHIP_NAME;
   }
   async writeFlash(opts) {
     esp.flash = opts;
+    if (esp.onWrite) await esp.onWrite();
     opts.fileArray.forEach((f, i) => { opts.reportProgress(i, f.data.length / 2, f.data.length); opts.reportProgress(i, f.data.length, f.data.length); });
   }
   async after(mode) { esp.log.push('after:' + mode); }
@@ -254,6 +256,61 @@ test('a different chip is refused before writing', async () => {
   assert.equal(r.code, 'wrong-chip');
   assert.equal(esp.flash, null);
   await sleep(400);
+});
+
+test('Stop while writing cancels the upload, restarts the board and gives the monitor back', async () => {
+  esp.log.length = 0;
+  esp.onWrite = () => usb.cancelFlash();
+  const r = await call(usb.flash(JSON.stringify({ chip: 'esp32s3', parts: [{ offset: 0x10000, data: b64(64, 4) }] })));
+  esp.onWrite = null;
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'cancelled');
+  assert.equal(r.partial, true, 'stopped while writing: the program is incomplete');
+  assert.deepEqual(esp.log, ['main:default_reset', 'after:hard_reset', 'disconnect']);
+  await sleep(400);
+  assert.equal(usb.isOpen(), true);
+});
+
+test('Stop before writing leaves the program alone', async () => {
+  esp.flash = null;
+  esp.onMain = () => usb.cancelFlash();
+  const r = await call(usb.flash(JSON.stringify({ chip: 'esp32s3', parts: [{ offset: 0x10000, data: b64(64, 4) }] })));
+  esp.onMain = null;
+  assert.equal(r.code, 'cancelled');
+  assert.equal(r.partial, false);
+  assert.equal(esp.flash, null, 'nothing written');
+  await sleep(400);
+  assert.equal(usb.isOpen(), true);
+  // The next upload is not cancelled by the old Stop.
+  const again = await call(usb.flash(JSON.stringify({ chip: 'esp32s3', parts: [{ offset: 0x10000, data: b64(64, 4) }] })));
+  assert.equal(again.ok, true, JSON.stringify(again));
+});
+
+test('cancelFlash with no upload running does nothing', async () => {
+  const r = await call(usb.cancelFlash());
+  assert.equal(r.ok, true);
+  assert.equal(r.cancelling, false);
+});
+
+test('identify asks the chip its name, restarts it and reopens the monitor', async () => {
+  esp.log.length = 0;
+  const r = await call(usb.identify(115200));
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.chip, 'ESP32-S3 (QFN56) (revision v0.2)');
+  assert.equal(r.label, 'ESP32-S3 USB (303A:1001)');
+  assert.equal(r.reopened, true);
+  assert.deepEqual(esp.log, ['main:default_reset', 'after:hard_reset', 'disconnect']);
+  assert.equal(usb.isOpen(), true);
+});
+
+test('identify reports a board that does not answer', async () => {
+  esp.failMain = true;
+  const r = await call(usb.identify(115200));
+  esp.failMain = false;
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'bootloader');
+  await sleep(400);
+  assert.equal(usb.isOpen(), true);
 });
 
 test('reconnect opens an already-allowed board without a prompt', async () => {

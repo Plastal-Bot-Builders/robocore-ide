@@ -1,4 +1,5 @@
 // App state: loading saved data safely, and Upload to a real board (fake USB link + mock compile server).
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,10 @@ class FakeUsb extends UsbLink {
   bool open = false;
   bool failBootloader = false;
   Map<String, dynamic>? flashed;
+  String chip = 'ESP32-S3 (QFN56) (revision v0.2)';
+  // Set to make flash() wait until Stop (cancelFlash) or until it is completed.
+  Completer<void>? flashGate;
+  bool flashing = false, cancelled = false;
   final written = <String>[];
 
   @override
@@ -52,12 +57,34 @@ class FakeUsb extends UsbLink {
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) async {
     if (failBootloader) return const UsbResult(false, code: 'bootloader', message: 'Failed to connect with the device');
+    if (flashGate != null) {
+      flashing = true;
+      onEvent?.call('stage', 'writing');
+      await flashGate!.future;
+      flashing = false;
+      if (cancelled) return const UsbResult(false, code: 'cancelled', message: 'Upload cancelled.', data: {'partial': true});
+    }
     flashed = job;
     onEvent?.call('stage', 'connecting');
     onEvent?.call('progress', jsonEncode({'name': 'app', 'address': 65536, 'done': 50, 'total': 100}));
     onEvent?.call('progress', jsonEncode({'name': 'app', 'address': 65536, 'done': 100, 'total': 100}));
     onText?.call('RoboCore V2 ready\r\n');
     return const UsbResult(true, data: {'ok': true, 'chip': 'ESP32-S3', 'bytes': 100, 'reopened': true});
+  }
+
+  @override
+  Future<UsbResult> cancelFlash() async {
+    if (flashing) {
+      cancelled = true;
+      flashGate?.complete();
+    }
+    return UsbResult(true, data: {'cancelling': flashing});
+  }
+
+  @override
+  Future<UsbResult> identify({required int baud}) async {
+    if (failBootloader) return const UsbResult(false, code: 'bootloader', message: 'Failed to connect with the device');
+    return UsbResult(true, data: {'chip': chip, 'label': 'ESP32-S3 USB (303A:1001)', 'reopened': true});
   }
 }
 
@@ -188,11 +215,13 @@ void main() {
     late AppState s;
     late List<Map<String, dynamic>> requests;
     http.Response Function() reply = _ok;
+    Completer<void>? serverGate;
 
     setUp(() async {
       usb = FakeUsb();
       requests = [];
       reply = _ok;
+      serverGate = null;
       SharedPreferences.setMockInitialValues({
         'robocore-ide-v1': _store([projectFrom(exampleById('blink'), name: 'Blink LED').toJson()],
             port: 'usb', server: 'https://cc.test'),
@@ -202,6 +231,7 @@ void main() {
         compileClient: CompileClient(
           client: MockClient((req) async {
             requests.add((jsonDecode(req.body) as Map).cast<String, dynamic>());
+            if (serverGate != null) await serverGate!.future;
             return reply();
           }),
         ),
@@ -284,6 +314,61 @@ void main() {
       usb.onEvent!('reconnected', 'ESP32-S3 USB (303A:1001)');
       expect(s.usbOpen, isTrue);
       expect(s.log.last.text, contains('reconnected'));
+    });
+
+    test('Stop while compiling cancels the upload, and the late answer is ignored', () async {
+      serverGate = Completer<void>();
+      expect(s.canStop, isFalse);
+      final up = s.upload();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(s.busy, 'upload');
+      expect(s.canStop, isTrue);
+      s.stop();
+      expect(s.busy, isNull);
+      expect(s.stateLabel, 'Cancelled');
+      serverGate!.complete();
+      await up;
+      expect(usb.flashed, isNull);
+      expect(s.stateLabel, 'Cancelled');
+      expect(s.output.map((o) => o.text), contains('Upload cancelled.'));
+      expect(s.output.map((o) => o.text).join('\n'), isNot(contains('Compiled in')));
+    });
+
+    test('Stop while flashing asks the flasher to stop and says the program is incomplete', () async {
+      usb.flashGate = Completer<void>();
+      final up = s.upload();
+      for (var i = 0; i < 50 && !usb.flashing; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(usb.flashing, isTrue);
+      s.stop();
+      await up;
+      expect(usb.cancelled, isTrue);
+      expect(usb.flashed, isNull);
+      expect(s.busy, isNull);
+      expect(s.stateLabel, 'Cancelled');
+      expect(s.output.last.text, contains('cancelled part-way'));
+    });
+
+    test('Test connection asks the chip its name', () async {
+      await s.testConnection();
+      expect(s.conn!.kind, 'ok');
+      expect(s.conn!.text, contains('ESP32-S3 (QFN56) (revision v0.2)'));
+      expect(s.toast, 'Board answered · ESP32-S3 (QFN56) (revision v0.2)');
+      expect(s.busy, isNull);
+      s.closeToast();
+    });
+
+    test('Test connection: a different chip, or no answer', () async {
+      usb.chip = 'ESP32-D0WD-V3 (revision v3.1)';
+      await s.testConnection();
+      expect(s.conn!.kind, 'err');
+      expect(s.conn!.text, contains('Board Setup is set to RoboCore V2'));
+      usb.failBootloader = true;
+      await s.testConnection();
+      expect(s.conn!.kind, 'err');
+      expect(s.conn!.text, contains('did not answer'));
+      s.closeToast();
     });
 
     test('text without a newline still shows up', () async {

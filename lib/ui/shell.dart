@@ -286,6 +286,24 @@ class TopBar extends StatelessWidget {
               phone
                   ? _PrimaryIcon(icon: 'arrow', onTap: s.busy == null ? s.upload : null, tip: 'Upload')
                   : _TopPrimary(label: 'Upload', icon: 'arrow', tooltip: 'Upload ($kMod+U)', onTap: s.busy == null ? s.upload : null),
+              // Stop: only while a Verify or Upload runs, or the preview board runs the sketch (E-07).
+              ListenableBuilder(
+                listenable: s.sim,
+                builder: (context, _) => !s.canStop
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _PrimaryIcon(
+                          icon: 'stop',
+                          onTap: s.stop,
+                          tip: s.busy == 'upload'
+                              ? 'Cancel the upload'
+                              : s.busy == 'verify'
+                                  ? 'Cancel Verify'
+                                  : 'Stop the sketch',
+                        ),
+                      ),
+              ),
             ] else
               phone
                   ? _PrimaryIcon(icon: 'plus', onTap: () => showNewProjectDialog(context), tip: 'New project')
@@ -589,6 +607,31 @@ class ConnStatus extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------- search
+// Help topics in search (G-11): a page or dialog, found by its name or by a word people might type.
+class HelpTopic {
+  const HelpTopic(this.name, this.icon, this.words, this.open);
+  final String name, icon, words;
+  final void Function(BuildContext context, AppState s) open;
+
+  /// Every word typed starts one of the topic's words (so “board” is not found in “keyboard”).
+  bool matches(String query) {
+    final mine = '$name $words'.toLowerCase().split(RegExp('[^a-z0-9]+'));
+    final typed = query.toLowerCase().split(RegExp('[^a-z0-9]+')).where((q) => q.isNotEmpty).toList();
+    return typed.isNotEmpty && typed.every((q) => mine.any((w) => w.startsWith(q)));
+  }
+}
+
+final kHelpTopics = <HelpTopic>[
+  HelpTopic('Board Setup', 'chip', 'board usb cable port driver connect upload flash esp32 test connection setup', (_, s) => s.go(Screen.board)),
+  HelpTopic('Serial Monitor', 'term', 'serial print println baud monitor output plotter messages', (_, s) => s.go(Screen.serial)),
+  HelpTopic('Libraries', 'libs', 'library libraries install include header', (_, s) => s.go(Screen.libraries)),
+  HelpTopic('Examples', 'light', 'examples learn start tutorial sample', (_, s) => s.go(Screen.examples)),
+  HelpTopic('Settings', 'gear', 'settings preferences theme dark light font size cog level autosave', (_, s) => s.go(Screen.settings)),
+  HelpTopic('New project', 'plus', 'new project create start blank', (context, _) => showNewProjectDialog(context)),
+  HelpTopic('Keyboard shortcuts', 'keyboard', 'keyboard shortcuts keys hotkeys', (context, _) => showShortcutsDialog(context)),
+  HelpTopic('About RoboCore IDE', 'info', 'about version licence license credits', (context, _) => showAboutRoboCoreDialog(context)),
+];
+
 class SearchBox extends StatefulWidget {
   const SearchBox({super.key});
   @override
@@ -620,6 +663,7 @@ class _SearchBoxState extends State<SearchBox> {
     final t = q.trim().toLowerCase();
     final ps = t.isEmpty ? <Project>[] : s.projects.where((p) => p.name.toLowerCase().contains(t)).take(5).toList();
     final es = t.isEmpty ? <Example>[] : kExamples.where((x) => '${x.name} ${x.desc}'.toLowerCase().contains(t)).take(5).toList();
+    final hs = t.isEmpty ? <HelpTopic>[] : kHelpTopics.where((h) => h.matches(t)).take(3).toList();
     return Popover(
       open: t.isNotEmpty,
       alignRight: false,
@@ -641,7 +685,13 @@ class _SearchBoxState extends State<SearchBox> {
               _clear();
               s.openExample(e.id);
             }),
-          if (ps.isEmpty && es.isEmpty)
+          if (hs.isNotEmpty) _h(c, 'Help'),
+          for (final h in hs)
+            _row(c, h.icon, h.name, 'Help', () {
+              _clear();
+              h.open(context, s);
+            }),
+          if (ps.isEmpty && es.isEmpty && hs.isEmpty)
             Padding(padding: const EdgeInsets.all(12), child: Text('Nothing matches “$q”.', style: tCaption(c))),
         ]),
       ),
@@ -671,6 +721,10 @@ class _SearchBoxState extends State<SearchBox> {
               final id = es.first.id;
               _clear();
               s.openExample(id);
+            } else if (hs.isNotEmpty) {
+              final h = hs.first;
+              _clear();
+              h.open(context, s);
             }
           },
         ),
