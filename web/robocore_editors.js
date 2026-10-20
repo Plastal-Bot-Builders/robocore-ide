@@ -171,6 +171,9 @@
       // Dropdowns are a darker tint of the block (navy over it), without an outline.
       '.robocore-renderer .blocklyDropdownField > .blocklyFieldRect { fill: rgba(27,42,65,.28) !important; stroke: none !important; }',
       '.robocore-renderer .rcNavyText > .blocklyDropdownField > .blocklyFieldRect { fill: rgba(27,42,65,.14) !important; }',
+      // The gear on "if" (else if / else) in the block palette's navy and cream, not Blockly's blue.
+      '.robocore-renderer .blocklyMutatorIcon .blocklyIconShape { fill: ' + INK + '; stroke: none; }',
+      '.robocore-renderer .blocklyMutatorIcon .blocklyIconSymbol { fill: ' + CREAM + '; }',
       // On the yellow Events blocks the dropdown chevron is navy, like their labels.
       '.robocore-renderer .rcNavyText > .blocklyDropdownField > image { filter: brightness(0.15); }',
       // The toolbox (the design's Block Category rows): 160 px wide, 34 px rows, 22 px colour chips.
@@ -383,6 +386,34 @@
           style: 'text_blocks', tooltip: Blockly.Msg.TEXT_TEXT_TOOLTIP, helpUrl: Blockly.Msg.TEXT_TEXT_HELPURL });
       },
     };
+    // "join" as in the design (and Scratch): two values on one row, no gear; join a join for more pieces.
+    // Projects saved with Blockly's own join (any number of pieces) still open: their itemCount adds the rest.
+    Blockly.Blocks['text_join'] = {
+      init() {
+        this.itemCount_ = 2;
+        this.setStyle('rc_operators');
+        this.setOutput(true, 'String');
+        this.setInputsInline(true);
+        this.setTooltip('Joins two values into one text: String(a) + b');
+        this.updateShape_();
+      },
+      saveExtraState() {
+        return this.itemCount_ === 2 ? null : { itemCount: this.itemCount_ };
+      },
+      loadExtraState(state) {
+        this.itemCount_ = Math.max(2, (state && state.itemCount) || 2);
+        this.updateShape_();
+      },
+      updateShape_() {
+        for (let i = 0; i < this.itemCount_; i++) {
+          if (!this.getInput('ADD' + i)) {
+            const input = this.appendValueInput('ADD' + i);
+            if (i === 0) input.appendField('join');
+          }
+        }
+        for (let i = this.itemCount_; this.getInput('ADD' + i); i++) this.removeInput('ADD' + i);
+      },
+    };
     Blockly.common.defineBlocksWithJsonArray([
       // ---- Events
       hat({ type: 'rc_on_start', message0: 'on start', style: 'rc_events', tooltip: 'Runs once when the robot starts: void setup() { … }' }),
@@ -548,7 +579,7 @@
       Blockly.Blocks[type].init = function () { init.call(this); this.setStyle(style); };
     };
     for (const t of ['logic_compare', 'logic_operation', 'logic_negate', 'logic_boolean', 'math_number', 'math_arithmetic',
-      'math_random_int', 'math_round', 'text', 'text_join']) restyle(t, 'rc_operators');
+      'math_random_int', 'math_round', 'text']) restyle(t, 'rc_operators');
     for (const t of ['controls_if', 'controls_repeat_ext', 'controls_whileUntil']) restyle(t, 'rc_control');
     // Their words, as in the catalogue.
     Object.assign(Blockly.Msg, {
