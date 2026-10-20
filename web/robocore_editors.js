@@ -14,13 +14,8 @@
   const MODE = location.hash === '#code' ? 'code' : 'blocks';
 
   const INK = '#1B2A41', CREAM = '#F7F1E3', PAPER = '#FFFCF5', YELLOW = '#F2B01E';
-  const CATS = {
-    output: '#2F6BBF', input: '#7A4FB5', control: YELLOW, math: '#2F7A4C',
-    variables: '#B23E7A', robotics: '#B84A26', sensors: '#0F7680', communication: INK,
-  };
-
   // Board context from the app: project name, board id and the pins the pin blocks offer.
-  const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], userPin: 42, theme: 'paper' };
+  const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], userPin: 42, led: 2, theme: 'paper' };
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -39,29 +34,71 @@
   }
 
   // ======================================================================= Blocks (Blockly)
+  //
+  // The hardware-first block set (RoboCore_IDE_Design/docs/block-catalogue.md): 10 categories, and blocks
+  // that say what the robot does. Blocks from the first version (Output, Input, Robotics, Communication …)
+  // keep their types so saved projects open: those with the same meaning took the new words, the others
+  // are still defined but no longer in the toolbox.
 
-  const NOTES = { C4: 262, D4: 294, E4: 330, F4: 349, G4: 392, A4: 440, B4: 494, C5: 523, D5: 587, E5: 659 };
+  const NOTES = { C4: 262, D4: 294, E4: 330, F4: 349, G4: 392, A4: 440, B4: 494, C5: 523, D5: 587, E5: 659, F5: 698, G5: 784, A5: 880, C6: 1047 };
   const COLOURS = {
     red: [255, 0, 0], green: [0, 255, 0], blue: [0, 0, 255], yellow: [255, 200, 0],
     purple: [160, 0, 255], white: [255, 255, 255], off: [0, 0, 0],
   };
   const DRIVE = { forward: [1, 1], backward: [-1, -1], left: [-1, 1], right: [1, -1] };
-  const HATS = ['rc_on_start', 'rc_forever'];
+  const MELODIES = { 'power up': 'MELODY_POWER_UP', 'power down': 'MELODY_POWER_DOWN', success: 'MELODY_SUCCESS', error: 'MELODY_ERROR', alarm: 'MELODY_ALARM' };
+
+  // Blocks that start a script: on start → setup(), forever and the "when …" hats → loop(),
+  // "when I receive" → a function. "define" (My Blocks) also starts one.
+  const HATS = ['rc_on_start', 'rc_forever', 'rc_when_user', 'rc_when_closer', 'rc_when_line', 'rc_when_tilt',
+    'rc_when_timer', 'rc_when', 'rc_when_receive'];
+  const isRoot = (type) => HATS.includes(type) || type === 'procedures_defnoreturn';
+
+  // The categories, hardware first: [key, name, colour, Lucide icon].
+  const ICONS = {
+    zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+    bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+    gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+    lightbulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+    radio: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',
+    repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    sigma: '<path d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"/>',
+    variable: '<path d="M8 21s-4-3-4-9 4-9 4-9"/><path d="M16 3s4 3 4 9-4 9-4 9"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/>',
+    blocks: '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
+    plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  };
+  const CATS = [
+    ['events', 'Events', YELLOW, 'zap'],
+    ['movement', 'Movement', '#2F6BBF', 'bot'],
+    ['motors', 'Motors', '#B84A26', 'gauge'],
+    ['light', 'Light & Sound', '#7A4FB5', 'lightbulb'],
+    ['sensors', 'Sensors', '#0F7680', 'radio'],
+    ['control', 'Control', '#8A5A00', 'repeat'],
+    ['operators', 'Operators', '#2F7A4C', 'sigma'],
+    ['variables', 'Variables', '#B23E7A', 'variable'],
+    ['myblocks', 'My Blocks', '#5B6577', 'blocks'],
+    ['pins', 'Pins & Serial', INK, 'plug'],
+  ];
+  const svgUri = (paths, stroke, size = 24) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`);
+  // The robot and gauge marks at the start of Movement and Motors blocks.
+  const iconField = (name) => ({ type: 'field_image', src: svgUri(ICONS[name], CREAM), width: 18, height: 18, alt: '' });
 
   function theme(navy) {
     const styles = {};
-    for (const [k, c] of Object.entries(CATS)) {
-      const primary = navy && k === 'communication' ? '#3E5A86' : c;
+    for (const [k, , c] of CATS) {
+      const primary = navy && k === 'pins' ? '#3E5A86' : c;
       styles['rc_' + k] = { colourPrimary: primary, colourSecondary: darker(primary, 0.85), colourTertiary: INK };
     }
-    // Blockly's own blocks (if, loops, compare, numbers, variables, text) take the RoboCore colours.
+    // Blockly's own blocks take the RoboCore colours (and categories, see defineBlocks()).
     Object.assign(styles, {
-      logic_blocks: styles.rc_control, loop_blocks: styles.rc_control, math_blocks: styles.rc_math,
-      variable_blocks: styles.rc_variables, variable_dynamic_blocks: styles.rc_variables,
-      procedure_blocks: styles.rc_variables, text_blocks: styles.rc_communication,
+      logic_blocks: styles.rc_control, loop_blocks: styles.rc_control, math_blocks: styles.rc_operators,
+      text_blocks: styles.rc_operators, variable_blocks: styles.rc_variables, variable_dynamic_blocks: styles.rc_variables,
+      procedure_blocks: styles.rc_myblocks,
     });
     const cats = {};
-    for (const k of Object.keys(CATS)) cats[k] = { colour: styles['rc_' + k].colourPrimary };
+    for (const [k] of CATS) cats[k] = { colour: styles['rc_' + k].colourPrimary };
     return Blockly.Theme.defineTheme(navy ? 'robocore-navy' : 'robocore-paper', {
       base: Blockly.Themes.Classic,
       blockStyles: styles,
@@ -86,7 +123,7 @@
     });
   }
 
-  // Zelos, plus a class on yellow (control) blocks so their labels can be navy instead of cream.
+  // Zelos, plus a class on yellow (Events) blocks so their labels can be navy instead of cream.
   function registerRenderer() {
     class RcPathObject extends Blockly.zelos.PathObject {
       applyColour(block) {
@@ -106,127 +143,318 @@
       '.robocore-renderer .blocklyText { fill: ' + CREAM + '; }',
       '.robocore-renderer .rcNavyText > .blocklyText, .robocore-renderer .rcNavyText > g > .blocklyText { fill: ' + INK + '; }',
       '.robocore-renderer .blocklyEditableText > .blocklyText:not(.blocklyDropdownText) { fill: ' + INK + '; }',
-      '.blocklyToolboxCategory, .blocklyTreeRow { border-radius: 6px; margin: 2px 6px; font-weight: 600; }',
+      '.blocklyToolboxCategory, .blocklyTreeRow { border-radius: 6px; margin: 2px 6px; font-weight: 600; border-left: none !important; padding-left: 6px !important; }',
       '.blocklyToolboxSelected, .blocklyTreeSelected { background: rgba(242,176,30,.22) !important; box-shadow: inset 3px 0 0 ' + YELLOW + '; }',
       '.blocklyToolboxSelected .blocklyToolboxCategoryLabel, .blocklyTreeSelected .blocklyTreeLabel { color: inherit !important; }',
       '.blocklyToolboxCategoryLabel, .blocklyTreeLabel { font-family: Barlow, sans-serif; font-size: 14px; }',
       '.blocklyWidgetDiv .blocklyMenu, .blocklyDropDownDiv { font-family: Barlow, sans-serif; }',
       '.injectionDiv .blocklyZoom > image, .injectionDiv .blocklyZoom > svg > image { opacity: .7; }',
       '.injectionDiv .blocklyZoom > image:hover, .injectionDiv .blocklyZoom > svg > image:hover { opacity: 1; }',
+      // A round, coloured icon for each category (the design's toolbox).
+      '.rcCatIcon { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; vertical-align: middle;' +
+        ' background-repeat: no-repeat; background-position: center; background-size: 14px 14px; }',
+      ...CATS.map(([k, , c, icon]) => `.rcCat_${k} { background-color: ${c}; background-image: url("${svgUri(ICONS[icon], k === 'events' ? INK : CREAM)}"); }`),
     ].join('\n');
     document.head.appendChild(css);
   }
 
   function dropdown(values) {
-    return values.map((v) => [v, v]);
+    return values.map((v) => (Array.isArray(v) ? v : [v, v]));
   }
 
-  // Pins depend on the board, so these menus are built when they open. The current value always
-  // stays in the list so saved projects load whatever the board.
+  // Pins depend on the board, so these menus are built when they open; on the RoboCore V2 they read IO37 …
+  // The current value always stays in the list so saved projects load whatever the board.
+  const SAVED_PINS = new Set();
   function pinMenu(tone) {
     return function () {
-      const opts = dropdown(tone ? CTX.tonePins : CTX.pins);
+      const opts = (tone ? CTX.tonePins : CTX.pins).map((p) => [CTX.board === 'v2' ? 'IO' + p : p, p]);
       const v = this && typeof this.getValue === 'function' ? this.getValue() : null;
-      if (v && !opts.some((o) => o[1] === v)) opts.push([v, v]);
+      for (const x of [v, ...SAVED_PINS]) if (x && !opts.some((o) => o[1] === x)) opts.push([x, x]);
       return opts;
     };
   }
 
+  // Messages for "when I receive" / "broadcast": every name used in the workspace, plus New message….
+  const MESSAGES = new Set(['message1']);
+  function messageMenu() {
+    const ws = this && this.getSourceBlock && this.getSourceBlock() && this.getSourceBlock().workspace;
+    if (ws) for (const b of ws.getAllBlocks(false)) if (b.getField('MSG')) MESSAGES.add(b.getFieldValue('MSG'));
+    return [...MESSAGES].sort().map((m) => [m, m]).concat([['New message…', '__new__']]);
+  }
+  function messageValidator(v) {
+    if (v !== '__new__') return v;
+    const field = this;
+    Blockly.dialog.prompt('Name of the new message:', '', (name) => {
+      const n = (name || '').trim();
+      if (!n) return;
+      MESSAGES.add(n);
+      field.setValue(n);
+    });
+    return null;
+  }
+  // Messages and pins in a saved workspace, so its dropdowns accept them while it loads.
+  function rememberMessages(json) {
+    const walk = (o) => {
+      if (!o || typeof o !== 'object') return;
+      if (o.fields && typeof o.fields.MSG === 'string') MESSAGES.add(o.fields.MSG);
+      if (o.fields && typeof o.fields.PIN === 'string') SAVED_PINS.add(o.fields.PIN);
+      for (const v of Object.values(o)) walk(v);
+    };
+    walk(json);
+  }
+
   function defineBlocks() {
+    const num = (name, check = 'Number') => ({ type: 'input_value', name, check });
+    const stmt = (o) => Object.assign({ previousStatement: null, nextStatement: null }, o);
+    const hat = (o) => Object.assign({ message1: '%1', args1: [{ type: 'input_statement', name: 'DO' }] }, o);
+    const dd = (name, values) => ({ type: 'field_dropdown', name, options: dropdown(values) });
     Blockly.common.defineBlocksWithJsonArray([
-      // --- Control
-      { type: 'rc_on_start', message0: 'on start', message1: '%1', args1: [{ type: 'input_statement', name: 'DO' }],
-        style: 'rc_control', tooltip: 'Runs once when the board starts: void setup() { … }' },
-      { type: 'rc_forever', message0: 'forever', message1: '%1', args1: [{ type: 'input_statement', name: 'DO' }],
-        style: 'rc_control', tooltip: 'Runs again and again: void loop() { … }' },
-      { type: 'rc_wait', message0: 'wait %1 %2',
-        args0: [{ type: 'field_number', name: 'TIME', value: 1, min: 0 }, { type: 'field_dropdown', name: 'UNIT', options: dropdown(['secs', 'ms']) }],
-        previousStatement: null, nextStatement: null, style: 'rc_control', tooltip: 'delay(ms);' },
-      // --- Output
-      { type: 'rc_led', message0: 'set built-in LED to %1', args0: [{ type: 'field_dropdown', name: 'STATE', options: dropdown(['HIGH', 'LOW']) }],
-        previousStatement: null, nextStatement: null, style: 'rc_output', tooltip: 'digitalWrite(LED_BUILTIN, HIGH);' },
-      { type: 'rc_rgb', message0: 'set RGB LED to %1', args0: [{ type: 'field_dropdown', name: 'COLOR', options: dropdown(Object.keys(COLOURS)) }],
-        previousStatement: null, nextStatement: null, style: 'rc_output', tooltip: 'rgbLedWrite(RGB_BUILTIN, r, g, b);' },
-      // --- Input
-      { type: 'rc_wait_button', message0: 'wait until USER is pressed',
-        previousStatement: null, nextStatement: null, style: 'rc_input', tooltip: 'while (digitalRead(USER_BUTTON) == HIGH) { delay(10); }' },
-      { type: 'rc_user_pressed', message0: 'USER pressed?', output: 'Boolean', style: 'rc_input',
-        tooltip: 'digitalRead(USER_BUTTON) == LOW' },
-      // --- Robotics
-      { type: 'rc_drive', message0: 'drive %1 at %2 %%',
-        args0: [{ type: 'field_dropdown', name: 'DIR', options: dropdown(Object.keys(DRIVE)) }, { type: 'field_number', name: 'SPEED', value: 60, min: 0, max: 100, precision: 1 }],
-        previousStatement: null, nextStatement: null, style: 'rc_robotics', tooltip: 'motors.drive(left, right);' },
-      { type: 'rc_stop', message0: 'stop motors', previousStatement: null, nextStatement: null, style: 'rc_robotics', tooltip: 'motors.stop();' },
-      // --- Sensors
+      // ---- Events
+      hat({ type: 'rc_on_start', message0: 'on start', style: 'rc_events', tooltip: 'Runs once when the robot starts: void setup() { … }' }),
+      hat({ type: 'rc_forever', message0: 'forever', style: 'rc_events', tooltip: 'Runs again and again: void loop() { … }' }),
+      hat({ type: 'rc_when_user', message0: 'when USER button is pressed', style: 'rc_events',
+        tooltip: 'Runs each time USER is pressed. Checked on every pass of forever, so keep forever free of long waits.' }),
+      hat({ type: 'rc_when_closer', message0: 'when obstacle is closer than %1 cm', args0: [num('CM')], style: 'rc_events',
+        tooltip: 'Runs each time something comes closer than this.' }),
+      hat({ type: 'rc_when_line', message0: 'when the line is %1', args0: [dd('STATE', ['found', 'lost'])], style: 'rc_events',
+        tooltip: 'Runs each time the line sensor finds (or loses) the line.' }),
+      hat({ type: 'rc_when_tilt', message0: 'when the robot is %1', args0: [dd('STATE', ['tilted', 'shaken', 'flat'])], style: 'rc_events',
+        tooltip: 'Runs each time the robot is tilted, shaken or put flat.' }),
+      hat({ type: 'rc_when_timer', message0: 'when timer > %1 s', args0: [num('SECS')], style: 'rc_events',
+        tooltip: 'Runs once when the timer passes this many seconds (again after reset timer).' }),
+      hat({ type: 'rc_when', message0: 'when %1', args0: [num('COND', 'Boolean')], style: 'rc_events',
+        tooltip: 'Runs each time the yes / no block becomes yes.' }),
+      // ---- Movement (both wheels together)
+      stmt({ type: 'rc_move', message0: '%1 move %2 for %3 %4', style: 'rc_movement', inputsInline: true,
+        args0: [iconField('bot'), dd('DIR', ['forward', 'backward']), num('AMOUNT'), dd('UNIT', ['cm', 'rotations', 'seconds'])],
+        tooltip: 'Drives straight and waits until done: robot.move(10, CM);' }),
+      stmt({ type: 'rc_turn', message0: '%1 turn %2 for %3 °', style: 'rc_movement', inputsInline: true,
+        args0: [iconField('bot'), dd('DIR', ['right', 'left']), num('DEG')], tooltip: 'Turns on the spot (IMU) and waits: robot.turn(90);' }),
+      stmt({ type: 'rc_start_moving', message0: '%1 start moving %2', style: 'rc_movement',
+        args0: [iconField('bot'), dd('DIR', ['forward', 'backward'])], tooltip: 'Keeps driving until stop moving: robot.start(FORWARD);' }),
+      stmt({ type: 'rc_steer', message0: '%1 start moving, steering %2', style: 'rc_movement', inputsInline: true,
+        args0: [iconField('bot'), num('STEER')], tooltip: '-100 to 100: 0 straight, 50 one wheel stopped, 100 spins right: robot.steer(30);' }),
+      stmt({ type: 'rc_drive_lr', message0: '%1 drive left %2 % right %3 %', style: 'rc_movement', inputsInline: true,
+        args0: [iconField('bot'), num('L'), num('R')], tooltip: 'Each wheel\'s speed, -100 to 100: motors.drive(50, 50);' }),
+      stmt({ type: 'rc_stop_moving', message0: '%1 stop moving', style: 'rc_movement', args0: [iconField('bot')], tooltip: 'Brakes: robot.stop();' }),
+      stmt({ type: 'rc_move_speed', message0: '%1 set movement speed to %2 %', style: 'rc_movement', inputsInline: true,
+        args0: [iconField('bot'), num('PCT')], tooltip: 'For move, turn, start moving and steering: robot.setSpeed(50);' }),
+      stmt({ type: 'rc_wheel_size', message0: '%1 set 1 wheel turn to %2 cm', style: 'rc_movement', inputsInline: true,
+        args0: [iconField('bot'), num('CM')], tooltip: 'How far one turn of a wheel goes (60 mm wheel: 18.8 cm): robot.setWheelCm(18.8);' }),
+      { type: 'rc_distance_moved', message0: 'distance moved (cm)', output: 'Number', style: 'rc_movement', tooltip: 'From the wheel encoders: robot.distanceCm()' },
+      // ---- Motors (one wheel at a time) and servos
+      stmt({ type: 'rc_motor_run', message0: '%1 run %2 motor for %3 %4', style: 'rc_motors', inputsInline: true,
+        args0: [iconField('gauge'), dd('SIDE', ['left', 'right']), num('AMOUNT'), dd('UNIT', ['rotations', 'degrees', 'seconds'])],
+        tooltip: 'Runs one motor and waits: motors.run(LEFT, 1, ROTATIONS);' }),
+      stmt({ type: 'rc_motor_start', message0: '%1 start %2 motor at %3 %', style: 'rc_motors', inputsInline: true,
+        args0: [iconField('gauge'), dd('SIDE', ['left', 'right']), num('PCT')], tooltip: 'motors.start(LEFT, 50);' }),
+      stmt({ type: 'rc_motor_stop', message0: '%1 stop %2 motor', style: 'rc_motors',
+        args0: [iconField('gauge'), dd('SIDE', ['left', 'right'])], tooltip: 'motors.stop(LEFT);' }),
+      stmt({ type: 'rc_motor_reset', message0: '%1 reset %2 motor position', style: 'rc_motors',
+        args0: [iconField('gauge'), dd('SIDE', ['left', 'right'])], tooltip: 'motors.resetPosition(LEFT);' }),
+      { type: 'rc_motor_position', message0: '%1 motor position (°)', args0: [dd('SIDE', ['left', 'right'])], output: 'Number', style: 'rc_motors',
+        tooltip: '360 = one wheel turn forward: motors.positionDeg(LEFT)' },
+      { type: 'rc_motor_speed', message0: '%1 motor speed (%)', args0: [dd('SIDE', ['left', 'right'])], output: 'Number', style: 'rc_motors',
+        tooltip: 'motors.speedPercent(LEFT)' },
+      stmt({ type: 'rc_servo_set', message0: '%1 set servo %2 to %3 °', style: 'rc_motors', inputsInline: true,
+        args0: [iconField('gauge'), dd('PORT', ['1', '2', '3', '4']), num('DEG')], tooltip: '0 to 180 degrees: servos.write(1, 90);' }),
+      { type: 'rc_servo_angle', message0: 'servo %1 angle (°)', args0: [dd('PORT', ['1', '2', '3', '4'])], output: 'Number', style: 'rc_motors',
+        tooltip: 'servos.angle(1)' },
+      // ---- Light & Sound
+      stmt({ type: 'rc_led', message0: 'turn LED %1', args0: [dd('STATE', [['on', 'HIGH'], ['off', 'LOW']])], style: 'rc_light',
+        tooltip: 'digitalWrite(LED_BUILTIN, HIGH);' }),
+      stmt({ type: 'rc_rgb', message0: 'set LED to %1', args0: [dd('COLOR', Object.keys(COLOURS))], style: 'rc_light', tooltip: 'RoboCore::rgb(255, 0, 0);' }),
+      stmt({ type: 'rc_led_brightness', message0: 'set LED brightness to %1 %', args0: [num('PCT')], style: 'rc_light', inputsInline: true,
+        tooltip: 'RoboCore::ledBrightness(50);' }),
+      stmt({ type: 'rc_beep', message0: 'play beep %1 for %2 s', args0: [dd('NOTE', Object.keys(NOTES)), num('SECS')], style: 'rc_light', inputsInline: true,
+        tooltip: 'Plays a note and waits: RoboCore::beep(523, 200);' }),
+      stmt({ type: 'rc_beep_start', message0: 'start playing beep %1', args0: [dd('NOTE', Object.keys(NOTES))], style: 'rc_light',
+        tooltip: 'Keeps playing until stop sound: tone(RC_PIN_BUZZER, 523);' }),
+      stmt({ type: 'rc_melody', message0: 'play melody %1', args0: [dd('TUNE', Object.keys(MELODIES))], style: 'rc_light',
+        tooltip: 'RoboCore::melody(MELODY_POWER_UP);' }),
+      stmt({ type: 'rc_sound_stop', message0: 'stop sound', style: 'rc_light', tooltip: 'noTone(RC_PIN_BUZZER);' }),
+      // ---- Sensors
       { type: 'rc_distance', message0: 'distance (cm)', output: 'Number', style: 'rc_sensors', tooltip: 'sonar.distanceCm()' },
-      { type: 'rc_line', message0: 'line position', output: 'Number', style: 'rc_sensors',
-        tooltip: 'line.read(): -1 (line on the left) to 1 (on the right)' },
-      { type: 'rc_print_distance', message0: 'print distance in cm', previousStatement: null, nextStatement: null,
-        style: 'rc_sensors', tooltip: 'Serial.println(sonar.distanceCm(), 1);' },
-      { type: 'rc_print_line', message0: 'print line sensor', previousStatement: null, nextStatement: null,
-        style: 'rc_sensors', tooltip: 'Serial.println(line.read(), 2);' },
-      // --- Communication
-      { type: 'rc_serial_begin', message0: 'start serial at %1 baud', args0: [{ type: 'field_dropdown', name: 'BAUD', options: dropdown(['115200', '9600']) }],
-        previousStatement: null, nextStatement: null, style: 'rc_communication', tooltip: 'Serial.begin(115200);' },
-      { type: 'rc_print_text', message0: 'print %1', args0: [{ type: 'field_input', name: 'TEXT', text: 'Hello' }],
-        previousStatement: null, nextStatement: null, style: 'rc_communication', tooltip: 'Serial.println("…");' },
-      { type: 'rc_print', message0: 'print value %1', args0: [{ type: 'input_value', name: 'VALUE' }],
-        previousStatement: null, nextStatement: null, style: 'rc_communication', tooltip: 'Serial.println(value);' },
+      { type: 'rc_closer', message0: 'is obstacle closer than %1 cm?', args0: [num('CM')], output: 'Boolean', style: 'rc_sensors', inputsInline: true,
+        tooltip: 'sonar.distanceCm() < 20' },
+      { type: 'rc_line', message0: 'line position', output: 'Number', style: 'rc_sensors', tooltip: '-1 (line on the left) to 1 (right): line.read()' },
+      { type: 'rc_on_line', message0: 'is %1 sensor on the line?', args0: [dd('SENSOR', ['centre', 'left', 'right'])], output: 'Boolean', style: 'rc_sensors',
+        tooltip: 'line.centre() > 0.5' },
+      { type: 'rc_line_sensor', message0: '%1 line sensor (%)', args0: [dd('SENSOR', ['centre', 'left', 'right'])], output: 'Number', style: 'rc_sensors',
+        tooltip: '0 white … 100 black: line.centre() * 100' },
+      { type: 'rc_tilt', message0: 'tilt angle (°)', output: 'Number', style: 'rc_sensors', tooltip: 'imu.tiltDeg()' },
+      { type: 'rc_angle', message0: '%1 angle (°)', args0: [dd('AXIS', ['yaw', 'pitch', 'roll'])], output: 'Number', style: 'rc_sensors',
+        tooltip: 'Yaw: the heading, turning right counts up: imu.yawDeg()' },
+      stmt({ type: 'rc_reset_yaw', message0: 'set yaw angle to 0', style: 'rc_sensors', tooltip: 'imu.resetYaw();' }),
+      { type: 'rc_is_tilted', message0: 'is the robot %1?', args0: [dd('STATE', ['tilted', 'shaken', 'flat'])], output: 'Boolean', style: 'rc_sensors',
+        tooltip: 'imu.isTilted()' },
+      { type: 'rc_user_pressed', message0: 'is USER button pressed?', output: 'Boolean', style: 'rc_sensors', tooltip: 'RoboCore::userPressed()' },
+      { type: 'rc_battery', message0: 'battery %1', args0: [dd('KIND', [['%', 'PERCENT'], ['volts', 'VOLTS']])], output: 'Number', style: 'rc_sensors',
+        tooltip: 'RoboCore::batteryPercent()' },
+      { type: 'rc_temperature', message0: 'temperature (°C)', output: 'Number', style: 'rc_sensors', tooltip: 'imu.temperature()' },
+      { type: 'rc_timer', message0: 'timer (s)', output: 'Number', style: 'rc_sensors', tooltip: 'Seconds since the start or reset timer: RoboCore::timer()' },
+      stmt({ type: 'rc_reset_timer', message0: 'reset timer', style: 'rc_sensors', tooltip: 'RoboCore::resetTimer();' }),
+      // ---- Control
+      stmt({ type: 'rc_wait', message0: 'wait %1 %2', style: 'rc_control',
+        args0: [{ type: 'field_number', name: 'TIME', value: 1, min: 0 }, dd('UNIT', ['secs', 'ms'])], tooltip: 'delay(1000);' }),
+      stmt({ type: 'rc_wait_until', message0: 'wait until %1', args0: [num('COND', 'Boolean')], style: 'rc_control',
+        tooltip: 'while (!(condition)) delay(10);' }),
+      { type: 'rc_stop_program', message0: 'stop program', previousStatement: null, style: 'rc_control', tooltip: 'Motors and sound off, then nothing more: RoboCore::stopProgram();' },
+      // ---- Operators
+      { type: 'rc_between', message0: 'is %1 between %2 and %3 ?', args0: [num('X'), num('LO'), num('HI')], output: 'Boolean', style: 'rc_operators',
+        inputsInline: true, tooltip: '(x >= -10 && x <= 10)' },
+      // ---- Pins & Serial
+      stmt({ type: 'rc_serial_begin', message0: 'start serial at %1 baud', args0: [dd('BAUD', ['115200', '9600'])], style: 'rc_pins',
+        tooltip: 'Serial.begin(115200);' }),
+      stmt({ type: 'rc_print', message0: 'print %1', args0: [{ type: 'input_value', name: 'VALUE' }], style: 'rc_pins',
+        tooltip: 'Sends a line to the Serial Monitor: Serial.println("…");' }),
+      { type: 'rc_serial_read_line', message0: 'serial read line', output: 'String', style: 'rc_pins', tooltip: 'Serial.readStringUntil(\'\\n\')' },
+      // ---- From the first block set (not in the toolbox; saved projects still use them)
+      stmt({ type: 'rc_wait_button', message0: 'wait until USER is pressed', style: 'rc_control',
+        tooltip: 'while (digitalRead(USER_BUTTON) == HIGH) { delay(10); }' }),
+      stmt({ type: 'rc_drive', message0: '%1 drive %2 at %3 %%', style: 'rc_movement',
+        args0: [iconField('bot'), dd('DIR', Object.keys(DRIVE)), { type: 'field_number', name: 'SPEED', value: 60, min: 0, max: 100, precision: 1 }],
+        tooltip: 'motors.drive(left, right);' }),
+      stmt({ type: 'rc_stop', message0: '%1 stop motors', args0: [iconField('bot')], style: 'rc_movement', tooltip: 'motors.stop();' }),
+      stmt({ type: 'rc_print_distance', message0: 'print distance in cm', style: 'rc_sensors', tooltip: 'Serial.println(sonar.distanceCm(), 1);' }),
+      stmt({ type: 'rc_print_line', message0: 'print line sensor', style: 'rc_sensors', tooltip: 'Serial.println(line.read(), 2);' }),
+      stmt({ type: 'rc_print_text', message0: 'print %1', args0: [{ type: 'field_input', name: 'TEXT', text: 'Hello' }], style: 'rc_pins',
+        tooltip: 'Serial.println("…");' }),
     ]);
-    // Blocks whose pin menus depend on the board.
+    // Blocks whose menus are built when they open.
+    Blockly.Blocks.rc_when_receive = {
+      init() {
+        this.appendDummyInput().appendField('when I receive').appendField(new Blockly.FieldDropdown(messageMenu, messageValidator), 'MSG');
+        this.appendStatementInput('DO');
+        this.setStyle('rc_events');
+        this.setTooltip('Runs when another script broadcasts this message: void on_message1() { … }');
+      },
+    };
+    Blockly.Blocks.rc_broadcast = {
+      init() {
+        this.appendDummyInput().appendField('broadcast').appendField(new Blockly.FieldDropdown(messageMenu, messageValidator), 'MSG');
+        this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_events');
+        this.setTooltip('Runs the “when I receive” scripts for this message, then carries on: on_message1();');
+      },
+    };
+    const readPin = (type, label, tooltip) => {
+      Blockly.Blocks[type] = {
+        init() {
+          this.appendDummyInput().appendField(label).appendField(new Blockly.FieldDropdown(pinMenu(false)), 'PIN');
+          this.setOutput(true, 'Number');
+          this.setStyle('rc_pins');
+          this.setTooltip(tooltip);
+        },
+      };
+    };
+    readPin('rc_read_pin', 'read pin', 'HIGH (1) or LOW (0): digitalRead(pin)');
+    readPin('rc_read_analog', 'read analog pin', '0 to 4095 on the RoboCore V2: analogRead(pin)');
     Blockly.Blocks.rc_pin = {
       init() {
         this.appendDummyInput().appendField('set pin').appendField(new Blockly.FieldDropdown(pinMenu(false)), 'PIN')
           .appendField('to').appendField(new Blockly.FieldDropdown(dropdown(['HIGH', 'LOW'])), 'STATE');
-        this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_output');
+        this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_pins');
         this.setTooltip('digitalWrite(pin, HIGH);');
       },
     };
+    // From the first block set: a tone on a chosen pin.
     Blockly.Blocks.rc_tone = {
       init() {
         this.appendDummyInput().appendField('tone pin').appendField(new Blockly.FieldDropdown(pinMenu(true)), 'PIN')
           .appendField(new Blockly.FieldDropdown(dropdown(Object.keys(NOTES))), 'NOTE')
           .appendField('for').appendField(new Blockly.FieldNumber(0.5, 0), 'SECS').appendField('s');
-        this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_output');
+        this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_light');
         this.setTooltip('tone(pin, frequency, ms); delay(ms);');
       },
     };
-    // Comparisons sit with Math.
-    const compareInit = Blockly.Blocks.logic_compare.init;
-    Blockly.Blocks.logic_compare.init = function () { compareInit.call(this); this.setStyle('math_blocks'); };
+    // Blockly's own blocks, in the RoboCore categories.
+    const restyle = (type, style) => {
+      const init = Blockly.Blocks[type].init;
+      Blockly.Blocks[type].init = function () { init.call(this); this.setStyle(style); };
+    };
+    for (const t of ['logic_compare', 'logic_operation', 'logic_negate', 'logic_boolean', 'math_number', 'math_arithmetic',
+      'math_random_int', 'math_round', 'text', 'text_join']) restyle(t, 'rc_operators');
+    for (const t of ['controls_if', 'controls_repeat_ext', 'controls_whileUntil']) restyle(t, 'rc_control');
+    // Their words, as in the catalogue.
+    Object.assign(Blockly.Msg, {
+      CONTROLS_IF_MSG_THEN: 'then',
+      MATH_RANDOM_INT_TITLE: 'pick random %1 to %2',
+      TEXT_JOIN_TITLE_CREATEWITH: 'join',
+      PROCEDURES_DEFNORETURN_TITLE: 'define',
+      PROCEDURES_DEFNORETURN_PROCEDURE: 'my block',
+      PROCEDURES_BEFORE_PARAMS: 'with:',
+      NEW_VARIABLE: 'Make a variable…',
+    });
   }
 
+  // The toolbox: the 10 categories, with each block's starting values.
   const num = (v) => ({ shadow: { type: 'math_number', fields: { NUM: v } } });
+  const txt = (v) => ({ shadow: { type: 'text', fields: { TEXT: v } } });
+  const blk = (type, inputs, extra) => Object.assign({ kind: 'block', type }, inputs ? { inputs } : {}, extra || {});
+  const category = (key, contents, custom) => {
+    const c = CATS.find((x) => x[0] === key);
+    return Object.assign({ kind: 'category', name: c[1], categorystyle: key, cssConfig: { icon: 'rcCatIcon rcCat_' + key } },
+      custom ? { custom } : { contents });
+  };
   const TOOLBOX = {
     kind: 'categoryToolbox',
     contents: [
-      { kind: 'category', name: 'Output', categorystyle: 'output', contents: [
-        { kind: 'block', type: 'rc_led' }, { kind: 'block', type: 'rc_rgb' }, { kind: 'block', type: 'rc_pin' }, { kind: 'block', type: 'rc_tone' }] },
-      { kind: 'category', name: 'Input', categorystyle: 'input', contents: [
-        { kind: 'block', type: 'rc_wait_button' }, { kind: 'block', type: 'rc_user_pressed' }] },
-      { kind: 'category', name: 'Control', categorystyle: 'control', contents: [
-        { kind: 'block', type: 'rc_on_start' }, { kind: 'block', type: 'rc_forever' }, { kind: 'block', type: 'rc_wait' },
-        { kind: 'block', type: 'controls_if' },
-        { kind: 'block', type: 'controls_if', extraState: { hasElse: true } },
-        { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: num(10) } },
-        { kind: 'block', type: 'controls_whileUntil' },
-        { kind: 'block', type: 'logic_operation' }, { kind: 'block', type: 'logic_negate' }, { kind: 'block', type: 'logic_boolean' }] },
-      { kind: 'category', name: 'Math', categorystyle: 'math', contents: [
-        { kind: 'block', type: 'math_number' },
-        { kind: 'block', type: 'logic_compare', inputs: { A: num(0), B: num(20) }, fields: { OP: 'LT' } },
-        { kind: 'block', type: 'math_arithmetic', inputs: { A: num(1), B: num(1) } },
-        { kind: 'block', type: 'math_random_int', inputs: { FROM: num(0), TO: num(100) } }] },
-      { kind: 'category', name: 'Variables', categorystyle: 'variables', custom: 'VARIABLE' },
-      { kind: 'category', name: 'Robotics', categorystyle: 'robotics', contents: [
-        { kind: 'block', type: 'rc_drive' }, { kind: 'block', type: 'rc_stop' }] },
-      { kind: 'category', name: 'Sensors', categorystyle: 'sensors', contents: [
-        { kind: 'block', type: 'rc_distance' }, { kind: 'block', type: 'rc_line' },
-        { kind: 'block', type: 'rc_print_distance' }, { kind: 'block', type: 'rc_print_line' }] },
-      { kind: 'category', name: 'Communication', categorystyle: 'communication', contents: [
-        { kind: 'block', type: 'rc_serial_begin' }, { kind: 'block', type: 'rc_print_text' },
-        { kind: 'block', type: 'rc_print', inputs: { VALUE: num(0) } }, { kind: 'block', type: 'text' }] },
+      category('events', [
+        blk('rc_on_start'), blk('rc_forever'), blk('rc_when_user'), blk('rc_when_closer', { CM: num(20) }), blk('rc_when_line'),
+        blk('rc_when_tilt'), blk('rc_when_timer', { SECS: num(10) }), blk('rc_when'), blk('rc_when_receive'), blk('rc_broadcast')]),
+      category('movement', [
+        blk('rc_move', { AMOUNT: num(10) }), blk('rc_turn', { DEG: num(90) }), blk('rc_start_moving'), blk('rc_steer', { STEER: num(30) }),
+        blk('rc_drive_lr', { L: num(50), R: num(50) }), blk('rc_stop_moving'), blk('rc_move_speed', { PCT: num(50) }),
+        blk('rc_wheel_size', { CM: num(18.8) }), blk('rc_distance_moved')]),
+      category('motors', [
+        blk('rc_motor_run', { AMOUNT: num(1) }), blk('rc_motor_start', { PCT: num(50) }), blk('rc_motor_stop'), blk('rc_motor_reset'),
+        blk('rc_motor_position'), blk('rc_motor_speed'), blk('rc_servo_set', { DEG: num(90) }), blk('rc_servo_angle')]),
+      category('light', [
+        blk('rc_led'), blk('rc_rgb'), blk('rc_led_brightness', { PCT: num(50) }), blk('rc_beep', null, { fields: { NOTE: 'C5' }, inputs: { SECS: num(0.2) } }),
+        blk('rc_beep_start', null, { fields: { NOTE: 'C5' } }), blk('rc_melody'), blk('rc_sound_stop')]),
+      category('sensors', [
+        blk('rc_distance'), blk('rc_closer', { CM: num(20) }), blk('rc_line'), blk('rc_on_line'), blk('rc_line_sensor'), blk('rc_tilt'),
+        blk('rc_angle'), blk('rc_reset_yaw'), blk('rc_is_tilted'), blk('rc_user_pressed'), blk('rc_battery'), blk('rc_temperature'),
+        blk('rc_timer'), blk('rc_reset_timer')]),
+      category('control', [
+        blk('rc_wait'), blk('controls_repeat_ext', { TIMES: num(5) }), blk('controls_if'), blk('controls_if', null, { extraState: { hasElse: true } }),
+        blk('rc_wait_until'), blk('controls_whileUntil', null, { fields: { MODE: 'UNTIL' } }), blk('rc_stop_program')]),
+      category('operators', [
+        blk('math_arithmetic', { A: num(0), B: num(0) }), blk('logic_compare', { A: num(0), B: num(20) }, { fields: { OP: 'LT' } }),
+        blk('logic_operation'), blk('logic_negate'), blk('math_random_int', { FROM: num(1), TO: num(10) }),
+        blk('rc_between', { X: num(0), LO: num(-10), HI: num(10) }), blk('math_round', { NUM: num(3.6) }),
+        blk('text_join', { ADD0: txt('cm: '), ADD1: txt('20') })]),
+      category('variables', null, 'VARIABLE'),
+      category('myblocks', null, 'RC_MYBLOCKS'),
+      category('pins', [
+        blk('rc_pin'), blk('rc_read_pin'), blk('rc_read_analog'), blk('rc_serial_begin'),
+        blk('rc_print', { VALUE: txt('RoboCore V2 ready') }), blk('rc_serial_read_line')]),
     ],
   };
+
+  // My Blocks: Make a block… and a call block for each block made (Blockly's procedures, no return value).
+  function registerMyBlocks(w) {
+    w.registerToolboxCategoryCallback('RC_MYBLOCKS', (ws) => {
+      const items = [{ kind: 'button', text: 'Make a block…', callbackkey: 'rcMakeBlock' }];
+      for (const [name, params] of Blockly.Procedures.allProcedures(ws)[0]) {
+        items.push({ kind: 'block', type: 'procedures_callnoreturn', extraState: { name, params } });
+      }
+      return items;
+    });
+    w.registerButtonCallback('rcMakeBlock', () => {
+      Blockly.dialog.prompt('Name of the new block:', '', (name) => {
+        const n = (name || '').trim();
+        if (!n) return;
+        const b = w.newBlock('procedures_defnoreturn');
+        b.setFieldValue(Blockly.Procedures.findLegalName(n, b), 'NAME');
+        b.initSvg();
+        b.render();
+        const m = w.getMetricsManager().getViewMetrics(true);
+        b.moveTo(new Blockly.utils.Coordinate(m.left + 40, m.top + 40));
+        b.select();
+      });
+    });
+  }
 
   // ---------------------------------------------------------------- Arduino C++ generator
 
@@ -237,12 +465,39 @@
   const toInt = (v) => Math.trunc(toNum(v));
   const cstr = (s) => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const fmt = (n) => (Number.isInteger(n) ? String(n) : String(+n.toFixed(6)));
+  const isLiteral = (code) => /^-?\d+(\.\d+)?$/.test(code);
+  // -x for "backward" / "left": -10 for a number, -(x) for anything else.
+  const neg = (code) => (isLiteral(code) ? fmt(-toNum(code)) : '-(' + code + ')');
+  // Seconds → milliseconds: 200 for 0.2, (x) * 1000 for anything else.
+  const ms = (code) => (isLiteral(code) ? String(Math.max(0, Math.round(toNum(code) * 1000))) : '(' + code + ') * 1000');
+  const SIDE = (b) => (b.getFieldValue('SIDE') === 'right' ? 'RIGHT' : 'LEFT');
+  // "blink twice" → blinkTwice; "message1" → on_message1.
+  const camel = (s) => {
+    const w = String(s).replace(/[^A-Za-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const id = w.map((x, i) => (i ? x[0].toUpperCase() + x.slice(1) : x[0].toLowerCase() + x.slice(1))).join('') || 'myBlock';
+    return /^\d/.test(id) ? 'b' + id : id;
+  };
+  const handler = (msg) => 'on_' + (String(msg).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'message');
 
   function makeGenerator() {
     const g = new Blockly.CodeGenerator('ArduinoCpp');
     g.INDENT = '  ';
-    g.addReservedWords('setup,loop,motors,sonar,line,Serial,int,float,long,bool,char,byte,if,else,for,while,do,return,' +
-      'break,continue,true,false,HIGH,LOW,INPUT,OUTPUT,delay,random,tone,digitalWrite,digitalRead,analogRead');
+    // A variable a student calls "word" or "delay" gets another name (word2): these mean something already.
+    g.addReservedWords(
+      // C++
+      'alignas,alignof,and,asm,auto,bool,break,case,catch,char,class,const,constexpr,continue,default,delete,do,double,else,enum,' +
+      'explicit,export,extern,false,float,for,friend,goto,if,inline,int,long,mutable,namespace,new,noexcept,not,nullptr,operator,or,' +
+      'private,protected,public,register,return,short,signed,sizeof,static,struct,switch,template,this,throw,true,try,typedef,typename,' +
+      'union,unsigned,using,virtual,void,volatile,while,xor,' +
+      // Arduino
+      'setup,loop,Serial,Wire,String,byte,word,boolean,size_t,HIGH,LOW,INPUT,OUTPUT,INPUT_PULLUP,LED_BUILTIN,RGB_BUILTIN,PI,HALF_PI,' +
+      'TWO_PI,DEG_TO_RAD,RAD_TO_DEG,pinMode,digitalWrite,digitalRead,analogRead,analogWrite,delay,delayMicroseconds,millis,micros,' +
+      'tone,noTone,random,randomSeed,map,min,max,abs,constrain,round,sq,sqrt,pow,sin,cos,tan,floor,ceil,bit,bitRead,bitWrite,' +
+      'highByte,lowByte,interrupts,noInterrupts,attachInterrupt,detachInterrupt,yield,rgbLedWrite,' +
+      // RoboCore and the names the blocks use
+      'RoboCore,RoboCoreMotors,RoboCoreDrive,RoboCoreServos,RoboCoreEdge,Sonar,LineSensor,IMU,motors,sonar,line,imu,robot,servos,' +
+      'LEFT,RIGHT,FORWARD,BACKWARD,CM,ROTATIONS,DEGREES,SECONDS,MELODY_POWER_UP,MELODY_POWER_DOWN,MELODY_SUCCESS,MELODY_ERROR,' +
+      'MELODY_ALARM,USER_BUTTON,when1,when2,when3,when4,when5,when6,when7,when8,when9');
     g.init = function (ws) {
       Object.getPrototypeOf(g).init.call(this, ws);
       if (!this.nameDB_) this.nameDB_ = new Blockly.Names(this.RESERVED_WORDS_);
@@ -257,39 +512,105 @@
       return thisOnly || !next ? code : code + this.blockToCode(next);
     };
     const varName = (block) => g.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+    const val = (b, name, order, def) => g.valueToCode(b, name, order) || def;
+    const v2 = () => CTX.board === 'v2';
+    const tonePin = () => (v2() ? 'RC_PIN_BUZZER' : String(toInt(CTX.tonePins[0] || 8)));
     const f = g.forBlock;
 
-    // Hats only frame setup() / loop(); their bodies are generated by generate().
-    f.rc_on_start = () => '';
-    f.rc_forever = () => '';
-    f.rc_wait = (b) => {
-      const ms = Math.round(toNum(b.getFieldValue('TIME')) * (b.getFieldValue('UNIT') === 'ms' ? 1 : 1000));
-      return 'delay(' + Math.max(0, ms) + ');\n';
+    // Script tops: their bodies are placed by generate().
+    for (const t of HATS) f[t] = () => '';
+    f.procedures_defnoreturn = () => '';
+
+    // Events
+    f.rc_broadcast = (b) => handler(b.getFieldValue('MSG')) + '();\n';
+    // Movement
+    f.rc_move = (b) => {
+      const a = val(b, 'AMOUNT', O.NONE, '0'), unit = { rotations: 'ROTATIONS', seconds: 'SECONDS' }[b.getFieldValue('UNIT')] || 'CM';
+      return 'robot.move(' + (b.getFieldValue('DIR') === 'backward' ? neg(a) : a) + ', ' + unit + ');\n';
     };
+    f.rc_turn = (b) => { const d = val(b, 'DEG', O.NONE, '0'); return 'robot.turn(' + (b.getFieldValue('DIR') === 'left' ? neg(d) : d) + ');\n'; };
+    f.rc_start_moving = (b) => 'robot.start(' + (b.getFieldValue('DIR') === 'backward' ? 'BACKWARD' : 'FORWARD') + ');\n';
+    f.rc_steer = (b) => 'robot.steer(' + val(b, 'STEER', O.NONE, '0') + ');\n';
+    f.rc_drive_lr = (b) => 'motors.drive(' + val(b, 'L', O.NONE, '0') + ', ' + val(b, 'R', O.NONE, '0') + ');\n';
+    f.rc_stop_moving = () => 'robot.stop();\n';
+    f.rc_move_speed = (b) => 'robot.setSpeed(' + val(b, 'PCT', O.NONE, '50') + ');\n';
+    f.rc_wheel_size = (b) => 'robot.setWheelCm(' + val(b, 'CM', O.NONE, '18.8') + ');\n';
+    f.rc_distance_moved = () => ['robot.distanceCm()', O.POSTFIX];
+    // Motors
+    f.rc_motor_run = (b) => {
+      const unit = { degrees: 'DEGREES', seconds: 'SECONDS' }[b.getFieldValue('UNIT')] || 'ROTATIONS';
+      return 'motors.run(' + SIDE(b) + ', ' + val(b, 'AMOUNT', O.NONE, '0') + ', ' + unit + ');\n';
+    };
+    f.rc_motor_start = (b) => 'motors.start(' + SIDE(b) + ', ' + val(b, 'PCT', O.NONE, '0') + ');\n';
+    f.rc_motor_stop = (b) => 'motors.stop(' + SIDE(b) + ');\n';
+    f.rc_motor_reset = (b) => 'motors.resetPosition(' + SIDE(b) + ');\n';
+    f.rc_motor_position = (b) => ['motors.positionDeg(' + SIDE(b) + ')', O.POSTFIX];
+    f.rc_motor_speed = (b) => ['motors.speedPercent(' + SIDE(b) + ')', O.POSTFIX];
+    f.rc_servo_set = (b) => 'servos.write(' + toInt(b.getFieldValue('PORT')) + ', ' + val(b, 'DEG', O.NONE, '90') + ');\n';
+    f.rc_servo_angle = (b) => ['servos.angle(' + toInt(b.getFieldValue('PORT')) + ')', O.POSTFIX];
+    // Light & Sound
     f.rc_led = (b) => 'digitalWrite(LED_BUILTIN, ' + (b.getFieldValue('STATE') === 'LOW' ? 'LOW' : 'HIGH') + ');\n';
-    f.rc_pin = (b) => 'digitalWrite(' + toInt(b.getFieldValue('PIN')) + ', ' + (b.getFieldValue('STATE') === 'LOW' ? 'LOW' : 'HIGH') + ');\n';
     f.rc_rgb = (b) => {
       const name = b.getFieldValue('COLOR'), c = COLOURS[name] || COLOURS.off;
-      return 'rgbLedWrite(RGB_BUILTIN, ' + c.join(', ') + ');  // ' + name + '\n';
+      return (v2() ? 'RoboCore::rgb(' : 'rgbLedWrite(RGB_BUILTIN, ') + c.join(', ') + ');  // ' + name + '\n';
     };
-    f.rc_tone = (b) => {
-      const ms = Math.max(0, Math.round(toNum(b.getFieldValue('SECS')) * 1000)), note = b.getFieldValue('NOTE');
-      return 'tone(' + toInt(b.getFieldValue('PIN')) + ', ' + (NOTES[note] || 262) + ', ' + ms + ');  // ' + note + '\ndelay(' + ms + ');\n';
+    f.rc_led_brightness = (b) => 'RoboCore::ledBrightness(' + val(b, 'PCT', O.NONE, '100') + ');\n';
+    f.rc_beep = (b) => {
+      const note = b.getFieldValue('NOTE'), hz = NOTES[note] || 523, d = ms(val(b, 'SECS', O.MULT, '0'));
+      if (v2()) return 'RoboCore::beep(' + hz + ', ' + d + ');  // ' + note + '\n';
+      return 'tone(' + tonePin() + ', ' + hz + ', ' + d + ');  // ' + note + '\ndelay(' + d + ');\n';
     };
+    f.rc_beep_start = (b) => 'tone(' + tonePin() + ', ' + (NOTES[b.getFieldValue('NOTE')] || 523) + ');  // ' + b.getFieldValue('NOTE') + '\n';
+    f.rc_melody = (b) => 'RoboCore::melody(' + (MELODIES[b.getFieldValue('TUNE')] || 'MELODY_POWER_UP') + ');\n';
+    f.rc_sound_stop = () => 'noTone(' + tonePin() + ');\n';
+    // Sensors
+    f.rc_distance = () => ['sonar.distanceCm()', O.POSTFIX];
+    f.rc_closer = (b) => ['sonar.distanceCm() < ' + val(b, 'CM', O.REL, '20'), O.REL];
+    f.rc_line = () => ['line.read()', O.POSTFIX];
+    f.rc_on_line = (b) => ['line.' + (b.getFieldValue('SENSOR') || 'centre') + '() > 0.5', O.REL];
+    f.rc_line_sensor = (b) => ['line.' + (b.getFieldValue('SENSOR') || 'centre') + '() * 100', O.MULT];
+    f.rc_tilt = () => ['imu.tiltDeg()', O.POSTFIX];
+    f.rc_angle = (b) => ['imu.' + (b.getFieldValue('AXIS') || 'yaw') + 'Deg()', O.POSTFIX];
+    f.rc_reset_yaw = () => 'imu.resetYaw();\n';
+    f.rc_is_tilted = (b) => ['imu.' + ({ shaken: 'isShaken', flat: 'isFlat' }[b.getFieldValue('STATE')] || 'isTilted') + '()', O.POSTFIX];
+    f.rc_user_pressed = () => (v2() ? ['RoboCore::userPressed()', O.POSTFIX] : ['digitalRead(USER_BUTTON) == LOW', O.EQ]);
+    f.rc_battery = (b) => [b.getFieldValue('KIND') === 'VOLTS' ? 'RoboCore::batteryVolts()' : 'RoboCore::batteryPercent()', O.POSTFIX];
+    f.rc_temperature = () => ['imu.temperature()', O.POSTFIX];
+    f.rc_timer = () => ['RoboCore::timer()', O.POSTFIX];
+    f.rc_reset_timer = () => 'RoboCore::resetTimer();\n';
+    // Control
+    f.rc_wait = (b) => {
+      const d = Math.round(toNum(b.getFieldValue('TIME')) * (b.getFieldValue('UNIT') === 'ms' ? 1 : 1000));
+      return 'delay(' + Math.max(0, d) + ');\n';
+    };
+    f.rc_wait_until = (b) => 'while (!(' + val(b, 'COND', O.NONE, 'false') + ')) {\n  delay(10);\n}\n';
+    f.rc_stop_program = () => (v2() ? 'RoboCore::stopProgram();\n' : 'while (true) {\n  delay(1000);\n}\n');
+    // Operators
+    f.rc_between = (b) => {
+      const x = val(b, 'X', O.REL, '0');
+      return [x + ' >= ' + val(b, 'LO', O.REL, '0') + ' && ' + x + ' <= ' + val(b, 'HI', O.REL, '0'), O.AND];
+    };
+    // Pins & Serial
+    f.rc_pin = (b) => 'digitalWrite(' + toInt(b.getFieldValue('PIN')) + ', ' + (b.getFieldValue('STATE') === 'LOW' ? 'LOW' : 'HIGH') + ');\n';
+    f.rc_read_pin = (b) => ['digitalRead(' + toInt(b.getFieldValue('PIN')) + ')', O.POSTFIX];
+    f.rc_read_analog = (b) => ['analogRead(' + toInt(b.getFieldValue('PIN')) + ')', O.POSTFIX];
+    f.rc_serial_begin = (b) => 'Serial.begin(' + (b.getFieldValue('BAUD') === '9600' ? 9600 : 115200) + ');\n';
+    f.rc_print = (b) => 'Serial.println(' + val(b, 'VALUE', O.NONE, '""') + ');\n';
+    f.rc_serial_read_line = () => ["Serial.readStringUntil('\\n')", O.POSTFIX];
+    // From the first block set
     f.rc_wait_button = () => 'while (digitalRead(USER_BUTTON) == HIGH) {\n  delay(10);\n}\n';
-    f.rc_user_pressed = () => ['digitalRead(USER_BUTTON) == LOW', O.EQ];
     f.rc_drive = (b) => {
       const s = Math.trunc(Math.min(100, Math.max(0, toNum(b.getFieldValue('SPEED'))))), m = DRIVE[b.getFieldValue('DIR')] || DRIVE.forward;
       return 'motors.drive(' + m[0] * s + ', ' + m[1] * s + ');\n';
     };
     f.rc_stop = () => 'motors.stop();\n';
-    f.rc_distance = () => ['sonar.distanceCm()', O.POSTFIX];
-    f.rc_line = () => ['line.read()', O.POSTFIX];
     f.rc_print_distance = () => 'Serial.print("distance_cm=");\nSerial.println(sonar.distanceCm(), 1);\n';
     f.rc_print_line = () => 'Serial.print("line=");\nSerial.println(line.read(), 2);\n';
-    f.rc_serial_begin = (b) => 'Serial.begin(' + (b.getFieldValue('BAUD') === '9600' ? 9600 : 115200) + ');\n';
     f.rc_print_text = (b) => 'Serial.println("' + cstr(b.getFieldValue('TEXT')) + '");\n';
-    f.rc_print = (b) => 'Serial.println(' + (g.valueToCode(b, 'VALUE', O.NONE) || '0') + ');\n';
+    f.rc_tone = (b) => {
+      const d = Math.max(0, Math.round(toNum(b.getFieldValue('SECS')) * 1000)), note = b.getFieldValue('NOTE');
+      return 'tone(' + toInt(b.getFieldValue('PIN')) + ', ' + (NOTES[note] || 262) + ', ' + d + ');  // ' + note + '\ndelay(' + d + ');\n';
+    };
 
     // Blockly's own blocks in C++.
     f.controls_if = (b) => {
@@ -340,10 +661,22 @@
       const top = /^-?\d+$/.test(to) ? String(parseInt(to, 10) + 1) : to + ' + 1';
       return ['random(' + from + ', ' + top + ')', O.POSTFIX];
     };
+    f.math_round = (b) => [({ ROUNDUP: 'ceil', ROUNDDOWN: 'floor' }[b.getFieldValue('OP')] || 'round') + '(' + val(b, 'NUM', O.NONE, '0') + ')', O.POSTFIX];
+    f.text = (b) => ['"' + cstr(b.getFieldValue('TEXT')) + '"', O.ATOMIC];
+    f.text_join = (b) => {
+      const parts = [];
+      for (let i = 0; b.getInput('ADD' + i); i++) parts.push(g.valueToCode(b, 'ADD' + i, O.ADD) || '""');
+      if (!parts.length) return ['String("")', O.POSTFIX];
+      return ['String(' + parts[0] + ')' + parts.slice(1).map((p) => ' + ' + p).join(''), O.ADD];
+    };
     f.variables_get = (b) => [varName(b), O.ATOMIC];
     f.variables_set = (b) => varName(b) + ' = ' + (g.valueToCode(b, 'VALUE', O.NONE) || '0') + ';\n';
     f.math_change = (b) => varName(b) + ' += ' + (g.valueToCode(b, 'DELTA', O.NONE) || '0') + ';\n';
-    f.text = (b) => ['"' + cstr(b.getFieldValue('TEXT')) + '"', O.ATOMIC];
+    f.procedures_callnoreturn = (b) => {
+      const args = [];
+      for (let i = 0; b.getInput('ARG' + i); i++) args.push(g.valueToCode(b, 'ARG' + i, O.NONE) || '0');
+      return camel(b.getFieldValue('NAME')) + '(' + args.join(', ') + ');\n';
+    };
     return g;
   }
 
@@ -351,56 +684,179 @@
     return b.isEnabled() && !(typeof b.getInheritedDisabled === 'function' && b.getInheritedDisabled());
   }
 
-  // The whole sketch, laid out like lib/engine/codegen.dart (includes, globals, setup, loop).
+  // Variable types: int when every value given to it is a whole number, String for text, else float.
+  const INT_BLOCKS = new Set(['math_random_int', 'math_round', 'rc_read_pin', 'rc_read_analog', 'rc_motor_speed']);
+  const STRING_BLOCKS = new Set(['text', 'text_join', 'rc_serial_read_line']);
+  function varTypes(blocks) {
+    const sets = new Map(); // variable id → value blocks given to it
+    for (const b of blocks) {
+      if (b.type !== 'variables_set' && b.type !== 'math_change') continue;
+      const id = b.getFieldValue('VAR');
+      if (!sets.has(id)) sets.set(id, []);
+      sets.get(id).push(b.getInputTargetBlock(b.type === 'math_change' ? 'DELTA' : 'VALUE'));
+    }
+    const types = new Map();
+    const kind = (b, seen) => {
+      if (!b) return 'int';
+      if (STRING_BLOCKS.has(b.type)) return 'String';
+      if (INT_BLOCKS.has(b.type)) return 'int';
+      if (b.type === 'math_number') return Number.isInteger(toNum(b.getFieldValue('NUM'))) ? 'int' : 'float';
+      if (b.type === 'rc_battery') return b.getFieldValue('KIND') === 'VOLTS' ? 'float' : 'int';
+      if (b.type === 'variables_get') return typeOf(b.getFieldValue('VAR'), seen);
+      if (b.type === 'math_arithmetic') {
+        if (['DIVIDE', 'POWER'].includes(b.getFieldValue('OP'))) return 'float';
+        const a = kind(b.getInputTargetBlock('A'), seen), c = kind(b.getInputTargetBlock('B'), seen);
+        return a === 'String' || c === 'String' ? 'String' : a === 'float' || c === 'float' ? 'float' : 'int';
+      }
+      return 'float';
+    };
+    const typeOf = (id, seen = new Set()) => {
+      if (types.has(id)) return types.get(id);
+      if (seen.has(id)) return 'int';
+      seen.add(id);
+      const ks = (sets.get(id) || []).map((b) => kind(b, seen));
+      return ks.includes('String') ? 'String' : ks.includes('float') ? 'float' : 'int';
+    };
+    for (const id of sets.keys()) types.set(id, typeOf(id));
+    return types;
+  }
+
+  // The whole sketch: includes, globals, My Blocks and messages, setup, loop.
   function generate(ws) {
     cpp.init(ws);
-    const hats = ws.getTopBlocks(true).filter((b) => HATS.includes(b.type) && live(b));
-    const used = new Set(), pins = [], tonePins = [], vars = [];
-    const add = (list, v) => { if (!list.includes(v)) list.push(v); };
-    for (const hat of hats) {
-      for (const b of hat.getDescendants(true)) {
-        if (!live(b)) continue;
-        used.add(b.type);
-        if (b.type === 'rc_pin') add(pins, String(toInt(b.getFieldValue('PIN'))));
-        if (b.type === 'rc_tone') add(tonePins, String(toInt(b.getFieldValue('PIN'))));
-        if (['variables_set', 'variables_get', 'math_change'].includes(b.type)) {
-          add(vars, cpp.nameDB_.getName(b.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE));
-        }
-      }
-    }
+    const tops = ws.getTopBlocks(true).filter((b) => isRoot(b.type) && live(b));
+    const blocks = [];
+    for (const t of tops) for (const b of t.getDescendants(true)) if (live(b)) blocks.push(b);
+    const used = new Set(blocks.map((b) => b.type));
     const has = (...t) => t.some((x) => used.has(x));
     const v2 = CTX.board === 'v2';
-    const usesMot = has('rc_drive', 'rc_stop'), usesSonar = has('rc_distance', 'rc_print_distance'),
-      usesLine = has('rc_line', 'rc_print_line'), usesBtn = has('rc_wait_button', 'rc_user_pressed');
-    const needSerial = has('rc_print_text', 'rc_print', 'rc_print_distance', 'rc_print_line') && !has('rc_serial_begin');
+    const add = (list, v) => { if (!list.includes(v)) list.push(v); };
 
-    const body = (type) => hats.filter((h) => h.type === type).map((h) => cpp.statementToCode(h, 'DO')).join('');
-    const setupBody = body('rc_on_start'), loopBody = body('rc_forever');
+    // Variables, and the parameters of My Blocks (those are not globals).
+    const params = new Set();
+    for (const t of tops) if (t.type === 'procedures_defnoreturn' && t.getVarModels) for (const m of t.getVarModels()) params.add(m.getId());
+    const types = varTypes(blocks), vars = [];
+    for (const b of blocks) {
+      if (!['variables_set', 'variables_get', 'math_change'].includes(b.type)) continue;
+      const id = b.getFieldValue('VAR');
+      if (params.has(id)) continue;
+      add(vars, id);
+    }
+    const outPins = [], inPins = [];
+    for (const b of blocks) {
+      if (b.type === 'rc_pin') add(outPins, String(toInt(b.getFieldValue('PIN'))));
+      if (b.type === 'rc_read_pin') add(inPins, String(toInt(b.getFieldValue('PIN'))));
+      if (b.type === 'rc_tone') add(outPins, String(toInt(b.getFieldValue('PIN'))));
+    }
+
+    const usesRobot = has('rc_move', 'rc_turn', 'rc_start_moving', 'rc_steer', 'rc_stop_moving', 'rc_move_speed', 'rc_wheel_size', 'rc_distance_moved');
+    const usesMot = usesRobot || has('rc_drive_lr', 'rc_motor_run', 'rc_motor_start', 'rc_motor_stop', 'rc_motor_reset', 'rc_motor_position', 'rc_motor_speed', 'rc_drive', 'rc_stop');
+    const usesSonar = has('rc_distance', 'rc_closer', 'rc_when_closer', 'rc_print_distance');
+    const usesLine = has('rc_line', 'rc_on_line', 'rc_line_sensor', 'rc_when_line', 'rc_print_line');
+    const imuBlocks = has('rc_tilt', 'rc_angle', 'rc_reset_yaw', 'rc_is_tilted', 'rc_temperature', 'rc_when_tilt');
+    const usesImu = usesRobot || imuBlocks;
+    const usesServos = has('rc_servo_set', 'rc_servo_angle');
+    const edges = tops.filter((t) => t.type === 'rc_when');
+    const usesLib = usesMot || usesSonar || usesLine || usesImu || usesServos || edges.length > 0 ||
+      has('rc_led_brightness', 'rc_melody', 'rc_battery', 'rc_timer', 'rc_reset_timer', 'rc_when_user', 'rc_when_timer', 'rc_stop_program') ||
+      (v2 && has('rc_rgb', 'rc_beep', 'rc_beep_start', 'rc_sound_stop', 'rc_user_pressed'));
+    const usesBtnPin = has('rc_wait_button') || (!v2 && has('rc_user_pressed'));
+    const needSerial = has('rc_print', 'rc_print_text', 'rc_print_distance', 'rc_print_line', 'rc_serial_read_line') && !has('rc_serial_begin');
+
+    const body = (t) => cpp.statementToCode(t, 'DO');
+    const ind = (code) => code.replace(/^(?=.)/gm, '  ');
+
+    // The "when …" hats, checked at the top of loop() in the order they sit on the workspace.
+    let n = 0;
+    const whenCode = [];
+    const ordered = tops.slice().sort((a, b) => a.getRelativeToSurfaceXY().y - b.getRelativeToSurfaceXY().y || a.getRelativeToSurfaceXY().x - b.getRelativeToSurfaceXY().x);
+    const edgeName = new Map();
+    for (const t of ordered) {
+      if (t.type === 'rc_when') edgeName.set(t.id, 'when' + (++n));
+      const cond = whenCond(t, edgeName.get(t.id));
+      if (cond) whenCode.push('if (' + cond + ') {\n' + body(t) + '}');
+    }
+
+    // My Blocks and messages become functions.
+    const fns = [];
+    for (const t of ordered.filter((x) => x.type === 'procedures_defnoreturn')) {
+      const ps = (t.getVarModels ? t.getVarModels() : []).map((m) => 'float ' + cpp.nameDB_.getName(m.getId(), Blockly.Names.NameType.VARIABLE));
+      fns.push(['void ' + camel(t.getFieldValue('NAME')) + '(' + ps.join(', ') + ')', cpp.statementToCode(t, 'STACK')]);
+    }
+    const msgs = new Map();
+    for (const t of ordered.filter((x) => x.type === 'rc_when_receive')) {
+      const h = handler(t.getFieldValue('MSG'));
+      msgs.set(h, (msgs.get(h) || '') + body(t));
+    }
+    for (const b of blocks.filter((x) => x.type === 'rc_broadcast')) {
+      const h = handler(b.getFieldValue('MSG'));
+      if (!msgs.has(h)) msgs.set(h, '');
+    }
+    for (const [h, code] of msgs) fns.push(['void ' + h + '()', code]);
 
     const l = ['// ' + CTX.name, '// Made with blocks in RoboCore IDE.', ''];
-    if (usesMot) l.push('#include <RoboCoreMotors.h>');
-    if (usesSonar || usesLine) l.push('#include <RoboCoreSensors.h>');
-    if (usesBtn) l.push(v2 ? '#define USER_BUTTON ' + CTX.userPin : '#define USER_BUTTON 0');
+    if (usesLib) l.push('#include <RoboCore.h>');
+    if (usesBtnPin) l.push(v2 ? '#define USER_BUTTON ' + CTX.userPin : '#define USER_BUTTON 0');
+    // Some ESP32 board packages have no LED_BUILTIN.
+    if (!v2 && has('rc_led')) l.push('#ifndef LED_BUILTIN', '#define LED_BUILTIN ' + toInt(CTX.led), '#endif');
     const glob = [];
     if (usesMot) glob.push('RoboCoreMotors motors;');
     if (usesSonar) glob.push('Sonar sonar;');
     if (usesLine) glob.push('LineSensor line;');
-    for (const v of vars) glob.push('int ' + v + ' = 0;');
+    if (usesImu) glob.push('IMU imu;');
+    if (usesRobot) glob.push('RoboCoreDrive robot(motors, imu);');
+    if (usesServos) glob.push('RoboCoreServos servos;');
+    for (const e of edgeName.values()) glob.push('RoboCoreEdge ' + e + ';');
+    for (const id of vars) {
+      const t = types.get(id) || 'int', name = cpp.nameDB_.getName(id, Blockly.Names.NameType.VARIABLE);
+      glob.push(t + ' ' + name + ' = ' + (t === 'String' ? '""' : '0') + ';');
+    }
     if (l.length > 3) l.push('');
     if (glob.length) l.push(...glob, '');
+    const lines = (code) => (code ? code.replace(/\n$/, '').split('\n') : []);
+    if (fns.length) {
+      // Declared first, so they can call each other in any order.
+      if (fns.length > 1) l.push(...fns.map(([sig]) => sig + ';'), '');
+      for (const [sig, code] of fns) l.push(sig + ' {', ...lines(code), '}', '');
+    }
 
     const setup = [];
     if (needSerial) setup.push('Serial.begin(115200);');
     if (has('rc_led')) setup.push('pinMode(LED_BUILTIN, OUTPUT);');
-    for (const p of pins) setup.push('pinMode(' + p + ', OUTPUT);');
-    for (const p of tonePins) if (!pins.includes(p)) setup.push('pinMode(' + p + ', OUTPUT);');
-    if (usesBtn) setup.push(v2 ? 'pinMode(USER_BUTTON, INPUT);' : 'pinMode(USER_BUTTON, INPUT_PULLUP);');
+    for (const p of outPins) setup.push('pinMode(' + p + ', OUTPUT);');
+    for (const p of inPins) if (!outPins.includes(p)) setup.push('pinMode(' + p + ', INPUT);');
+    if (usesBtnPin) setup.push(v2 ? 'pinMode(USER_BUTTON, INPUT);' : 'pinMode(USER_BUTTON, INPUT_PULLUP);');
     if (usesMot) setup.push('motors.begin();');
     if (usesSonar) setup.push('sonar.begin();');
     if (usesLine) setup.push('line.begin();');
-    const lines = (code) => (code ? code.replace(/\n$/, '').split('\n') : []);
+    // Last: it measures the gyro while the robot is still (0.3 s).
+    if (imuBlocks) setup.push('imu.begin();');
+    const setupBody = tops.filter((t) => t.type === 'rc_on_start').map(body).join('');
+    const loopBody = whenCode.map((c) => ind(c) + '\n').join('') + tops.filter((t) => t.type === 'rc_forever').map(body).join('');
     l.push('void setup() {', ...setup.map((s) => '  ' + s), ...lines(setupBody), '}', '', 'void loop() {', ...lines(loopBody), '}', '');
     return l.join('\n');
+  }
+
+  // A "when …" hat's condition, checked on every pass of loop() (edge: its RoboCoreEdge for "when <condition>").
+  function whenCond(t, edge) {
+    switch (t.type) {
+      case 'rc_when_user': return 'RoboCore::userJustPressed()';
+      case 'rc_when_closer': return 'sonar.justCloserThan(' + (cpp.valueToCode(t, 'CM', O.NONE) || '20') + ')';
+      case 'rc_when_line': return t.getFieldValue('STATE') === 'lost' ? 'line.justLost()' : 'line.justFound()';
+      case 'rc_when_tilt': return 'imu.' + ({ shaken: 'justShaken', flat: 'justFlat' }[t.getFieldValue('STATE')] || 'justTilted') + '()';
+      case 'rc_when_timer': return 'RoboCore::timerPassed(' + (cpp.valueToCode(t, 'SECS', O.NONE) || '10') + ')';
+      case 'rc_when': return (edge || 'when1') + '.rose(' + (cpp.valueToCode(t, 'COND', O.NONE) || 'false') + ')';
+    }
+    return null;
+  }
+
+  // A script top's C++ on its own (for Cog's "Explain this block").
+  function rootCpp(t) {
+    const b = t.type === 'procedures_defnoreturn' ? cpp.statementToCode(t, 'STACK') : cpp.statementToCode(t, 'DO');
+    const head = { rc_on_start: 'void setup()', rc_forever: 'void loop()' }[t.type] ||
+      (t.type === 'rc_when_receive' ? 'void ' + handler(t.getFieldValue('MSG')) + '()' : null) ||
+      (t.type === 'procedures_defnoreturn' ? 'void ' + camel(t.getFieldValue('NAME')) + '()' : 'if (' + whenCond(t) + ')');
+    return head + ' {\n' + b + '}';
   }
 
   let ws = null, onBlocksChange = null, onZoom = null, onSelect = null, onHistory = null, loading = false, timer = 0, lastScale = 0, lastSelection = '', lastHistory = '';
@@ -424,7 +880,7 @@
   }
   function blockCpp(b) {
     cpp.init(ws);
-    if (HATS.includes(b.type)) return (b.type === 'rc_on_start' ? 'void setup() {\n' : 'void loop() {\n') + cpp.statementToCode(b, 'DO') + '}';
+    if (isRoot(b.type)) return rootCpp(b);
     const code = cpp.blockToCode(b, true);
     return (Array.isArray(code) ? code[0] : code).replace(/\n$/, '');
   }
@@ -438,8 +894,8 @@
   function zoomBy(dir) { if (ws) ws.zoomCenter(dir); }
   function resetZoom() { if (ws) { ws.setScale(START_SCALE); ws.scrollCenter(); } }
 
-  // Blocks a student placed: not the two hats or the number fields inside other blocks.
-  const countBlocks = (w) => w.getAllBlocks(false).filter((b) => !b.isShadow() && !HATS.includes(b.type)).length;
+  // Blocks a student placed: not on start / forever, or the number fields inside other blocks.
+  const countBlocks = (w) => w.getAllBlocks(false).filter((b) => !b.isShadow() && b.type !== 'rc_on_start' && b.type !== 'rc_forever').length;
 
   function sendBlocks() {
     timer = 0;
@@ -465,6 +921,7 @@
     if (o.pins) CTX.pins = o.pins;
     if (o.tonePins) CTX.tonePins = o.tonePins;
     if (o.userPin != null) CTX.userPin = o.userPin;
+    if (o.led != null) CTX.led = o.led;
   }
 
   function loadWorkspace(json, tidy) {
@@ -472,7 +929,11 @@
     Blockly.Events.disable();
     try {
       ws.clear();
-      if (json) Blockly.serialization.workspaces.load(JSON.parse(json), ws);
+      if (json) {
+        const data = JSON.parse(json);
+        rememberMessages(data);
+        Blockly.serialization.workspaces.load(data, ws);
+      }
       if (tidy) ws.cleanUp();
     } catch (e) {
       console.error('RoboCore: could not load the blocks', e);
@@ -510,6 +971,7 @@
         maxTrashcanContents: 32,
         sounds: false,
       });
+      registerMyBlocks(ws);
       // The app hides this frame while the C++ tab is open; re-measure when it shows again.
       new ResizeObserver(() => { if (ws) Blockly.svgResize(ws); }).observe(document.getElementById('host'));
       ws.addChangeListener(Blockly.Events.disableOrphans);
@@ -878,14 +1340,17 @@
     blocks: blocksApi,
     code: codeApi,
     setIdeKeys(handler) { onIdeKey = handler || null; },
-    // For checks: the C++ for a saved workspace, without showing it.
+    // For checks: the toolbox (every block a student can take), and the C++ for a saved workspace.
+    toolbox: TOOLBOX,
     generateFor(json, optionsJson) {
       blocksOptions(JSON.parse(optionsJson || '{}'));
       const headless = new Blockly.Workspace();
-      Blockly.serialization.workspaces.load(JSON.parse(json), headless);
+      const data = JSON.parse(json);
+      rememberMessages(data);
+      Blockly.serialization.workspaces.load(data, headless);
       headless.getAllBlocks(false).forEach((b) => {
         const root = b.getRootBlock();
-        if (!HATS.includes(root.type) && b.setDisabledReason) b.setDisabledReason(true, 'ORPHANED_BLOCK');
+        if (!isRoot(root.type) && b.setDisabledReason) b.setDisabledReason(true, 'ORPHANED_BLOCK');
       });
       const code = generate(headless);
       headless.dispose();

@@ -143,6 +143,8 @@ CompileResult compileSketch({
     }
     libsIn.add(lib.id);
   }
+  // RoboCore.h includes the motors and sensors headers.
+  if (libsIn.contains('robocore')) libsIn.addAll(const ['motors', 'sensors']);
 
   List<Tok> toks;
   Node prog;
@@ -157,7 +159,7 @@ CompileResult compileSketch({
   if (!fns.containsKey('setup')) err(main.name, 1, "undefined reference to 'setup()'. Every sketch needs a setup() function.");
   if (!fns.containsKey('loop')) err(main.name, 1, "undefined reference to 'loop()'. Every sketch needs a loop() function.");
 
-  final extra = <String, num>{if (libsIn.any(kRoboCoreLibs.contains)) ...RoboCoreV2Pins.byCName};
+  final extra = <String, num>{if (libsIn.any(kRoboCoreLibs.contains)) ...{...RoboCoreV2Pins.byCName, ...kRoboCoreConsts}};
   final consts = {...baseConsts(b), ...extra};
   final declared = <String>{...defines.keys};
   walk(prog, (n) {

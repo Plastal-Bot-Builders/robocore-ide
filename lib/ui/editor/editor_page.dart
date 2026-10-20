@@ -280,6 +280,7 @@ class _EditorPageState extends State<EditorPage> {
         'pins': pinOptions(p.board),
         'tonePins': pinOptions(p.board, tone: true),
         'userPin': RoboCoreV2Pins.userButton,
+        'led': kBoards[p.board]!.led,
         'theme': c.dark ? 'navy' : 'paper',
       },
       onChange: (json, code, count) => s.setBlockly(json, code, count: count),

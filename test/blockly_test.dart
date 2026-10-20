@@ -26,7 +26,8 @@ void main() {
       expect(tops.map((b) => b['type']), ['rc_on_start', 'rc_forever']);
       final first = tops[0]['inputs']['DO']['block'] as Map<String, dynamic>;
       expect(first['type'], 'rc_serial_begin');
-      expect(first['next']['block']['fields'], {'TEXT': 'hi "there"'});
+      expect(first['next']['block']['type'], 'rc_print');
+      expect(first['next']['block']['inputs']['VALUE']['shadow']['fields'], {'TEXT': 'hi "there"'});
       final loop = tops[1]['inputs']['DO']['block'] as Map<String, dynamic>;
       expect(loop['fields'], {'STATE': 'HIGH'});
       expect(loop['next']['block'], {
@@ -52,6 +53,31 @@ void main() {
       expect(set['fields']['VAR'], {'id': 'var_count'});
       final rand = set['next']['block']['next']['block'] as Map<String, dynamic>;
       expect(rand['inputs']['VALUE']['block']['type'], 'math_random_int');
+    });
+
+    test('old blocks become the hardware-first blocks that mean the same', () {
+      final j = jsonDecode(blocklyFromLists([], [
+        {'t': 'drive', 'dir': 'left', 'speed': 60},
+        {'t': 'stop'},
+        {'t': 'tone', 'pin': '47', 'note': 'C5', 'secs': 0.2},
+        {'t': 'button'},
+        {'t': 'distance'},
+      ])) as Map<String, dynamic>;
+      final blocks = <Map<String, dynamic>>[];
+      Map<String, dynamic>? b = j['blocks']['blocks'][1]['inputs']['DO']['block'] as Map<String, dynamic>;
+      while (b != null) {
+        blocks.add(b);
+        b = (b['next'] as Map?)?['block'] as Map<String, dynamic>?;
+      }
+      expect(blocks.map((x) => x['type']), ['rc_drive_lr', 'rc_stop_moving', 'rc_beep', 'rc_wait_until', 'rc_print']);
+      expect(blocks[0]['inputs']['L']['shadow']['fields']['NUM'], -60);
+      expect(blocks[0]['inputs']['R']['shadow']['fields']['NUM'], 60);
+      expect(blocks[2]['fields'], {'NOTE': 'C5'});
+      expect(blocks[2]['inputs']['SECS']['shadow']['fields']['NUM'], 0.2);
+      expect(blocks[3]['inputs']['COND']['block']['type'], 'rc_user_pressed');
+      final join = blocks[4]['inputs']['VALUE']['block'] as Map<String, dynamic>;
+      expect(join['type'], 'text_join');
+      expect(join['inputs']['ADD1']['block']['type'], 'rc_distance');
     });
 
     test('an empty project still has both hats', () {

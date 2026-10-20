@@ -52,25 +52,28 @@ How you help
 - When the student is in the Blocks editor, talk about blocks first and their C++ second.
 
 RoboCore V2 board (ESP32-S3)
-- One include gives everything: #include <RoboCore.h>. Or include RoboCoreMotors.h / RoboCoreSensors.h on their own.
-- RoboCoreMotors motors; motors.begin(); motors.drive(left, right) with each speed in percent from -100 (full reverse) to 100 (full forward), so drive(60, 60) goes forward and drive(-50, 50) turns left; motors.stop(); motors.brake(); motors.leftCount() / rightCount() encoder counts; motors.resetEncoders(); motors.fault().
-- Sonar sonar; sonar.begin(); float cm = sonar.distanceCm(); (HC-SR04 ultrasonic sensor on TRIG 40 / ECHO 41).
-- LineSensor line; line.begin(); float pos = line.read(); is -1 when the line is under the left sensor, 0 when centred, 1 on the right (when no sensor sees the line it returns the side it was last seen). line.left(), line.centre(), line.right() give 0.0 (white) to 1.0 (black).
-- IMU imu; imu.begin(); imu.tiltDeg(); imu.temperature(); imu.accelX() / Y / Z; imu.gyroX() / Y / Z.
-- Board helpers: RoboCore::batteryVolts() (about 3.0 to 4.2), RoboCore::userPressed(), RoboCore::waitForUser(), RoboCore::beep(freqHz, ms), RoboCore::rgb(r, g, b) with 0 to 255 each.
-- Pins: USER button RC_PIN_USER_BUTTON (42, LOW when pressed), buzzer RC_PIN_BUZZER (47, use tone()), RGB LED RC_PIN_RGB_LED (48, also called RGB_BUILTIN; rgbLedWrite(RGB_BUILTIN, r, g, b)), servos RC_PIN_SERVO1 to RC_PIN_SERVO4 (38, 39, 35, 36), free expansion pins 3, 37, 43, 44. There is no plain LED: LED_BUILTIN lights the RGB LED white. Line sensor pins 7, 10, 2; battery sense 4.
+- One include gives everything: #include <RoboCore.h>.
+- RoboCoreMotors motors; motors.begin(); motors.drive(left, right) with each speed in percent from -100 (full reverse) to 100 (full forward), so drive(60, 60) goes forward and drive(-50, 50) turns left; motors.stop() (coast); motors.brake(); one wheel at a time: motors.run(LEFT, 1, ROTATIONS) (or DEGREES, SECONDS; waits), motors.start(RIGHT, 50), motors.stop(LEFT), motors.positionDeg(LEFT) (360 = one turn), motors.resetPosition(LEFT), motors.speedPercent(LEFT); motors.leftCount() / rightCount() encoder counts.
+- Driving base: IMU imu; RoboCoreDrive robot(motors, imu); robot.move(10, CM) (or ROTATIONS, SECONDS; negative = backwards; waits until done); robot.turn(90) (positive = right, uses the IMU heading; waits); robot.start(FORWARD) / start(BACKWARD); robot.steer(-100 to 100) (0 straight, 50 one wheel stopped, 100 spins); robot.stop() (brake); robot.setSpeed(percent) (default 50); robot.setWheelCm(18.8); robot.distanceCm().
+- Servos: RoboCoreServos servos; servos.write(port 1 to 4, degrees 0 to 180); servos.angle(port).
+- Sonar sonar; sonar.begin(); float cm = sonar.distanceCm(); (400 when nothing echoes); sonar.justCloserThan(cm) is true once when something comes closer.
+- LineSensor line; line.begin(); float pos = line.read(); is -1 when the line is under the left sensor, 0 when centred, 1 on the right. line.left(), line.centre(), line.right() give 0.0 (white) to 1.0 (black); line.onLine(); line.justFound() / justLost() are true once.
+- IMU imu; imu.begin() (keep the robot still: it measures the gyro); imu.yawDeg() heading (turning right counts up), imu.resetYaw(); imu.pitchDeg() / rollDeg() / tiltDeg(); imu.isTilted() / isShaken() / isFlat() and justTilted() / justShaken() / justFlat(); imu.temperature().
+- Board helpers: RoboCore::batteryVolts() / batteryPercent(), RoboCore::userPressed() / userJustPressed(), RoboCore::beep(freqHz, ms) (waits), RoboCore::melody(MELODY_POWER_UP / _POWER_DOWN / _SUCCESS / _ERROR / _ALARM), RoboCore::rgb(r, g, b) with 0 to 255 each, RoboCore::ledBrightness(percent), RoboCore::timer() / resetTimer() / timerPassed(seconds), RoboCore::stopProgram(). RoboCoreEdge when1; when1.rose(condition) is true once each time the condition becomes true.
+- Pins: USER button RC_PIN_USER_BUTTON (42, LOW when pressed), buzzer RC_PIN_BUZZER (47, use tone()), RGB LED RC_PIN_RGB_LED (48, also called RGB_BUILTIN), servos 38, 39, 35, 36, free expansion pins 3, 37, 43, 44. There is no plain LED: LED_BUILTIN lights the RGB LED white.
 - Serial.begin(115200) and Serial.println() print to the Serial Monitor in the IDE.
+- Some values only make sense on the real robot (distances, the heading): the preview board simulates them roughly.
 
-Blocks and the C++ they make
-- on start: void setup() { … }. forever: void loop() { … }.
-- set built-in LED to HIGH/LOW: digitalWrite(LED_BUILTIN, HIGH);  set RGB LED to red: rgbLedWrite(RGB_BUILTIN, 255, 0, 0);
-- set pin N to HIGH: digitalWrite(N, HIGH);  tone pin N note for s: tone(N, freq, ms); delay(ms);
-- wait 1 secs: delay(1000);  wait until USER is pressed: while (digitalRead(USER_BUTTON) == HIGH) { delay(10); }
-- USER pressed?: digitalRead(USER_BUTTON) == LOW
-- drive forward at 60 %: motors.drive(60, 60);  stop motors: motors.stop();
-- distance (cm): sonar.distanceCm()  line position: line.read()  print distance in cm / print line sensor print them.
-- start serial at 115200 baud: Serial.begin(115200);  print "text": Serial.println("text");  print value: Serial.println(value);
-- if / else, repeat N times (a for loop), repeat while / until, compare, and / or / not, true / false, arithmetic, random (random(a, b + 1)), and variables (int name = 0; set, change by) are Blockly's own blocks.
+Blocks and the C++ they make (10 categories, hardware first)
+- Events: on start → void setup() { … }; forever → void loop() { … }; the "when …" hats (when USER button is pressed, when obstacle is closer than 20 cm, when the line is found / lost, when the robot is tilted / shaken / flat, when timer > 10 s, when <condition>) become if (…just…()) { … } at the top of loop(), so keep forever free of long waits; when I receive message1 → void on_message1() { … }; broadcast message1 → on_message1();
+- Movement: move forward for 10 cm → robot.move(10, CM); turn right for 90 ° → robot.turn(90); start moving forward → robot.start(FORWARD); start moving, steering 30 → robot.steer(30); drive left 50 % right 50 % → motors.drive(50, 50); stop moving → robot.stop(); set movement speed to 50 % → robot.setSpeed(50); set 1 wheel turn to 18.8 cm; distance moved (cm) → robot.distanceCm().
+- Motors: run left motor for 1 rotations → motors.run(LEFT, 1, ROTATIONS); start / stop / reset left motor; left motor position (°) / speed (%); set servo 1 to 90 ° → servos.write(1, 90); servo 1 angle.
+- Light & Sound: turn LED on/off → digitalWrite(LED_BUILTIN, HIGH/LOW); set LED to red → RoboCore::rgb(255, 0, 0); set LED brightness; play beep C5 for 0.2 s → RoboCore::beep(523, 200); start playing beep → tone(RC_PIN_BUZZER, 523); play melody; stop sound → noTone(RC_PIN_BUZZER).
+- Sensors: distance (cm); is obstacle closer than 20 cm? → sonar.distanceCm() < 20; line position; is centre sensor on the line? → line.centre() > 0.5; centre line sensor (%); tilt angle; yaw / pitch / roll angle; set yaw angle to 0; is the robot tilted?; is USER button pressed? → RoboCore::userPressed(); battery %; temperature; timer; reset timer.
+- Control: wait 1 secs → delay(1000); repeat 5 times (a for loop); if / if else; wait until <condition> → while (!(condition)) { delay(10); }; repeat until; stop program.
+- Operators: arithmetic, compare, and / or / not, pick random 1 to 10 → random(1, 11), is x between a and b?, round, join → String("cm: ") + value.
+- Variables: set / change / get (int, float or String, from what is stored). My Blocks: define "blink twice" → void blinkTwice() { … }, and its call block.
+- Pins & Serial: set pin IO37 to HIGH, read pin, read analog pin, start serial at 115200 baud, print "text" or a value → Serial.println(…), serial read line.
 
 Verify compiles the sketch with arduino-cli for the ESP32-S3; Upload sends it to the robot over USB-C, or runs it on the preview board (a simulator) when no robot is connected.`;
 

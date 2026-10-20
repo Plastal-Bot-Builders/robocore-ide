@@ -35,6 +35,23 @@ class SimBoard extends ChangeNotifier implements BoardIO {
   bool user = false;
   bool readsSerial = false;
   double _dist = 42, _lineT = 0, _analog = 1800;
+
+  // The robot's wheels and heading, worked out from the motor speeds over time (SimBoardPhysics).
+  final List<double> _turns = [0, 0];
+  double _heading = 0;
+  int _physMs = 0;
+
+  void _physics() {
+    final now = millis();
+    final dt = (now - _physMs) / 1000.0;
+    _physMs = now;
+    if (dt <= 0) return;
+    const tps = SimBoardPhysics.turnsPerSecond;
+    final l = motorSpeeds[0] / 100 * tps, r = motorSpeeds[1] / 100 * tps;
+    _turns[0] += l * dt;
+    _turns[1] += r * dt;
+    _heading += (l - r) * SimBoardPhysics.wheelCm / SimBoardPhysics.trackCm * 180 / math.pi * dt;
+  }
   String _lineBuf = '';
   String _inQ = '';
   final Set<String> _skipped = {};
@@ -50,6 +67,9 @@ class SimBoard extends ChangeNotifier implements BoardIO {
     toneHz = null;
     motorSpeeds = [0, 0];
     servoAngle = null;
+    _turns[0] = _turns[1] = 0;
+    _heading = 0;
+    _physMs = 0;
     pins.clear();
     modes.clear();
     _lineBuf = '';
@@ -181,8 +201,21 @@ class SimBoard extends ChangeNotifier implements BoardIO {
 
   @override
   void motors(num l, num r) {
+    _physics();
     motorSpeeds = [l.clamp(-100, 100).round(), r.clamp(-100, 100).round()];
     _changed();
+  }
+
+  @override
+  num wheelTurns(int side) {
+    _physics();
+    return _turns[side == 0 ? 0 : 1];
+  }
+
+  @override
+  num heading() {
+    _physics();
+    return _heading;
   }
 
   @override
