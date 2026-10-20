@@ -1,7 +1,5 @@
 // The account button in the top bar (G-10): who is using this device, Edit profile, Keyboard shortcuts and About.
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show KeyDownEvent, LogicalKeyboardKey;
 
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -9,31 +7,36 @@ import 'app_scope.dart';
 import 'dialogs.dart' show DialogFrame;
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
-import 'widgets/popover.dart';
+import 'widgets/menu.dart';
 
 /// Keep in step with `version:` in pubspec.yaml.
 const kAppVersion = '1.0.0';
 
-class AccountButton extends StatefulWidget {
+class AccountButton extends StatelessWidget {
   const AccountButton({super.key});
-  @override
-  State<AccountButton> createState() => _AccountButtonState();
-}
-
-class _AccountButtonState extends State<AccountButton> {
-  bool open = false;
-
-  void _close() => setState(() => open = false);
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    return Popover(
-      open: open,
-      onClose: _close,
-      popup: (_) => AccountMenu(onDone: _close),
-      child: Hover(
-        onTap: () => setState(() => open = !open),
+    final c = RC.of(context);
+    return MenuButton(
+      width: 260,
+      header: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Text(s.school.isEmpty ? 'This device' : '${s.school} · this device', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+      entries: () => [
+        MenuEntry('Edit profile', icon: 'user', onTap: () => s.go(Screen.settings)),
+        MenuEntry('Keyboard shortcuts', icon: 'keyboard', onTap: () => showShortcutsDialog(context)),
+        MenuEntry('About RoboCore IDE', icon: 'info', onTap: () => showAboutRoboCoreDialog(context)),
+      ],
+      builder: (context, open, toggle) => Hover(
+        onTap: toggle,
         tooltip: 'Account',
         builder: (context, h) => Container(
           width: 32,
@@ -49,97 +52,6 @@ class _AccountButtonState extends State<AccountButton> {
   }
 }
 
-class AccountMenu extends StatefulWidget {
-  const AccountMenu({super.key, required this.onDone});
-  final VoidCallback onDone;
-  @override
-  State<AccountMenu> createState() => _AccountMenuState();
-}
-
-class _AccountMenuState extends State<AccountMenu> {
-  // Asked for outright: autofocus would do nothing while an editor still holds the focus.
-  final _focus = FocusNode(debugLabel: 'Account menu');
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focus.requestFocus();
-    });
-  }
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final onDone = widget.onDone;
-    final s = AppScope.of(context);
-    final c = RC.of(context);
-    Widget item(String icon, String label, VoidCallback onTap) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Hover(
-            onTap: () {
-              onDone();
-              onTap();
-            },
-            builder: (context, h) => Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-              child: Row(children: [
-                RcIcon(icon, size: 16, color: c.ink),
-                const SizedBox(width: 10),
-                Expanded(child: Text(label, style: tLabel(c, w: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-              ]),
-            ),
-          ),
-        );
-    // Esc closes the menu (G-15).
-    return Focus(
-      focusNode: _focus,
-      onKeyEvent: (node, e) {
-        if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape) {
-          onDone();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Container(
-        width: 260,
-        decoration: BoxDecoration(
-          color: c.raised,
-          border: Border.all(color: c.line),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: popShadow,
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 2),
-              Text(s.school.isEmpty ? 'This device' : '${s.school} · this device',
-                  style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
-            ]),
-          ),
-          const SizedBox(height: 4),
-          item('user', 'Edit profile', () => s.go(Screen.settings)),
-          item('keyboard', 'Keyboard shortcuts', () => showShortcutsDialog(context)),
-          item('info', 'About RoboCore IDE', () => showAboutRoboCoreDialog(context)),
-          const SizedBox(height: 4),
-        ]),
-      ),
-    );
-  }
-}
-
-bool get _mac => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS;
-
 Future<void> showShortcutsDialog(BuildContext context) => showDialog<void>(
       context: context,
       barrierColor: const Color(0x521B2A41),
@@ -152,10 +64,17 @@ class _ShortcutsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    final m = _mac ? '⌘' : 'Ctrl';
+    final m = kMod;
     // Only the shortcuts the IDE really has: the top-bar ones (shell.dart) and those of Monaco and Blockly.
     final groups = <(String, List<(String, String)>)>[
-      ('In the IDE', [('Save', '$m+S'), ('Verify', '$m+R'), ('Upload', '$m+U'), ('Ask Cog', '$m+I')]),
+      ('In the IDE', [
+        ('Save', '$m+S'),
+        ('Verify', '$m+R'),
+        ('Upload', '$m+U'),
+        ('Ask Cog', '$m+I'),
+        ('Collapse the sidebar', '$m+B'),
+        ('Show or hide the console', '$m+J'),
+      ]),
       (
         'In the code editor',
         [
@@ -196,7 +115,7 @@ class _ShortcutsDialog extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         Text(
-          'Save, Verify, Upload and Ask Cog work anywhere in the IDE, also while you’re typing in the code or blocks.',
+          'These work anywhere in the IDE, also while you’re typing in the code or blocks.',
           style: tCaption(c, color: c.faint),
         ),
       ]),

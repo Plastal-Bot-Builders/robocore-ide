@@ -23,6 +23,7 @@ import 'pages/welcome_page.dart';
 import 'cog/cog_panel.dart' show CogButton;
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
+import 'widgets/menu.dart';
 import 'widgets/popover.dart';
 
 const kPhone = 760.0;
@@ -51,6 +52,10 @@ class _ShellState extends State<Shell> {
           _upload(s);
         case 'cog':
           _cog(s);
+        case 'sidebar':
+          s.toggleSidebar();
+        case 'console':
+          _console(s);
       }
     });
   }
@@ -79,6 +84,10 @@ class _ShellState extends State<Shell> {
         const SingleActivator(LogicalKeyboardKey.keyU, meta: true): () => _upload(s),
         const SingleActivator(LogicalKeyboardKey.keyI, control: true): () => _cog(s),
         const SingleActivator(LogicalKeyboardKey.keyI, meta: true): () => _cog(s),
+        const SingleActivator(LogicalKeyboardKey.keyB, control: true): s.toggleSidebar,
+        const SingleActivator(LogicalKeyboardKey.keyB, meta: true): s.toggleSidebar,
+        const SingleActivator(LogicalKeyboardKey.keyJ, control: true): () => _console(s),
+        const SingleActivator(LogicalKeyboardKey.keyJ, meta: true): () => _console(s),
       },
       child: Focus(
         autofocus: true,
@@ -112,10 +121,10 @@ class _ShellState extends State<Shell> {
               ),
               if (s.toast != null)
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 44,
-                  child: Center(child: _Toast(text: s.toast!)),
+                  left: phone ? 0 : null,
+                  right: phone ? 0 : 24,
+                  bottom: phone ? 44 : 52,
+                  child: phone ? Center(child: _Toast(text: s.toast!, error: s.toastError)) : _Toast(text: s.toast!, error: s.toastError),
                 ),
             ],
           ),
@@ -142,6 +151,10 @@ class _ShellState extends State<Shell> {
 
   void _cog(AppState s) {
     if (s.view == Screen.editor && s.cur != null) s.cog.toggle();
+  }
+
+  void _console(AppState s) {
+    if (s.view == Screen.editor && s.cur != null) s.togglePanel();
   }
 
   /// While a project is open the editor stays built (offstage on other screens), so Blockly and Monaco
@@ -182,19 +195,26 @@ class _ShellState extends State<Shell> {
   }
 }
 
+/// Bottom right, as in the design. An error has an alert icon and a close button, and stays (G-16).
 class _Toast extends StatelessWidget {
-  const _Toast({required this.text});
+  const _Toast({required this.text, required this.error});
   final String text;
+  final bool error;
   @override
   Widget build(BuildContext context) {
+    final s = AppScope.read(context);
     return Material(
       color: Colors.transparent,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 520),
         margin: const EdgeInsets.symmetric(horizontal: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: EdgeInsets.fromLTRB(14, error ? 6 : 10, error ? 6 : 14, error ? 6 : 10),
         decoration: BoxDecoration(color: kNavy, borderRadius: BorderRadius.circular(8), boxShadow: popShadow),
-        child: Text(text, style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, color: kCream)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (error) ...[const RcIcon('alert', size: 16, color: kBrand), const SizedBox(width: 10)],
+          Flexible(child: Text(text, style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, color: kCream))),
+          if (error) ...[const SizedBox(width: 6), IconBtn('x', onTap: s.closeToast, tip: 'Close', color: kCream, size: 28, iconSize: 16)],
+        ]),
       ),
     );
   }
@@ -261,11 +281,11 @@ class TopBar extends StatelessWidget {
               const SizedBox(width: 8),
               phone
                   ? IconBtn('check', onTap: s.busy == null ? s.verify : null, tip: 'Verify', color: kNavy)
-                  : Btn('Verify', icon: 'check', kind: BtnKind.ghostTop, onTap: s.busy == null ? s.verify : null),
+                  : Btn('Verify', icon: 'check', kind: BtnKind.ghostTop, tooltip: 'Verify ($kMod+R)', onTap: s.busy == null ? s.verify : null),
               const SizedBox(width: 8),
               phone
                   ? _PrimaryIcon(icon: 'arrow', onTap: s.busy == null ? s.upload : null, tip: 'Upload')
-                  : _TopPrimary(label: 'Upload', icon: 'arrow', onTap: s.busy == null ? s.upload : null),
+                  : _TopPrimary(label: 'Upload', icon: 'arrow', tooltip: 'Upload ($kMod+U)', onTap: s.busy == null ? s.upload : null),
             ] else
               phone
                   ? _PrimaryIcon(icon: 'plus', onTap: () => showNewProjectDialog(context), tip: 'New project')
@@ -297,13 +317,15 @@ class TopBar extends StatelessWidget {
 
 /// Navy button on the yellow bar (stays navy in both themes).
 class _TopPrimary extends StatelessWidget {
-  const _TopPrimary({required this.label, required this.icon, this.onTap});
+  const _TopPrimary({required this.label, required this.icon, this.onTap, this.tooltip});
   final String label, icon;
   final VoidCallback? onTap;
+  final String? tooltip;
   @override
   Widget build(BuildContext context) {
     return Hover(
       onTap: onTap,
+      tooltip: tooltip,
       builder: (context, h) => Opacity(
         opacity: onTap == null ? .6 : 1,
         child: Container(
@@ -339,18 +361,37 @@ class _PrimaryIcon extends StatelessWidget {
       );
 }
 
+/// The project's name in the editor's top bar; opens the project menu (E-02).
 class _ProjectName extends StatelessWidget {
   const _ProjectName({required this.p});
   final Project p;
   @override
   Widget build(BuildContext context) {
+    final s = AppScope.read(context);
+    return MenuButton(
+      alignRight: false,
+      width: 220,
+      entries: () => [
+        MenuEntry('Rename…', icon: 'pencil', onTap: () => showRenameProjectDialog(context, p)),
+        MenuEntry('Project settings…', icon: 'sliders', onTap: () => showProjectSettingsDialog(context)),
+        MenuEntry('Duplicate', icon: 'copy', onTap: () => s.duplicateProject(p)),
+        MenuEntry('Download ${p.files.length == 1 ? p.files.first.name : '.zip'}', icon: 'download', onTap: () => s.downloadProject(p)),
+        MenuEntry.line,
+        MenuEntry('Delete project…', icon: 'trash', onTap: () => showDeleteProjectDialog(context, p)),
+      ],
+      builder: (context, open, toggle) => _name(open, toggle),
+    );
+  }
+
+  Widget _name(bool open, VoidCallback toggle) {
     return Hover(
-      onTap: () => showProjectSettingsDialog(context),
-      tooltip: 'Project settings',
+      onTap: toggle,
+      tooltip: 'Project menu',
       builder: (context, h) => Container(
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+        decoration: BoxDecoration(
+            color: h || open ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Flexible(
             child: Text(p.name,
@@ -398,6 +439,7 @@ class _BoardChipState extends State<BoardChip> {
     final portShort = s.portShort;
     return Popover(
       open: open,
+      escCloses: true,
       onClose: () => setState(() => open = false),
       popup: (context) => BoardMenu(onDone: () => setState(() => open = false)),
       child: Hover(
@@ -603,23 +645,35 @@ class _SearchBoxState extends State<SearchBox> {
             Padding(padding: const EdgeInsets.all(12), child: Text('Nothing matches “$q”.', style: tCaption(c))),
         ]),
       ),
-      child: RcInput(
-        controller: _ctl,
-        focusNode: _focus,
-        hint: 'Search',
-        icon: 'search',
-        onChanged: (v) => setState(() => q = v),
-        onSubmitted: (_) {
-          if (ps.isNotEmpty) {
-            final id = ps.first.id;
+      // Esc clears the search and closes the results (G-11); the field keeps its own focus.
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: (node, e) {
+          if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape && (q.isNotEmpty || _focus.hasFocus)) {
             _clear();
-            s.openProject(id);
-          } else if (es.isNotEmpty) {
-            final id = es.first.id;
-            _clear();
-            s.openExample(id);
+            return KeyEventResult.handled;
           }
+          return KeyEventResult.ignored;
         },
+        child: RcInput(
+          controller: _ctl,
+          focusNode: _focus,
+          hint: 'Search',
+          icon: 'search',
+          onChanged: (v) => setState(() => q = v),
+          onSubmitted: (_) {
+            if (ps.isNotEmpty) {
+              final id = ps.first.id;
+              _clear();
+              s.openProject(id);
+            } else if (es.isNotEmpty) {
+              final id = es.first.id;
+              _clear();
+              s.openExample(id);
+            }
+          },
+        ),
       ),
     );
   }
@@ -831,7 +885,12 @@ class StatusBar extends StatelessWidget {
           ),
         ),
         if (!phone)
-          Text('${b.name} · ${s.linked ? s.portLabel : 'not connected'} · ${s.baud} baud', style: tCaption(c, color: c.faint)),
+          Hover(
+            onTap: () => s.go(Screen.board),
+            tooltip: 'Board setup',
+            builder: (context, h) => Text('${b.name} · ${s.linked ? s.portLabel : 'not connected'} · ${s.baud} baud',
+                style: tCaption(c, color: h ? c.ink : c.faint).copyWith(decoration: h ? TextDecoration.underline : null)),
+          ),
         if (s.view == Screen.editor && p != null && p.mode == 'code') ...[
           const SizedBox(width: 16),
           Text(s.cursorPos, style: tCaption(c, color: c.faint)),
@@ -843,9 +902,12 @@ class StatusBar extends StatelessWidget {
   String _detail(AppState s, Project? p) {
     switch (s.view) {
       case Screen.home:
-      case Screen.projects:
         final n = s.projects.length;
         return '$n project${n == 1 ? '' : 's'} · saved on this device';
+      case Screen.projects:
+        final n = s.projects.length;
+        if (n == 0) return 'No projects yet';
+        return '${s.filteredProjects.length} of $n project${n == 1 ? '' : 's'} · saved on this device';
       case Screen.examples:
         return '${kExamples.length} examples';
       case Screen.libraries:

@@ -771,10 +771,10 @@
 
   // ======================================================================= The IDE's shortcuts
 
-  // Ctrl/⌘ + S, R, U and I are the IDE's (Save, Verify, Upload, Ask Cog), also while typing here. Taken
+  // Ctrl/⌘ + S, R, U, I, B and J are the IDE's (Save, Verify, Upload, Ask Cog, sidebar, console), also while typing here. Taken
   // before Blockly, Monaco or the browser see them: otherwise the browser would save the page (S), reload
   // it (R) or show its source (U), and Monaco would open suggestions (I). The app sets the handler.
-  const IDE_KEYS = { s: 'save', r: 'verify', u: 'upload', i: 'cog' };
+  const IDE_KEYS = { s: 'save', r: 'verify', u: 'upload', i: 'cog', b: 'sidebar', j: 'console' };
   let onIdeKey = null;
   window.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;

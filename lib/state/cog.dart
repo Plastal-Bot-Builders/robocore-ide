@@ -145,6 +145,7 @@ class CogController {
 
   Map<String, Object?> _body(String task, {int hint = 1, String? extra}) => {
         'style': app.settings.cogStyle,
+        'level': app.settings.cogLevel,
         'task': task,
         'hint': hint,
         'messages': [

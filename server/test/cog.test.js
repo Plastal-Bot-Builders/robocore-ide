@@ -123,6 +123,14 @@ test('the API request: model, fallback, effort, cached system prompt, project co
   assert.match(text, /The student: Why does it not compile\?/);
 });
 
+test('the explanation level reaches the model (Beginner when missing or unknown)', async () => {
+  await events(await post('/cog/chat', job({ level: 'advanced' })));
+  assert.match(JSON.stringify(seen.at(-1).body.messages.at(-1)), /Explanation level: Advanced/);
+  await events(await post('/cog/chat', job({ level: 'wizard' })));
+  assert.match(JSON.stringify(seen.at(-1).body.messages.at(-1)), /Explanation level: Beginner/);
+  assert.match(seen.at(-1).body.system, /explanation level/);
+});
+
 test('with "Let Cog read this project" off, no code is sent', async () => {
   await events(await post('/cog/chat', job({ context: { read: false, files: [{ name: 'Blink.ino', content: 'SECRET_CODE' }] } })));
   const text = JSON.stringify(seen.at(-1).body.messages);

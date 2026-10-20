@@ -1,7 +1,9 @@
-// New project and Project settings dialogs.
+// New project, Project settings, Rename and Delete dialogs.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../data/catalog.dart';
+import '../state/models.dart';
 import '../theme.dart';
 import 'app_scope.dart';
 import 'widgets/common.dart';
@@ -18,15 +20,59 @@ Future<void> showProjectSettingsDialog(BuildContext context) => showDialog<void>
       builder: (_) => AppScope(notifier: AppScope.read(context), child: const _ProjectSettingsDialog()),
     );
 
+Future<void> showRenameProjectDialog(BuildContext context, Project p) => showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (_) => AppScope(notifier: AppScope.read(context), child: _RenameDialog(p: p)),
+    );
+
+/// “Delete Blink LED?” (PR-08). Deleting removes the project from this device for good.
+Future<void> showDeleteProjectDialog(BuildContext context, Project p) => showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) {
+        final s = AppScope.read(context);
+        void delete() {
+          Navigator.of(dctx).pop();
+          s.deleteProject(p);
+        }
+
+        return DialogFrame(
+          title: 'Delete ${p.name}?',
+          subtitle: 'This deletes the project from this device. You can’t undo it.',
+          onSubmit: delete,
+          actions: [
+            Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+            Btn('Delete project', icon: 'trash', kind: BtnKind.primary, onTap: delete),
+          ],
+        );
+      },
+    );
+
 class DialogFrame extends StatelessWidget {
-  const DialogFrame({super.key, required this.title, this.subtitle, required this.body, required this.actions});
+  const DialogFrame({super.key, required this.title, this.subtitle, this.body, required this.actions, this.onSubmit});
   final String title;
   final String? subtitle;
-  final Widget body;
+  final Widget? body;
   final List<Widget> actions;
+
+  /// Enter runs the main button when no text field takes it (D-01).
+  final VoidCallback? onSubmit;
 
   @override
   Widget build(BuildContext context) {
+    final dialog = _frame(context);
+    if (onSubmit == null) return dialog;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter): onSubmit!,
+        const SingleActivator(LogicalKeyboardKey.numpadEnter): onSubmit!,
+      },
+      child: Focus(autofocus: true, child: dialog),
+    );
+  }
+
+  Widget _frame(BuildContext context) {
     final c = RC.of(context);
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -56,7 +102,10 @@ class DialogFrame extends StatelessWidget {
               IconBtn('x', onTap: () => Navigator.of(context).pop(), tip: 'Close'),
             ]),
           ),
-          Flexible(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(24, 16, 24, 20), child: body)),
+          if (body != null)
+            Flexible(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(24, 16, 24, 20), child: body))
+          else
+            const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -226,7 +275,6 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
   late String board;
   late bool autosave;
   String? error;
-  bool confirmDelete = false;
 
   @override
   void initState() {
@@ -247,7 +295,7 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
     final s = AppScope.read(context);
     final p = s.cur;
     if (p == null) return;
-    final e = s.validateName(_name.text);
+    final e = s.validateName(_name.text, except: p);
     if (e != null) {
       setState(() => error = e);
       return;
@@ -285,17 +333,71 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
         ]),
       ]),
       actions: [
-        Btn(confirmDelete ? 'Click again to delete' : 'Delete project', icon: 'trash', kind: BtnKind.danger, onTap: () {
-          if (!confirmDelete) {
-            setState(() => confirmDelete = true);
-            return;
-          }
-          Navigator.of(context).pop();
-          s.deleteProject(p);
+        Btn('Delete project', icon: 'trash', kind: BtnKind.danger, onTap: () {
+          final nav = Navigator.of(context);
+          nav.pop();
+          showDeleteProjectDialog(nav.context, p);
         }),
         const Spacer(),
         Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),
         Btn('Save', kind: BtnKind.primary, onTap: _save),
+      ],
+    );
+  }
+}
+
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.p});
+  final Project p;
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  // The name starts selected, so typing replaces it (PR-05).
+  late final _name = TextEditingController(text: widget.p.name)
+    ..selection = TextSelection(baseOffset: 0, extentOffset: widget.p.name.length);
+  String? error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final s = AppScope.read(context);
+    final e = s.validateName(_name.text, except: widget.p);
+    if (e != null) {
+      setState(() => error = e);
+      return;
+    }
+    Navigator.of(context).pop();
+    if (_name.text.trim() != widget.p.name) s.renameProject(widget.p, _name.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return DialogFrame(
+      title: 'Rename project',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const FieldLabel('Name'),
+        RcInput(
+          controller: _name,
+          height: 36,
+          fontSize: 14,
+          autofocus: true,
+          error: error != null,
+          onChanged: (_) => setState(() => error = null),
+          onSubmitted: (_) => _save(),
+        ),
+        const SizedBox(height: 6),
+        Text(error ?? 'Letters, numbers and spaces.', style: tCaption(c, color: error != null ? c.err : c.faint)),
+      ]),
+      actions: [
+        Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),
+        Btn('Rename', kind: BtnKind.primary, onTap: _save),
       ],
     );
   }

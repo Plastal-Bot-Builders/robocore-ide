@@ -157,6 +157,9 @@ class Settings {
   bool cogRead;
   String cogPin;
 
+  /// How Cog pitches its explanations: beginner | intermediate | advanced (ST-03).
+  String cogLevel;
+
   Settings({
     this.theme = 'paper',
     this.fontSize = 13,
@@ -170,6 +173,7 @@ class Settings {
     this.cogStyle = 'hints',
     this.cogRead = true,
     this.cogPin = '',
+    this.cogLevel = 'beginner',
   });
   Map<String, dynamic> toJson() => {
         'theme': theme,
@@ -184,6 +188,7 @@ class Settings {
         'cogStyle': cogStyle,
         'cogRead': cogRead,
         'cogPin': cogPin,
+        'cogLevel': cogLevel,
       };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
         theme: j['theme'] as String? ?? 'paper',
@@ -198,6 +203,7 @@ class Settings {
         cogStyle: const ['hints', 'explain', 'write'].contains(j['cogStyle']) ? j['cogStyle'] as String : 'hints',
         cogRead: j['cogRead'] as bool? ?? true,
         cogPin: j['cogPin'] as String? ?? '',
+        cogLevel: const ['beginner', 'intermediate', 'advanced'].contains(j['cogLevel']) ? j['cogLevel'] as String : 'beginner',
       );
 }
 

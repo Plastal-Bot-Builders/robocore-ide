@@ -5,12 +5,15 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/catalog.dart';
 import '../engine/compiler.dart';
+import '../engine/zip.dart';
 import '../hw/cog_client.dart';
 import '../hw/compile_client.dart';
+import '../hw/download.dart';
 import '../hw/usb_link.dart';
 import 'cog.dart';
 import 'models.dart';
@@ -143,6 +146,9 @@ class AppState extends ChangeNotifier {
   String? lastRunName;
   String cursorPos = 'Ln 1, Col 1';
   String? toast;
+
+  /// The toast is an error: it stays until it is closed (G-16).
+  bool toastError = false;
   Timer? _toastTimer;
   int logVersion = 0;
 
@@ -168,6 +174,16 @@ class AppState extends ChangeNotifier {
   }
 
   List<Project> get sortedProjects => [...projects]..sort((a, b) => b.updated.compareTo(a.updated));
+
+  /// Projects page: newest first, through the chips (All / Blocks / C++) and the filter field.
+  List<Project> get filteredProjects {
+    final q = pfilter.trim().toLowerCase();
+    return sortedProjects
+        .where((p) =>
+            (ptab == 'all' || p.mode == ptab) &&
+            (q.isEmpty || p.name.toLowerCase().contains(q) || kBoards[p.board]!.name.toLowerCase().contains(q)))
+        .toList();
+  }
   String get boardId => (view == Screen.editor && cur != null) ? cur!.board : board;
   Set<String> get installedLibs => {for (final e in libs.entries) if (e.value) e.key};
 
@@ -198,6 +214,8 @@ class AppState extends ChangeNotifier {
   void setProfile({required String name, String school = ''}) {
     user = name.trim().replaceAll(RegExp(r'\s+'), ' ');
     this.school = school.trim();
+    // After Reset all data the next profile starts with the starter projects again (W-04).
+    if (projects.isEmpty) _seed();
     persist(now: true);
     notifyListeners();
   }
@@ -237,7 +255,7 @@ class AppState extends ChangeNotifier {
       serialPush('Preview board ready at $baud baud. Plug in a RoboCore and pick USB-C in Board Setup to use the real one.', 'sys');
       _bootBoard();
     }
-    if (loadNotice != null) showToast(loadNotice!);
+    if (loadNotice != null) showToast(loadNotice!, error: true);
     notifyListeners();
   }
 
@@ -277,6 +295,7 @@ class AppState extends ChangeNotifier {
     settings = field(() => Settings.fromJson(((o['settings'] as Map?) ?? const {}).cast<String, dynamic>())) ?? settings;
     libs = field(() => {...libs, ...((o['libs'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', v == true))}) ?? libs;
     sideCollapsed = field(() => _prefs?.getBool('rc-side')) ?? false;
+    panelOpen = field(() => _prefs?.getBool('rc-panel')) ?? true;
 
     final list = o['projects'];
     final bad = <dynamic>[];
@@ -347,13 +366,23 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void showToast(String msg) {
+  /// Success and info hide after 4 s; an [error] stays until closed (G-16).
+  void showToast(String msg, {bool error = false}) {
     toast = msg;
+    toastError = error;
     _toastTimer?.cancel();
-    _toastTimer = Timer(const Duration(milliseconds: 2600), () {
-      toast = null;
-      notifyListeners();
-    });
+    if (!error) {
+      _toastTimer = Timer(const Duration(seconds: 4), () {
+        toast = null;
+        notifyListeners();
+      });
+    }
+    notifyListeners();
+  }
+
+  void closeToast() {
+    _toastTimer?.cancel();
+    toast = null;
     notifyListeners();
   }
 
@@ -404,11 +433,7 @@ class AppState extends ChangeNotifier {
 
   void openExample(String id) {
     final ex = exampleById(id);
-    var name = ex.proj;
-    var n = 2;
-    while (projects.any((p) => p.name == name)) {
-      name = '${ex.proj} ${n++}';
-    }
+    final name = _freeName(ex.proj);
     final p = projectFrom(ex, name: name, board: board);
     p.autosave = settings.autosave;
     projects.add(p);
@@ -417,11 +442,63 @@ class AppState extends ChangeNotifier {
     openProject(p.id);
   }
 
-  String? validateName(String name) {
+  /// Project names are required, plain and unique ([except]: the project being renamed).
+  String? validateName(String name, {Project? except}) {
     final t = name.trim();
     if (t.isEmpty) return 'Give your project a name.';
     if (!RegExp(r'^[A-Za-z0-9 ]+$').hasMatch(t)) return 'Use only letters, numbers and spaces.';
+    if (t.length > 40) return 'Use 40 characters or fewer.';
+    if (projects.any((p) => !identical(p, except) && p.name.toLowerCase() == t.toLowerCase())) {
+      return 'You already have a project called “$t”.';
+    }
     return null;
+  }
+
+  /// [base], or [base] 2, 3 … if a project already has that name.
+  String _freeName(String base) {
+    var name = base;
+    var n = 2;
+    while (projects.any((p) => p.name.toLowerCase() == name.toLowerCase())) {
+      name = '$base ${n++}';
+    }
+    return name;
+  }
+
+  void renameProject(Project p, String name) {
+    p.name = name.trim();
+    saveNow(p);
+    showToast('Renamed to “${p.name}”.');
+  }
+
+  /// A copy named “… copy”, at the top of Projects (PR-06).
+  void duplicateProject(Project p) {
+    p.syncCode();
+    final d = p.copy()
+      ..id = uid()
+      ..name = _freeName('${p.name} copy')
+      ..updated = DateTime.now().millisecondsSinceEpoch;
+    projects.add(d);
+    persist(now: true);
+    showToast('Project duplicated. “${d.name}” is in Projects.');
+    notifyListeners();
+  }
+
+  /// The sketch for Arduino IDE 2 (PR-07): the main .ino, or a .zip with a folder named after it when
+  /// the sketch has more than one tab. Native apps copy the main file to the clipboard instead.
+  Future<void> downloadProject(Project p) async {
+    p.syncCode();
+    final main = p.files.first.name;
+    final folder = main.replaceAll(RegExp(r'\.ino$'), '');
+    final one = p.files.length == 1;
+    final ok = one
+        ? downloadFile(main, utf8.encode(p.files.first.content), 'text/plain;charset=utf-8')
+        : downloadFile('$folder.zip', zipFiles({for (final f in p.files) '$folder/${f.name}': f.content}), 'application/zip');
+    if (ok) {
+      showToast(one ? 'Downloaded $main. Open it in Arduino IDE 2 to work offline.' : 'Downloaded $folder.zip. Unzip it and open $main in Arduino IDE 2.');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: p.files.first.content));
+    showToast('Copied $main to the clipboard. Downloads work in the web app.');
   }
 
   void createProject({required String name, required String mode, required String boardId}) {
@@ -462,12 +539,17 @@ class AppState extends ChangeNotifier {
 
   void deleteProject(Project p) {
     final name = p.name;
+    final open = p.id == pid;
     projects.remove(p);
     persist(now: true);
-    sim.stop();
-    pid = null;
     showToast('Deleted $name.');
-    go(Screen.projects);
+    if (open) {
+      sim.stop();
+      pid = null;
+      go(Screen.projects);
+    } else {
+      notifyListeners();
+    }
   }
 
   // ---------- saving ----------
@@ -625,7 +707,7 @@ class AppState extends ChangeNotifier {
     if (!usb.supported) {
       conn = ConnMsg('err', UsbResult.unsupported.message);
       serialPush(UsbResult.unsupported.message, 'err');
-      showToast(UsbResult.unsupported.message);
+      showToast(UsbResult.unsupported.message, error: true);
       return;
     }
     conn = const ConnMsg('', 'Pick the board in the browser’s list (ESP32-S3: “USB JTAG/serial debug unit”)…');
@@ -717,7 +799,7 @@ class AppState extends ChangeNotifier {
         usbOpen = false;
         serialPush('Board unplugged ($msg). Plug it back in and it reconnects by itself.', 'err');
         setStatus('Not connected', 'err');
-        showToast('The board was unplugged. Plug it back in to reconnect.');
+        showToast('The board was unplugged. Plug it back in to reconnect.', error: true);
         break;
       case 'reconnected':
         usbOpen = true;
@@ -1000,7 +1082,7 @@ class AppState extends ChangeNotifier {
       outLine('Uploading to a real board needs the compile server. Add its address in Settings → Compile server '
           '(server/README.md shows how to run one).', 'err');
       setStatus('No compile server', 'err');
-      showToast('Add a compile server in Settings to upload to the real board.');
+      showToast('Add a compile server in Settings to upload to the real board.', error: true);
       notifyListeners();
       return;
     }
@@ -1107,7 +1189,7 @@ class AppState extends ChangeNotifier {
       outLine('Upload failed: ${res.message}', 'err');
       if (res.code == 'bootloader') {
         outLine(kBootTip, 'err');
-        showToast('Hold BOOT, tap RESET, release BOOT, then Upload again.');
+        showToast('Hold BOOT, tap RESET, release BOOT, then Upload again.', error: true);
       }
       setStatus('Upload failed', 'err');
     }
@@ -1238,8 +1320,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The console's chevron or Ctrl/⌘+J (C-05); remembered on this device.
   void togglePanel() {
     panelOpen = !panelOpen;
+    _prefs?.setBool('rc-panel', panelOpen);
     notifyListeners();
   }
 
@@ -1379,13 +1463,44 @@ class AppState extends ChangeNotifier {
     _afterBlocks(p);
   }
 
-  void resetAll() {
+  /// Settings → Reset all data (ST-12): this device's projects, profile and settings go, and Welcome shows.
+  Future<void> resetAll() async {
     sim.stop();
-    _seed();
+    if (usbOpen) await disconnectUsb(quiet: true);
+    try {
+      await _prefs?.remove(_storeKey);
+      await _prefs?.remove('rc-side');
+      await _prefs?.remove('rc-panel');
+    } catch (_) {}
+    final fresh = Settings();
+    user = '';
+    school = '';
+    board = 'v2';
+    port = kPortSim;
+    baud = 115200;
+    connected = true;
+    cpu = '240 MHz';
+    partition = '8 MB · 3 MB app / 1.5 MB SPIFFS';
+    settings = fresh;
+    libs = {'esp32servo': true, 'neopixel': true, 'newping': false, 'lcd': false};
+    projects = [];
     pid = null;
     lastRun = null;
-    showToast('Sample projects restored.');
-    go(Screen.home);
+    problems = [];
+    verified = null;
+    output.clear();
+    log.clear();
+    sideCollapsed = false;
+    panelOpen = true;
+    ptab = 'all';
+    pfilter = '';
+    excat = 'All';
+    exq = '';
+    cog.newChat(notify: false);
+    cog.close();
+    view = Screen.home;
+    setStatus('Ready');
+    notifyListeners();
   }
 
   void setSerialOption({bool? ts, bool? scroll, String? ending}) {

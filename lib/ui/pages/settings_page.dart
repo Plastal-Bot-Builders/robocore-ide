@@ -5,7 +5,7 @@ import '../../state/cog.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../cog/cog_panel.dart' show CogMark;
-import '../dialogs.dart' show RadioDot;
+import '../dialogs.dart' show DialogFrame, RadioDot;
 import '../widgets/common.dart';
 import 'home_page.dart';
 
@@ -84,58 +84,102 @@ class SettingsPage extends StatelessWidget {
       theme('navy', 'Navy', 'Dark, for low light', kNavy),
     ];
 
-    return PageBody(children: [
-      const PageHeader(title: 'Settings', subtitle: 'Saved automatically on this device.'),
-      Align(
-        alignment: Alignment.topLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            card('Profile', [const _ProfileRow()]),
-            const SizedBox(height: 20),
-            card('Appearance', [
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: phone
-                    ? Column(children: [themes[0], const SizedBox(height: 12), themes[1]])
-                    : Row(children: [Expanded(child: themes[0]), const SizedBox(width: 12), Expanded(child: themes[1])]),
-              ),
-            ]),
-            const SizedBox(height: 20),
-            card('Editor', [
-              row(
-                  'Font size',
-                  RcSelect<int>(
-                    value: st.fontSize,
-                    width: 110,
-                    label: 'Font size',
-                    items: [for (final n in const [12, 13, 14, 15, 16, 18]) (n, '$n px')],
-                    onChanged: (v) => s.updateSettings((x) => x.fontSize = v),
-                  )),
-              row('Autocomplete', RcSwitch(value: st.autocomplete, label: 'Autocomplete', onChanged: (v) => s.updateSettings((x) => x.autocomplete = v)),
-                  hint: 'Suggest Arduino functions as you type.'),
-              row('Word wrap', RcSwitch(value: st.wrap, label: 'Word wrap', onChanged: (v) => s.updateSettings((x) => x.wrap = v))),
-            ]),
-            const SizedBox(height: 20),
-            card('Real board and upload', [const _CompileServerRow()]),
-            const SizedBox(height: 20),
-            card('Cog — learning partner', [
-              const _CogStyleRow(),
-              row('Let Cog read this project', RcSwitch(value: st.cogRead, label: 'Let Cog read this project', onChanged: (v) => s.updateSettings((x) => x.cogRead = v)),
-                  hint: 'Open files, Output and the Serial Monitor. Nothing is sent when this is off.'),
-              const _CogStatusRow(),
-            ]),
-            const SizedBox(height: 20),
-            card('General', [
-              row('Language',
-                  RcSelect<String>(value: st.lang, width: 130, label: 'Language', items: const [('English', 'English')], onChanged: (_) {})),
-              row('Auto-save projects', RcSwitch(value: st.autosave, label: 'Auto-save projects', onChanged: (v) => s.updateSettings((x) => x.autosave = v)),
-                  hint: 'Every 30 seconds and before upload.'),
-            ]),
-          ]),
-        ),
+    final profile = card('Profile', [const _ProfileRow()]);
+    final appearance = card('Appearance', [
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: phone
+            ? Column(children: [themes[0], const SizedBox(height: 12), themes[1]])
+            : Row(children: [Expanded(child: themes[0]), const SizedBox(width: 12), Expanded(child: themes[1])]),
       ),
     ]);
+    final editor = card('Editor', [
+      row(
+          'Font size',
+          RcSelect<int>(
+            value: st.fontSize,
+            width: 110,
+            label: 'Font size',
+            items: [for (final n in const [12, 13, 14, 15, 16, 18]) (n, '$n px')],
+            onChanged: (v) => s.updateSettings((x) => x.fontSize = v),
+          )),
+      row('Autocomplete', RcSwitch(value: st.autocomplete, label: 'Autocomplete', onChanged: (v) => s.updateSettings((x) => x.autocomplete = v)),
+          hint: 'Suggest Arduino functions as you type.'),
+      row('Word wrap', RcSwitch(value: st.wrap, label: 'Word wrap', onChanged: (v) => s.updateSettings((x) => x.wrap = v))),
+    ]);
+    final board = card('Real board and upload', [const _CompileServerRow()]);
+    final cog = card('Cog — learning partner', [
+      const _CogStyleRow(),
+      row(
+          'Explanation level',
+          RcSelect<String>(
+            value: st.cogLevel,
+            width: 150,
+            label: 'Explanation level',
+            items: const [('beginner', 'Beginner'), ('intermediate', 'Intermediate'), ('advanced', 'Advanced')],
+            onChanged: (v) => s.updateSettings((x) => x.cogLevel = v),
+          ),
+          hint: 'How much Cog assumes you already know.'),
+      row('Let Cog read this project', RcSwitch(value: st.cogRead, label: 'Let Cog read this project', onChanged: (v) => s.updateSettings((x) => x.cogRead = v)),
+          hint: 'Open files, Output and the Serial Monitor. Nothing is sent when this is off.'),
+      const _CogStatusRow(),
+    ]);
+    final general = card('General', [
+      row('Language', RcSelect<String>(value: st.lang, width: 130, label: 'Language', items: const [('English', 'English')], onChanged: (_) {})),
+      row('Auto-save projects', RcSwitch(value: st.autosave, label: 'Auto-save projects', onChanged: (v) => s.updateSettings((x) => x.autosave = v)),
+          hint: 'Saves a moment after each change, and before upload.'),
+      row('Reset all data', Btn('Reset…', icon: 'trash', kind: BtnKind.danger, onTap: () => _confirmReset(context)),
+          hint: 'Deletes this device’s projects, profile and settings.'),
+    ]);
+
+    Widget column(List<Widget> cards) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (var i = 0; i < cards.length; i++) ...[if (i > 0) const SizedBox(height: 20), cards[i]],
+        ]);
+
+    return PageBody(children: [
+      const PageHeader(title: 'Settings', subtitle: 'Saved automatically on this device.'),
+      // Two columns on wide windows, as in the design: you and Cog on the left, the app on the right.
+      LayoutBuilder(
+        builder: (context, k) => k.maxWidth >= 1000
+            ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: column([profile, cog])),
+                const SizedBox(width: 20),
+                Expanded(child: column([appearance, editor, board, general])),
+              ])
+            : Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: column([profile, appearance, editor, board, cog, general]),
+                ),
+              ),
+      ),
+    ]);
+  }
+
+  /// “Reset all data?” (ST-12).
+  void _confirmReset(BuildContext context) {
+    final s = AppScope.read(context);
+    showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) {
+        void reset() {
+          Navigator.of(dctx).pop();
+          s.resetAll();
+        }
+
+        return DialogFrame(
+          title: 'Reset all data?',
+          subtitle: 'Deletes this device’s projects, profile and settings, then starts again at the welcome screen. You can’t undo it.',
+          onSubmit: reset,
+          actions: [
+            Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+            Btn('Reset', icon: 'trash', kind: BtnKind.primary, onTap: reset),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -368,7 +412,7 @@ class _CogStyleRow extends StatelessWidget {
     final pin = await _pin(context, title: 'Teacher PIN', body: 'A teacher locked Cog’s help style. Type the PIN to change it.');
     if (pin == null) return false;
     if (cogPinHash(pin) == s.settings.cogPin) return true;
-    s.showToast('That PIN is not right.');
+    s.showToast('That PIN is not right.', error: true);
     return false;
   }
 

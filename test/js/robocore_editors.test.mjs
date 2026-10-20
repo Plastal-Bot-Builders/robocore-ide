@@ -40,13 +40,13 @@ function page(mode = 'code') {
   return { ctx, actions, press };
 }
 
-test('Ctrl or ⌘ + S, R, U, I go to the IDE and not to the editor or the browser', () => {
+test('Ctrl or ⌘ + S, R, U, I, B, J go to the IDE and not to the editor or the browser', () => {
   const { actions, press } = page();
-  for (const [key, mod] of [['s', 'ctrlKey'], ['r', 'ctrlKey'], ['u', 'metaKey'], ['i', 'metaKey'], ['S', 'ctrlKey']]) {
+  for (const [key, mod] of [['s', 'ctrlKey'], ['r', 'ctrlKey'], ['u', 'metaKey'], ['i', 'metaKey'], ['S', 'ctrlKey'], ['b', 'ctrlKey'], ['j', 'metaKey']]) {
     const e = press({ key, code: 'Key' + key.toUpperCase(), [mod]: true });
     assert.ok(e.prevented && e.stopped, `${mod} + ${key} is taken`);
   }
-  assert.deepEqual(actions, ['save', 'verify', 'upload', 'cog', 'save']);
+  assert.deepEqual(actions, ['save', 'verify', 'upload', 'cog', 'save', 'sidebar', 'console']);
 });
 
 test("the editors' own shortcuts and plain typing are left alone", () => {
