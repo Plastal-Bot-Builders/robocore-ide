@@ -36,7 +36,8 @@ extension type _Api._(JSObject _) implements JSObject {
 }
 
 extension type _Blocks._(JSObject _) implements JSObject {
-  external JSPromise<JSAny?> mount(String options, String? json, bool tidy, JSFunction onChange, JSFunction onZoom, JSFunction onSelect);
+  external JSPromise<JSAny?> mount(
+      String options, String? json, bool tidy, JSFunction onChange, JSFunction onZoom, JSFunction onSelect, JSFunction onHistory);
   external void load(String? json, bool tidy);
   external void setOptions(String options);
   external void undo();
@@ -201,7 +202,8 @@ class BlocklyEditor extends StatefulWidget {
       required this.options,
       required this.onChange,
       this.onZoom,
-      this.onSelect});
+      this.onSelect,
+      this.onHistory});
   final String projectId;
 
   /// The workspace to open; [tidy] lays it out first (for blocks converted from the old editor).
@@ -217,6 +219,9 @@ class BlocklyEditor extends StatefulWidget {
 
   /// The selected block as JSON {type, label, cpp}, or '' when none is selected.
   final void Function(String json)? onSelect;
+
+  /// Whether Undo and Redo have something to do.
+  final void Function(bool canUndo, bool canRedo)? onHistory;
 
   @override
   State<BlocklyEditor> createState() => BlocklyEditorState();
@@ -239,6 +244,8 @@ class BlocklyEditorState extends State<BlocklyEditor> {
           if (mounted) widget.onZoom?.call(scale.toDartDouble);
         }).toJS, ((JSString json) {
           if (mounted) widget.onSelect?.call(json.toDart);
+        }).toJS, ((JSBoolean canUndo, JSBoolean canRedo) {
+          if (mounted) widget.onHistory?.call(canUndo.toDart, canRedo.toDart);
         }).toJS)
         .toDart;
     _api = b;

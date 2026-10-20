@@ -7,8 +7,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../theme.dart';
 import 'icon_paths.dart';
 
-/// The shortcut key: ⌘ on a Mac (and iPad), Ctrl elsewhere.
-String get kMod => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS ? '⌘' : 'Ctrl';
+/// The shortcut key: Cmd on a Mac (and iPad), Ctrl elsewhere. Spelled out: Barlow has no ⌘ glyph.
+String get kMod => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS ? 'Cmd' : 'Ctrl';
 
 class RcIcon extends StatelessWidget {
   const RcIcon(this.name, {super.key, this.size = 16, this.color});

@@ -130,7 +130,7 @@ CompileResult compileSketch({
     }
     final lib = libs.first;
     if (lib.kind == 'opt' && !installedLibs.contains(lib.id)) {
-      err(i.file, i.line, '${i.h}: No such file or directory. Install ${lib.name} from Libraries.');
+      err(i.file, i.line, notInstalled(lib.name));
       continue;
     }
     if (lib.arch == 'v2' && b.id != 'v2') {
@@ -247,4 +247,24 @@ CompileResult compileSketch({
     tokens: toks.length,
     extraConsts: extra,
   );
+}
+
+/// L-04: the message for a library the sketch includes but this device has not installed.
+String notInstalled(String library) => '$library is not installed. Install it in Libraries.';
+
+/// The optional libraries [files] #include that are not installed here. Checked before a compile on the
+/// server too, which has every library: Libraries decides what a sketch may use.
+List<Problem> missingLibraries(List<SourceFile> files, Set<String> installedLibs) {
+  final out = <Problem>[];
+  for (final f in files) {
+    final lines = f.content.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      final inc = _includeRe.firstMatch(lines[i]);
+      if (inc == null || inc.group(1) == '"') continue;
+      final h = inc.group(2)!.trim();
+      final lib = kLibs.where((l) => l.h == (kHeaderAlias[h] ?? h)).firstOrNull;
+      if (lib != null && lib.kind == 'opt' && !installedLibs.contains(lib.id)) out.add(Problem(f.name, i + 1, notInstalled(lib.name)));
+    }
+  }
+  return out;
 }
