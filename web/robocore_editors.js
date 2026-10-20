@@ -111,6 +111,8 @@
       '.blocklyToolboxSelected .blocklyToolboxCategoryLabel, .blocklyTreeSelected .blocklyTreeLabel { color: inherit !important; }',
       '.blocklyToolboxCategoryLabel, .blocklyTreeLabel { font-family: Barlow, sans-serif; font-size: 14px; }',
       '.blocklyWidgetDiv .blocklyMenu, .blocklyDropDownDiv { font-family: Barlow, sans-serif; }',
+      '.injectionDiv .blocklyZoom > image, .injectionDiv .blocklyZoom > svg > image { opacity: .7; }',
+      '.injectionDiv .blocklyZoom > image:hover, .injectionDiv .blocklyZoom > svg > image:hover { opacity: 1; }',
     ].join('\n');
     document.head.appendChild(css);
   }
@@ -401,7 +403,15 @@
     return l.join('\n');
   }
 
-  let ws = null, onBlocksChange = null, loading = false, timer = 0;
+  let ws = null, onBlocksChange = null, onZoom = null, loading = false, timer = 0, lastScale = 0;
+  const START_SCALE = 0.9;
+
+  function reportZoom() {
+    if (ws && onZoom && ws.scale !== lastScale) { lastScale = ws.scale; onZoom(ws.scale); }
+  }
+
+  function zoomBy(dir) { if (ws) ws.zoomCenter(dir); }
+  function resetZoom() { if (ws) { ws.setScale(START_SCALE); ws.scrollCenter(); } }
 
   // Blocks a student placed: not the two hats or the number fields inside other blocks.
   const countBlocks = (w) => w.getAllBlocks(false).filter((b) => !b.isShadow() && !HATS.includes(b.type)).length;
@@ -442,11 +452,13 @@
   }
 
   const blocksApi = {
-    async mount(optionsJson, json, tidy, onChange) {
+    async mount(optionsJson, json, tidy, onChange, onZoomChange) {
       await ready;
       const o = JSON.parse(optionsJson);
       blocksOptions(o);
       onBlocksChange = onChange;
+      onZoom = onZoomChange;
+      lastScale = 0;
       setTheme(o.theme);
       ws = Blockly.inject(document.getElementById('host'), {
         toolbox: TOOLBOX,
@@ -454,7 +466,8 @@
         theme: CTX.theme === 'navy' ? NAVY : PAPER_THEME,
         media: 'vendor/blockly/media/',
         grid: { spacing: 24, length: 1, colour: 'rgba(27,42,65,.4)', snap: true },
-        zoom: { controls: true, wheel: false, pinch: true, startScale: 0.9, minScale: 0.5, maxScale: 2 },
+        // Ctrl/⌘ + wheel and trackpad pinch zoom; the plain wheel scrolls (move.wheel).
+        zoom: { controls: true, wheel: true, pinch: true, startScale: START_SCALE, minScale: 0.4, maxScale: 2.5, scaleSpeed: 1.15 },
         move: { scrollbars: true, drag: true, wheel: true },
         trashcan: true,
         maxTrashcanContents: 32,
@@ -464,10 +477,20 @@
       new ResizeObserver(() => { if (ws) Blockly.svgResize(ws); }).observe(document.getElementById('host'));
       ws.addChangeListener(Blockly.Events.disableOrphans);
       ws.addChangeListener((e) => {
+        if (e.type === Blockly.Events.VIEWPORT_CHANGE) reportZoom();
         if (loading || e.isUiEvent) return;
         emitBlocks();
       });
+      // Ctrl/⌘ + = / − / 0 zoom the blocks (not the whole page).
+      document.addEventListener('keydown', (e) => {
+        if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+        const dir = { '=': 1, '+': 1, '-': -1, '_': -1, '0': 0 }[e.key];
+        if (dir === undefined) return;
+        e.preventDefault();
+        if (dir) zoomBy(dir); else resetZoom();
+      });
       loadWorkspace(json, tidy);
+      reportZoom();
     },
     load(json, tidy) { if (ws) loadWorkspace(json, tidy); },
     setOptions(optionsJson) {
@@ -481,6 +504,9 @@
     redo() { if (ws) ws.undo(true); },
     clear() { if (ws) { Blockly.Events.setGroup(true); ws.clear(); Blockly.Events.setGroup(false); } },
     count() { return ws ? countBlocks(ws) : 0; },
+    zoom(dir) { zoomBy(dir); },
+    zoomToFit() { if (ws) ws.zoomToFit(); },
+    resetZoom() { resetZoom(); },
   };
 
   let PAPER_THEME = null, NAVY = null;
@@ -611,6 +637,7 @@
         lightbulb: { enabled: 'on' },
         renderLineHighlight: 'all',
         bracketPairColorization: { enabled: false },
+        mouseWheelZoom: true,
         guides: { bracketPairs: false, indentation: true },
         scrollBeyondLastLine: false,
         fixedOverflowWidgets: true,
