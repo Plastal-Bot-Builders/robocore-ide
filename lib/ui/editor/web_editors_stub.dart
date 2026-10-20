@@ -7,6 +7,8 @@ void setEditorFramesInteractive(bool on) {}
 
 void coverEditorFrames(bool on) {}
 
+void setEditorShortcutHandler(void Function(String action)? handler) {}
+
 class EditorFramesObserver extends NavigatorObserver {}
 
 class FrameShield extends StatelessWidget {

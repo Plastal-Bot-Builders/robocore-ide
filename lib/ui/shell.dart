@@ -11,6 +11,7 @@ import 'account.dart';
 import 'app_scope.dart';
 import 'dialogs.dart';
 import 'editor/editor_page.dart';
+import 'editor/web_editors.dart' show setEditorShortcutHandler;
 import 'pages/board_page.dart';
 import 'pages/examples_page.dart';
 import 'pages/home_page.dart';
@@ -34,6 +35,31 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   final _scaffold = GlobalKey<ScaffoldState>();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The same shortcuts, typed inside Blockly or Monaco (their iframes keep the keys from Flutter).
+    final s = AppScope.of(context);
+    setEditorShortcutHandler((action) {
+      switch (action) {
+        case 'save':
+          _save(s);
+        case 'verify':
+          _verify(s);
+        case 'upload':
+          _upload(s);
+        case 'cog':
+          _cog(s);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    setEditorShortcutHandler(null);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
