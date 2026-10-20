@@ -5,6 +5,9 @@ block catalogue in `RoboCore_IDE_Design/docs/`) the app does. Each spec row is o
 = ½, **Missing** = 0. Checked against the code and the running web app on branch `blockly-monaco-poc`. Update a row
 when you finish it.
 
+This counts behaviour. How each component *looks* next to the Figma Components page is in
+[component-review.md](component-review.md).
+
 ## Score
 
 | Part | Done | Partly | Missing | Score | At the first audit (20 Oct) |
