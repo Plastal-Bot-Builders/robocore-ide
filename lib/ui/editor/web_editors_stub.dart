@@ -27,7 +27,8 @@ class BlocklyEditor extends StatefulWidget {
       required this.options,
       required this.onChange,
       this.onZoom,
-      this.onSelect});
+      this.onSelect,
+      this.onHistory});
   final String projectId;
   final String? json;
   final bool tidy;
@@ -35,6 +36,7 @@ class BlocklyEditor extends StatefulWidget {
   final void Function(String json, String code, int count) onChange;
   final void Function(double scale)? onZoom;
   final void Function(String json)? onSelect;
+  final void Function(bool canUndo, bool canRedo)? onHistory;
 
   @override
   State<BlocklyEditor> createState() => BlocklyEditorState();

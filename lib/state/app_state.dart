@@ -1086,6 +1086,18 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    // Libraries decides what a sketch may #include (L-04), even though the server has them all.
+    final missing = missingLibraries([for (final f in p.files) SourceFile(f.name, f.content)], installedLibs);
+    if (missing.isNotEmpty) {
+      problems = missing;
+      for (final e in missing) {
+        outLine('${e.file}:${e.line}: error: ${e.msg}', 'err');
+      }
+      panelTab = 'problems';
+      setStatus('Errors', 'err');
+      notifyListeners();
+      return;
+    }
     busy = flash ? 'upload' : 'verify';
     final sw = Stopwatch()..start();
     outLine('Compiling ${p.files.first.name} for ${b.full} on the compile server…', 'info');
@@ -1264,6 +1276,27 @@ class AppState extends ChangeNotifier {
     file = i;
     closedTabs.remove(i);
     notifyListeners();
+  }
+
+  /// A new tab name: letters, numbers, _ or -, then .ino .h .hpp .c or .cpp, unique in the sketch (CD-03).
+  String? validateFileName(Project p, String name) {
+    final t = name.trim();
+    if (t.isEmpty) return 'Give the file a name, such as motors.h.';
+    if (!RegExp(r'^[A-Za-z][A-Za-z0-9_-]{0,63}\.(ino|h|hpp|c|cpp)$').hasMatch(t)) {
+      return 'Letters, numbers, _ or -, then .ino, .h, .hpp, .c or .cpp';
+    }
+    if (p.files.any((f) => f.name.toLowerCase() == t.toLowerCase())) return 'This sketch already has a file called $t.';
+    return null;
+  }
+
+  void addFile(Project p, String name) {
+    final t = name.trim();
+    final header = t.endsWith('.h') || t.endsWith('.hpp');
+    p.files.add(ProjectFile(t, header ? '// $t\n#pragma once\n\n' : '// $t\n\n'));
+    p.mode = 'code';
+    openFile(p.files.length - 1);
+    touch(p, immediate: true);
+    showToast(header ? 'Added $t. Use it with #include "$t".' : 'Added $t.');
   }
 
   void closeTab(int i) {

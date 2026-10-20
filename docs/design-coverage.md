@@ -9,9 +9,9 @@ when you finish it.
 
 | Part | Done | Partly | Missing | Score | At the first audit (20 Oct) |
 |---|---|---|---|---|---|
-| Behaviour spec (145 rows) | 125 | 13 | 7 | **131.5 / 145 = 91 %** | 117 / 145 = 81 % |
+| Behaviour spec (145 rows) | 133 | 7 | 5 | **136.5 / 145 = 94 %** | 117 / 145 = 81 % |
 | Block catalogue (74 blocks, 10 categories) | 25 (old wording, old categories) | | 49 | **25 / 74 = 34 %** | 34 % |
-| Both together | | | | **156.5 / 219 = 71 %** | 65 % |
+| Both together | | | | **161.5 / 219 = 74 %** | 65 % |
 
 Not counted: things only real hardware can prove (upload, reset and unplug on a RoboCore V2, which arrives about
 11 November) and Cog with a real Claude key (tested only against a stand-in API).
@@ -76,12 +76,11 @@ The page also has its **New project** button, as in Figma.
 |---|---|---|
 | EX-01 … EX-04 | Done | A card opens the preview; Open as new project copies it |
 
-### L — Libraries (3 / 4)
+### L — Libraries (4 / 4)
 
 | ID | Status | Note |
 |---|---|---|
-| L-01 … L-03 | Done | |
-| L-04 “<Library> is not installed” | Missing | The raw compiler error shows instead |
+| L-01 … L-04 | Done | “NewPing is not installed. Install it in Libraries.”, also before a compile on the server |
 
 ### B — Board Setup (9.5 / 10)
 
@@ -113,13 +112,13 @@ Laid out in two columns on wide windows, as in Figma.
 | E-01 … E-06, E-08 … E-13 | Done | The project name opens Rename…, Project settings…, Duplicate, Download, Delete project… |
 | E-07 Stop | Partly | Stops the simulator; can't cancel an upload |
 
-### BK — Blocks (16 / 23)
+### BK — Blocks (17 / 23)
 
 | ID | Status | Note |
 |---|---|---|
 | BK-01 … BK-08, BK-11 … BK-15, BK-17 | Done | Blockly |
-| BK-09 Undo / Redo | Partly | Buttons never look off |
-| BK-10 Delete all | Partly | “Click again”, not a dialog |
+| BK-09 Undo / Redo | Done | Greyed out when Blockly has nothing to undo or redo |
+| BK-10 Delete all | Done | “Delete all 6 blocks?” dialog; Undo brings them back |
 | BK-16 Selection + keyboard | Partly | Keyboard navigation not checked |
 | BK-18 Ten categories | Missing | Still the old 8 |
 | BK-19 Robot blocks | Missing | |
@@ -128,16 +127,18 @@ Laid out in two columns on wide windows, as in Figma.
 | BK-22 Make a block | Missing | |
 | BK-23 Library helpers | Missing | 31 helpers to add to the RoboCore library |
 
-### CD — Code (9 / 12)
+### CD — Code (12 / 12)
 
 | ID | Status | Note |
 |---|---|---|
-| CD-02, CD-04, CD-07, CD-09 … CD-12 | Done | |
-| CD-01 Generated / edited banner | Partly | A toast, and a note in the blocks pane; no banner over the code |
-| CD-03 File tabs | Partly | No **+** to add a file |
-| CD-05 Parameter hints | Missing | |
-| CD-06 Hover | Partly | No Arduino reference link |
-| CD-08 Quick fix | Partly | Explain with Cog only; no spelling fix |
+| CD-01 Banner | Done | Generated / You edited this file (Rebuild from blocks) / C++ project |
+| CD-02 Rebuild from blocks | Done | Asks first |
+| CD-03 File tabs | Done | **+** adds a .ino, .h, .hpp, .c or .cpp tab |
+| CD-04 Suggestions | Done | Arduino + RoboCore API with a line of docs each (lib/data/arduino_api.dart) |
+| CD-05 Parameter hints | Done | The argument you are typing is bold |
+| CD-06 Hover | Done | Signature, doc and the Arduino reference link (each link checked) |
+| CD-07, CD-09 … CD-12 | Done | |
+| CD-08 Quick fix | Done | “Change spelling to 'digitalWrite'” from the compiler, and Explain with Cog |
 
 ### C — Console (6 / 6)
 

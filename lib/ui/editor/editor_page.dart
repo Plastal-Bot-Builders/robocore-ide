@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../data/arduino_api.dart';
 import '../../data/catalog.dart';
 import '../../engine/blockly_convert.dart';
 import '../../engine/compiler.dart' show Problem;
@@ -13,6 +14,7 @@ import '../../state/models.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../cog/cog_panel.dart';
+import '../dialogs.dart' show DialogFrame, FieldLabel;
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/serial_log.dart';
@@ -28,7 +30,7 @@ class EditorPage extends StatefulWidget {
 }
 
 class _EditorPageState extends State<EditorPage> {
-  bool confirmClear = false;
+  bool _canUndo = false, _canRedo = false; // Blockly's undo stack (BK-09)
   final Map<String, GlobalKey<CodeViewState>> _keys = {};
   GlobalKey<CodeViewState>? _active;
 
@@ -106,6 +108,10 @@ class _EditorPageState extends State<EditorPage> {
                       ],
                     ]),
                   ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 4),
+                  child: IconBtn('plus', onTap: () => _newTab(context, s, p), tip: 'New tab', size: 28, iconSize: 16),
+                ),
               ]),
             ),
           )
@@ -150,28 +156,10 @@ class _EditorPageState extends State<EditorPage> {
                 onTap: () => setState(() => _showCpp = !_showCpp),
                 active: _showCpp,
                 tip: _showCpp ? 'Hide the C++ from the blocks' : 'Show the C++ from the blocks'),
-          IconBtn('undo', onTap: kWebEditors ? () => _blockly.currentState?.undo() : s.undo, tip: 'Undo'),
-          IconBtn('redo', onTap: kWebEditors ? () => _blockly.currentState?.redo() : s.redo, tip: 'Redo'),
-          IconBtn('trash',
-              tip: confirmClear ? 'Click again to remove every block' : 'Clear all blocks',
-              active: confirmClear,
-              color: confirmClear ? c.err : null, onTap: () {
-            if (!confirmClear) {
-              setState(() => confirmClear = true);
-              s.showToast('Click the bin again to remove every block. You can undo this.');
-              Future<void>.delayed(const Duration(seconds: 4), () {
-                if (mounted) setState(() => confirmClear = false);
-              });
-              return;
-            }
-            setState(() => confirmClear = false);
-            if (kWebEditors) {
-              _blockly.currentState?.clear();
-              s.showToast('All blocks removed. Press Undo to bring them back.');
-            } else {
-              s.clearBlocks();
-            }
-          }),
+          // Greyed out when there is nothing to undo or redo (BK-09).
+          IconBtn('undo', onTap: kWebEditors ? (_canUndo ? () => _blockly.currentState?.undo() : null) : s.undo, tip: 'Undo ($kMod+Z)'),
+          IconBtn('redo', onTap: kWebEditors ? (_canRedo ? () => _blockly.currentState?.redo() : null) : s.redo, tip: 'Redo ($kMod+Shift+Z)'),
+          IconBtn('trash', tip: 'Delete all blocks', onTap: () => _confirmClear(context, s, p)),
         ],
       ]),
     );
@@ -181,14 +169,21 @@ class _EditorPageState extends State<EditorPage> {
     if (!kWebEditors) {
       main = p.mode == 'blocks'
           ? const BlocksView()
-          : CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines);
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              _codeBanner(context, s, c, p, fi),
+              Expanded(child: CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines)),
+            ]);
     } else {
       // Both editors stay loaded while the project is open, so Blocks ↔ C++ is instant and Blockly
       // keeps its undo history; the hidden one is only not painted (its iframe stays in the page).
       main = IndexedStack(
         index: p.mode == 'blocks' ? 0 : 1,
         sizing: StackFit.expand,
-        children: [_blocklyArea(s, c, p, width), _monacoFor(s, c, p, fi)],
+        children: [
+          _blocklyArea(s, c, p, width),
+          // The banner always takes this slot, so Monaco's frame never moves (moving it would reload it).
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_codeBanner(context, s, c, p, fi), Expanded(child: _monacoFor(s, c, p, fi))]),
+        ],
       );
       _takeGotoLine(s, p);
     }
@@ -268,7 +263,7 @@ class _EditorPageState extends State<EditorPage> {
         'wrap': s.settings.wrap,
         'autocomplete': s.settings.autocomplete,
         'words': [
-          for (final w in acWords) [w.$1, w.$2]
+          for (final e in kApi) [e.name, e.params, e.doc, e.url]
         ],
       };
 
@@ -288,6 +283,10 @@ class _EditorPageState extends State<EditorPage> {
         'theme': c.dark ? 'navy' : 'paper',
       },
       onChange: (json, code, count) => s.setBlockly(json, code, count: count),
+      onHistory: (u, r) => setState(() {
+        _canUndo = u;
+        _canRedo = r;
+      }),
       onSelect: (json) {
         if (json.isEmpty) return s.cog.selectBlock(null);
         final b = (jsonDecode(json) as Map).cast<String, dynamic>();
@@ -332,7 +331,7 @@ class _EditorPageState extends State<EditorPage> {
                   child: Row(children: [
                     Text('C++ FROM THE BLOCKS', style: tOverline(c)),
                     const Spacer(),
-                    if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: s.rebuildFromBlocks),
+                    if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: () => _confirmRebuild(context, s, p)),
                   ]),
                 ),
                 if (p.codeEdited)
@@ -357,6 +356,97 @@ class _EditorPageState extends State<EditorPage> {
         ),
       ]);
     });
+  }
+
+  /// The strip above the code (CD-01): generated from the blocks, edited by hand, or a C++ project.
+  Widget _codeBanner(BuildContext context, AppState s, RC c, Project p, int fi) {
+    final fromBlocks = fi == 0 && (p.blockly != null || p.setup.isNotEmpty || p.loop.isNotEmpty);
+    final String text;
+    final String icon;
+    if (fromBlocks && !p.codeEdited) {
+      icon = 'blocks';
+      text = 'Generated from your blocks. If you type here, this file becomes C++ and the blocks stop changing it.';
+    } else if (fromBlocks) {
+      icon = 'pencil';
+      text = 'You edited this file, so the blocks no longer change it.';
+    } else {
+      icon = 'code';
+      text = 'C++ project. Ctrl+Space shows suggestions; $kMod+F finds; $kMod+. offers quick fixes.';
+    }
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.only(left: 12, right: 8),
+      decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
+      child: Row(children: [
+        RcIcon(icon, size: 16, color: c.ink),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, style: tLabel(c, w: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
+        if (fromBlocks && p.codeEdited) ...[
+          const SizedBox(width: 8),
+          Btn('Rebuild from blocks', icon: 'repeat', small: true, height: 28, onTap: () => _confirmRebuild(context, s, p)),
+        ],
+      ]),
+    );
+  }
+
+  /// “Rebuild the code from your blocks?” (CD-02).
+  void _confirmRebuild(BuildContext context, AppState s, Project p) {
+    showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) {
+        void go() {
+          Navigator.of(dctx).pop();
+          s.rebuildFromBlocks();
+        }
+
+        return DialogFrame(
+          title: 'Rebuild the code from your blocks?',
+          subtitle: 'Your typed changes in ${p.files.first.name} are replaced by the code the blocks generate.',
+          onSubmit: go,
+          actions: [
+            Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+            Btn('Rebuild', icon: 'repeat', kind: BtnKind.primary, onTap: go),
+          ],
+        );
+      },
+    );
+  }
+
+  /// “Delete all N blocks?” (BK-10). Undo brings them back.
+  void _confirmClear(BuildContext context, AppState s, Project p) {
+    final n = p.blocklyCount ?? p.setup.length + p.loop.length;
+    if (n == 0) return s.showToast('There are no blocks to delete.');
+    showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) {
+        void go() {
+          Navigator.of(dctx).pop();
+          if (kWebEditors) {
+            _blockly.currentState?.clear();
+            s.showToast('All blocks deleted. Undo ($kMod+Z) brings them back.');
+          } else {
+            s.clearBlocks();
+          }
+        }
+
+        return DialogFrame(
+          title: 'Delete all $n block${n == 1 ? '' : 's'}?',
+          subtitle: 'Undo ($kMod+Z) brings them back.',
+          onSubmit: go,
+          actions: [
+            Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+            Btn('Delete', icon: 'trash', kind: BtnKind.primary, onTap: go),
+          ],
+        );
+      },
+    );
+  }
+
+  /// “New tab” (CD-03): a .ino, .h or .cpp file in this sketch.
+  void _newTab(BuildContext context, AppState s, Project p) {
+    showDialog<void>(context: context, barrierColor: const Color(0x521B2A41), builder: (_) => _NewTabDialog(s: s, p: p));
   }
 
   Widget _monacoFor(AppState s, RC c, Project p, int fi) {
@@ -691,6 +781,63 @@ class _ExplainBar extends StatelessWidget {
         const SizedBox(width: 8),
         CogExplainButton(problem: problem, label: 'Explain with Cog'),
       ]),
+    );
+  }
+}
+
+class _NewTabDialog extends StatefulWidget {
+  const _NewTabDialog({required this.s, required this.p});
+  final AppState s;
+  final Project p;
+  @override
+  State<_NewTabDialog> createState() => _NewTabDialogState();
+}
+
+class _NewTabDialogState extends State<_NewTabDialog> {
+  final _name = TextEditingController();
+  String? error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _add() {
+    final e = widget.s.validateFileName(widget.p, _name.text);
+    if (e != null) {
+      setState(() => error = e);
+      return;
+    }
+    Navigator.of(context).pop();
+    widget.s.addFile(widget.p, _name.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return DialogFrame(
+      title: 'New tab',
+      subtitle: 'Add a .ino, .h or .cpp file to this sketch.',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const FieldLabel('File name'),
+        RcInput(
+          controller: _name,
+          hint: 'motors.h',
+          height: 36,
+          fontSize: 14,
+          autofocus: true,
+          error: error != null,
+          onChanged: (_) => setState(() => error = null),
+          onSubmitted: (_) => _add(),
+        ),
+        const SizedBox(height: 6),
+        Text(error ?? 'Letters, numbers, _ or -, then .ino, .h, .hpp, .c or .cpp', style: tCaption(c, color: error != null ? c.err : c.faint)),
+      ]),
+      actions: [
+        Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),
+        Btn('Add tab', icon: 'plus', kind: BtnKind.primary, onTap: _add),
+      ],
     );
   }
 }

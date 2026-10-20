@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/arduino_api.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../widgets/common.dart';
@@ -16,16 +17,8 @@ final _tokRe = RegExp(
     multiLine: true);
 final _constRe = RegExp(r'^(HIGH|LOW|INPUT|OUTPUT|INPUT_PULLUP|LED_BUILTIN|RGB_BUILTIN|HEX|DEC|BIN|A\d)$|^[A-Z][A-Z0-9_]{2,}$');
 
-const acWords = [
-  ('pinMode', '(pin, mode)'), ('digitalWrite', '(pin, value)'), ('digitalRead', '(pin)'), ('analogRead', '(pin)'), //
-  ('analogWrite', '(pin, value)'), ('delay', '(ms)'), ('delayMicroseconds', '(us)'), ('millis', '()'), ('micros', '()'),
-  ('Serial.begin', '(baud)'), ('Serial.print', '(value)'), ('Serial.println', '(value)'), ('Serial.available', '()'),
-  ('Serial.read', '()'), ('Serial.readStringUntil', '(char)'), ('tone', '(pin, freq, ms)'), ('noTone', '(pin)'),
-  ('random', '(min, max)'), ('map', '(x, a, b, c, d)'), ('constrain', '(x, lo, hi)'), ('rgbLedWrite', '(pin, r, g, b)'),
-  ('motors.drive', '(left, right)'), ('motors.stop', '()'), ('motors.begin', '()'), ('sonar.distanceCm', '()'),
-  ('line.read', '()'), ('imu.temperature', '()'), ('imu.tiltDeg', '()'), ('HIGH', ''), ('LOW', ''), ('INPUT', ''),
-  ('OUTPUT', ''), ('INPUT_PULLUP', ''), ('LED_BUILTIN', ''), ('RGB_BUILTIN', ''),
-];
+/// Suggestions for the built-in code view (native apps): names and parameters from [kApi].
+final acWords = [for (final e in kApi) (e.name, e.params)];
 
 class CodeController extends TextEditingController {
   CodeController({super.text});

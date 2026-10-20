@@ -403,11 +403,19 @@
     return l.join('\n');
   }
 
-  let ws = null, onBlocksChange = null, onZoom = null, onSelect = null, loading = false, timer = 0, lastScale = 0, lastSelection = '';
+  let ws = null, onBlocksChange = null, onZoom = null, onSelect = null, onHistory = null, loading = false, timer = 0, lastScale = 0, lastSelection = '', lastHistory = '';
   const START_SCALE = 0.9;
 
   function reportZoom() {
     if (ws && onZoom && ws.scale !== lastScale) { lastScale = ws.scale; onZoom(ws.scale); }
+  }
+
+  // Whether Undo and Redo have anything to do, so the app can grey its buttons out (BK-09).
+  function reportHistory() {
+    if (!ws || !onHistory) return;
+    const u = ws.getUndoStack().length > 0, r = ws.getRedoStack().length > 0;
+    const k = `${u}${r}`;
+    if (k !== lastHistory) { lastHistory = k; onHistory(u, r); }
   }
 
   // How a block reads (its own words, not the blocks inside it) and the C++ it makes, for Cog.
@@ -478,13 +486,15 @@
   }
 
   const blocksApi = {
-    async mount(optionsJson, json, tidy, onChange, onZoomChange, onSelectBlock) {
+    async mount(optionsJson, json, tidy, onChange, onZoomChange, onSelectBlock, onHistoryChange) {
       await ready;
       const o = JSON.parse(optionsJson);
       blocksOptions(o);
       onBlocksChange = onChange;
       onZoom = onZoomChange;
       onSelect = onSelectBlock || null;
+      onHistory = onHistoryChange || null;
+      lastHistory = '';
       lastScale = 0;
       setTheme(o.theme);
       ws = Blockly.inject(document.getElementById('host'), {
@@ -506,6 +516,8 @@
       ws.addChangeListener((e) => {
         if (e.type === Blockly.Events.VIEWPORT_CHANGE) reportZoom();
         if (e.type === Blockly.Events.SELECTED) reportSelection();
+        // After Blockly has put the event on its undo stack.
+        setTimeout(reportHistory, 0);
         if (loading || e.isUiEvent) return;
         emitBlocks();
       });
@@ -519,8 +531,9 @@
       });
       loadWorkspace(json, tidy);
       reportZoom();
+      setTimeout(reportHistory, 0);
     },
-    load(json, tidy) { if (ws) loadWorkspace(json, tidy); },
+    load(json, tidy) { if (ws) { loadWorkspace(json, tidy); setTimeout(reportHistory, 0); } },
     setOptions(optionsJson) {
       const o = JSON.parse(optionsJson);
       const nameOrBoard = (o.name != null && o.name !== CTX.name) || (o.board && o.board !== CTX.board);
@@ -589,7 +602,15 @@
     });
   }
 
-  // Suggestions and hovers from the app's Arduino + RoboCore word list ([name, '(params)']).
+  // Suggestions, parameter hints and hovers from the app's Arduino + RoboCore list
+  // ([name, '(params)', doc, reference url], lib/data/arduino_api.dart).
+  const apiDoc = ([, , doc, url]) => (doc || '') + (url ? `\n\n[Arduino reference](${url})` : '');
+  // The entry for a name as typed: exact, or by its last part (myMotors.drive → motors.drive).
+  const apiFind = (name) => {
+    const last = name.split(/::|\./).pop();
+    return words.find(([w]) => w === name) || words.find(([w]) => w.endsWith('.' + last) || w.endsWith('::' + last)) || null;
+  };
+
   function registerProviders() {
     monaco.languages.registerCompletionItemProvider('cpp', {
       triggerCharacters: ['.'],
@@ -599,35 +620,90 @@
         const typed = m ? m[0] : '';
         const range = new monaco.Range(pos.lineNumber, pos.column - typed.length, pos.lineNumber, pos.column);
         return {
-          suggestions: words.map(([w, params]) => ({
+          suggestions: words.map((e) => { const [w, params] = e; return {
             label: w,
             kind: params ? monaco.languages.CompletionItemKind.Function : monaco.languages.CompletionItemKind.Constant,
             detail: w + (params || ''),
+            documentation: { value: apiDoc(e) },
             insertText: params ? w + '($0)' : w,
             insertTextRules: params ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
             range,
-          })),
+          }; }),
+        };
+      },
+    });
+    // Parameter hints (CD-05): the signature with the argument you are typing in bold.
+    monaco.languages.registerSignatureHelpProvider('cpp', {
+      signatureHelpTriggerCharacters: ['(', ','],
+      signatureHelpRetriggerCharacters: [','],
+      provideSignatureHelp(model, pos) {
+        const text = model.getValueInRange({ startLineNumber: Math.max(1, pos.lineNumber - 5), startColumn: 1, endLineNumber: pos.lineNumber, endColumn: pos.column });
+        let depth = 0, commas = 0, i = text.length - 1, quote = null;
+        for (; i >= 0; i--) {
+          const ch = text[i];
+          if (quote) { if (ch === quote && text[i - 1] !== '\\') quote = null; continue; }
+          if (ch === '"' || ch === "'") quote = ch;
+          else if (ch === ')') depth++;
+          else if (ch === '(') { if (depth === 0) break; depth--; }
+          else if (ch === ',' && depth === 0) commas++;
+          else if (ch === ';' || ch === '{' || ch === '}') return null;
+        }
+        if (i < 0) return null;
+        const m = /([A-Za-z_][\w.:]*)\s*$/.exec(text.slice(0, i));
+        const hit = m && apiFind(m[1]);
+        if (!hit || !hit[1]) return null;
+        const params = hit[1].replace(/^\(|\)$/g, '').split(',').map((x) => x.trim()).filter(Boolean);
+        // Offsets, so “pin” in pinMode(pin, mode) marks the argument, not the start of the name.
+        let at = hit[0].length + 1;
+        const parts = params.map((x) => { const r = [at, at + x.length]; at += x.length + 2; return { label: r }; });
+        return {
+          value: {
+            signatures: [{ label: hit[0] + '(' + params.join(', ') + ')', documentation: { value: apiDoc(hit) }, parameters: parts }],
+            activeSignature: 0,
+            activeParameter: Math.min(commas, Math.max(0, params.length - 1)),
+          },
+          dispose() {},
         };
       },
     });
     monaco.languages.registerHoverProvider('cpp', {
       provideHover(model, pos) {
         const line = model.getLineContent(pos.lineNumber);
-        const re = /[A-Za-z_][\w.]*/g;
+        const re = /[A-Za-z_][\w.:]*/g;
         let m;
         while ((m = re.exec(line))) {
           if (pos.column - 1 >= m.index && pos.column - 1 <= m.index + m[0].length) {
-            const hit = words.find(([w]) => w === m[0]) || words.find(([w]) => w.endsWith('.' + m[0]));
+            const hit = apiFind(m[0]);
             if (!hit) return null;
+            // Signature, a short doc and the Arduino reference link (CD-06).
             return {
               range: new monaco.Range(pos.lineNumber, m.index + 1, pos.lineNumber, m.index + m[0].length + 1),
-              contents: [{ value: '```cpp\n' + hit[0] + (hit[1] || '') + '\n```' }],
+              contents: [{ value: '```cpp\n' + hit[0] + (hit[1] || '') + '\n```' }, { value: apiDoc(hit) }],
             };
           }
         }
         return null;
       },
     });
+  }
+
+  // “Change spelling to 'digitalWrite'”: from gcc's “did you mean …”, or a known name that differs only in case.
+  function spellingFix(model, m) {
+    const word = model.getWordAtPosition({ lineNumber: m.startLineNumber, column: m.startColumn });
+    if (!word) return null;
+    let to = (/did you mean '([\w:.]+)'/.exec(m.message) || [])[1];
+    if (to) to = to.split(/::|\./).pop();
+    if (!to) {
+      const lower = word.word.toLowerCase();
+      const hit = words.find(([w]) => w.split(/::|\./).pop().toLowerCase() === lower);
+      if (hit) to = hit[0].split(/::|\./).pop();
+    }
+    if (!to || to === word.word) return null;
+    return {
+      title: `Change spelling to '${to}'`, kind: 'quickfix', diagnostics: [m], isPreferred: true,
+      edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: {
+        range: new monaco.Range(m.startLineNumber, word.startColumn, m.startLineNumber, word.endColumn), text: to } }] },
+    };
   }
 
   function codeOptions(o) {
@@ -681,19 +757,27 @@
       editor.onDidChangeCursorPosition((e) => {
         if (onCursor) onCursor(e.position.lineNumber, e.position.column);
       });
+      // Quick fixes on compile problems (lightbulb, Ctrl+. or the hover): the compiler's spelling suggestion
+      // (CD-08), and Explain with Cog.
+      const explain = onExplain ? editor.addCommand(0, (_, line) => onExplain(line)) : null;
+      monaco.languages.registerCodeActionProvider('cpp', {
+        provideCodeActions(model, range, context) {
+          const marks = context.markers.filter((m) => m.owner === 'arduino-cli').slice(0, 1);
+          const actions = [];
+          for (const m of marks) {
+            const fix = spellingFix(model, m);
+            if (fix) actions.push(fix);
+            if (explain) {
+              actions.push({
+                title: 'Explain with Cog', kind: 'quickfix', diagnostics: [m], isPreferred: false,
+                command: { id: explain, title: 'Explain with Cog', arguments: [m.startLineNumber] },
+              });
+            }
+          }
+          return { actions, dispose() {} };
+        },
+      });
       if (onExplain) {
-        // Explain with Cog: a quick fix on compile problems (lightbulb, Ctrl+. or the hover) and in the menu.
-        const explain = editor.addCommand(0, (_, line) => onExplain(line));
-        monaco.languages.registerCodeActionProvider('cpp', {
-          provideCodeActions(model, range, context) {
-            const marks = context.markers.filter((m) => m.owner === 'arduino-cli');
-            const actions = marks.slice(0, 1).map((m) => ({
-              title: 'Explain with Cog', kind: 'quickfix', diagnostics: [m], isPreferred: false,
-              command: { id: explain, title: 'Explain with Cog', arguments: [m.startLineNumber] },
-            }));
-            return { actions, dispose() {} };
-          },
-        });
         editor.addAction({
           id: 'robocore.explainWithCog', label: 'Explain with Cog', contextMenuGroupId: '1_cog', contextMenuOrder: 0,
           run: (ed) => onExplain(ed.getPosition().lineNumber),
