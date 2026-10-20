@@ -139,8 +139,9 @@ class LibDef {
 
 /// The RoboCore library (firmware/RoboCore) is one Arduino library with three headers.
 const kLibs = [
-  LibDef('robocore', 'RoboCore', '1.0.0', 'RoboCore.h', 'included', 'v2', [],
-      'Pin names (RC_PIN_…), battery voltage, USER button, buzzer and RGB helpers, plus motors and sensors.'),
+  LibDef('robocore', 'RoboCore', '1.0.0', 'RoboCore.h', 'included', 'v2', ['RoboCoreDrive', 'RoboCoreServos', 'RoboCoreEdge'],
+      'Everything in one include: pin names (RC_PIN_…), motors, sensors, the driving base (move, turn), servos, '
+          'battery, USER button, buzzer, melodies, RGB LED and timer.'),
   LibDef('motors', 'RoboCore Motors', '1.0.0', 'RoboCoreMotors.h', 'included', 'v2', ['RoboCoreMotors'],
       'Drive the two motor ports with encoder feedback.'),
   LibDef('sensors', 'RoboCore Sensors', '1.0.0', 'RoboCoreSensors.h', 'included', 'v2', ['Sonar', 'LineSensor', 'IMU'],
@@ -155,10 +156,17 @@ const kLibs = [
 ];
 
 /// Other headers that belong to a library above.
-const kHeaderAlias = {'RoboCoreV2Pins.h': 'RoboCore.h'};
+const kHeaderAlias = {'RoboCoreV2Pins.h': 'RoboCore.h', 'RoboCoreDrive.h': 'RoboCore.h', 'RoboCoreServos.h': 'RoboCore.h'};
 
 /// Libraries whose headers give a sketch the RoboCore V2 pin names (RC_PIN_…).
 const kRoboCoreLibs = {'robocore', 'motors', 'sensors'};
+
+/// The RoboCore library's own names (sides, units, directions, tunes), as in firmware/RoboCore/src.
+const kRoboCoreConsts = <String, num>{
+  'LEFT': 0, 'RIGHT': 1, 'BACKWARD': -1, 'FORWARD': 1, 'CM': 0, 'ROTATIONS': 1, 'DEGREES': 2, 'SECONDS': 3, //
+  'MELODY_POWER_UP': 0, 'MELODY_POWER_DOWN': 1, 'MELODY_SUCCESS': 2, 'MELODY_ERROR': 3, 'MELODY_ALARM': 4,
+  'RC_COUNTS_PER_WHEEL_TURN': 292.5,
+};
 
 const kConfigH = '''// config.h — shared settings for this project
 #pragma once
@@ -181,6 +189,12 @@ class Example {
   /// Needs the real board: uses C++ the preview board can't run (Upload to a board on USB-C).
   final bool realOnly;
 
+  /// A Blockly workspace (Blockly's JSON) for examples made with the hardware-first blocks; [code] is its C++.
+  final String? blockly;
+
+  /// Opens with blocks (the old lists, or a Blockly workspace).
+  bool get hasBlocks => blocks != null || blockly != null;
+
   const Example({
     required this.id,
     required this.name,
@@ -196,6 +210,7 @@ class Example {
     this.v2,
     this.v2Blocks,
     this.realOnly = false,
+    this.blockly,
   });
 
   /// The sketch for [board]: the library's own example on the RoboCore V2.
@@ -219,6 +234,7 @@ const kExIcon = {
   'motors': 'robot',
   'imu': 'msg',
   'obstacle': 'bolt',
+  'robot_avoider': 'robot',
   'melody': 'music',
   'rgb': 'light',
   'line': 'robot',
@@ -528,6 +544,48 @@ void loop() {
     motors.drive(60, 60);
   }
   delay(250);
+}
+''',
+  ),
+  Example(
+    id: 'robot_avoider',
+    name: 'Robot obstacle avoider',
+    proj: 'Robot avoider',
+    file: 'RobotAvoider',
+    cat: 'Robotics',
+    level: 'Beginner',
+    desc: 'Drives forward, and beeps and turns right at anything closer than 20 cm. USER stops it.',
+    tag: 'The robot blocks',
+    boards: 'RoboCore V2',
+    blockly: r'''{"blocks":{"languageVersion":0,"blocks":[{"type":"rc_on_start","x":24,"y":24,"inputs":{"DO":{"block":{"type":"rc_move_speed","inputs":{"PCT":{"shadow":{"type":"math_number","fields":{"NUM":50}}}}}}}},{"type":"rc_forever","x":24,"y":168,"inputs":{"DO":{"block":{"type":"controls_if","extraState":{"hasElse":true},"inputs":{"IF0":{"block":{"type":"rc_closer","inputs":{"CM":{"shadow":{"type":"math_number","fields":{"NUM":20}}}}}},"DO0":{"block":{"type":"rc_stop_moving","next":{"block":{"type":"rc_beep","fields":{"NOTE":"C5"},"inputs":{"SECS":{"shadow":{"type":"math_number","fields":{"NUM":0.2}}}},"next":{"block":{"type":"rc_turn","fields":{"DIR":"right"},"inputs":{"DEG":{"shadow":{"type":"math_number","fields":{"NUM":90}}}}}}}}}},"ELSE":{"block":{"type":"rc_start_moving","fields":{"DIR":"forward"}}}}}}}},{"type":"rc_when_user","x":460,"y":24,"inputs":{"DO":{"block":{"type":"rc_stop_moving","next":{"block":{"type":"rc_stop_program"}}}}}}]}}''',
+    code: r'''// Robot avoider
+// Made with blocks in RoboCore IDE.
+
+#include <RoboCore.h>
+
+RoboCoreMotors motors;
+Sonar sonar;
+IMU imu;
+RoboCoreDrive robot(motors, imu);
+
+void setup() {
+  motors.begin();
+  sonar.begin();
+  robot.setSpeed(50);
+}
+
+void loop() {
+  if (RoboCore::userJustPressed()) {
+    robot.stop();
+    RoboCore::stopProgram();
+  }
+  if (sonar.distanceCm() < 20) {
+    robot.stop();
+    RoboCore::beep(523, 200);  // C5
+    robot.turn(90);
+  } else {
+    robot.start(FORWARD);
+  }
 }
 ''',
   ),

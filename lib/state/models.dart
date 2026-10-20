@@ -115,6 +115,23 @@ Project projectFrom(Example ex, {String? name, String board = 'v2', String? mode
   final nm = name ?? ex.proj;
   final blocks = ex.blocksFor(board);
   final code = ex.codeFor(board);
+  if (ex.blockly != null) {
+    // Made with the hardware-first blocks: the workspace, and the C++ it generates.
+    return Project(
+      id: uid(),
+      name: nm,
+      board: board,
+      mode: mode == 'code' ? 'code' : 'blocks',
+      setup: [],
+      loop: [],
+      files: [ProjectFile('${ex.file ?? fileBase(nm)}.ino', code)],
+      codeEdited: false,
+      autosave: true,
+      updated: updated ?? DateTime.now().millisecondsSinceEpoch,
+      blockly: ex.blockly,
+      blocklyCode: code,
+    );
+  }
   final hasBlocks = blocks != null;
   final m = (mode != null && (mode == 'code' || hasBlocks)) ? mode : (hasBlocks ? 'blocks' : 'code');
   final p = Project(

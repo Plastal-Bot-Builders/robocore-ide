@@ -44,13 +44,23 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
 - **AppState stays the source of truth.** Every Blockly change sends the workspace (Blockly JSON), the C++ and the
   block count to `AppState.setBlockly`. The project saves them as `blockly` and `blocklyCode`; the main `.ino` follows
   the blocks until it is edited by hand (then the C++ pane offers *Use the blocks again*).
+- **The block set** is the design's hardware-first catalogue (RoboCore_IDE_Design/docs/block-catalogue.md):
+  10 categories (Events, Movement, Motors, Light & Sound, Sensors, Control, Operators, Variables, My Blocks, Pins &
+  Serial) and 74 blocks. Numbers are value slots, so a sensor can go in (“move forward for (distance) cm”). Blocks
+  from the first set keep their types: those that mean the same took the new words (*turn LED on*), the others still
+  load and generate but are not in the toolbox.
 - **Old projects and the examples** still store blocks as `{setup, loop}` lists. `blocklyFromLists`
-  (lib/engine/blockly_convert.dart) turns them into a Blockly workspace when they open. An edit in the old Flutter
-  block editor (native apps) clears the Blockly workspace, so whichever editor changed the blocks last wins.
-- **The C++ generator** (in robocore_editors.js) writes the same sketch as `genBlocks` for the old blocks: checked for
-  all 15 example/board pairs (byte-identical), so the preview board, the compile server and the RoboCore library see
-  no difference. New blocks: if / else, repeat, while, compare, and / or / not, true / false, arithmetic, random,
-  variables (Blockly's), *USER pressed?*, *distance (cm)*, *line position*, *print value*, text.
+  (lib/engine/blockly_convert.dart) turns them into the new blocks when they open (drive → *drive left % right %*,
+  stop → *stop moving*, tone → *play beep*, …). Examples can also hold a Blockly workspace (`Example.blockly`, the
+  *Robot obstacle avoider*). An edit in the old Flutter block editor (native apps) clears the Blockly workspace, so
+  whichever editor changed the blocks last wins.
+- **The C++ generator** (in robocore_editors.js) writes one `#include <RoboCore.h>`, the objects the blocks need
+  (`motors`, `sonar`, `line`, `imu`, `robot`, `servos`), variables typed from what they hold (int, float or String),
+  My Blocks and “when I receive” as functions, and the “when …” hats as `if (…justHappened()) { … }` at the top of
+  `loop()`. Variable names that mean something in C++, Arduino or RoboCore get another name (`word` → `word2`).
+  `rcEditor.toolbox` and `rcEditor.generateFor()` exist for checks: a workspace with every toolbox block generates
+  test/fixtures/all_blocks.ino, which compiles with arduino-cli for the ESP32-S3 and runs in the preview board
+  (test/blocks_sim_test.dart). The library helpers behind the blocks are in firmware/RoboCore (README).
 
 ## What was checked
 
@@ -65,6 +75,8 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
 - Navy theme, font size, word wrap and autocomplete are passed to both editors but were not checked by eye.
 - Verify problems → Monaco markers and *click a problem → jump to the line* are wired but not tried in the app.
 - Monaco's prebuilt (AMD) build is deprecated upstream: bundle the ESM build with only the C++ parts later.
-- No automated check of the JS generator in CI yet (it could run Blockly headless in Node against fixtures from Dart).
+- No automated check of the JS generator in CI yet: all_blocks.ino was made by hand in a browser; CI could rebuild it
+  headless and compile it for the ESP32-S3.
 - Desktop / mobile apps: Blockly and Monaco need a WebView there (or the Electron route for desktop).
-- Spec items not built: Cog, Quick Fix / Explain lens, hover links to the Arduino reference, comments export.
+- The real robot: how far *move* and *turn* go, the yaw direction and the encoder counts per wheel turn (292.5
+  assumed) need checking once the RoboCore V2 boards arrive.

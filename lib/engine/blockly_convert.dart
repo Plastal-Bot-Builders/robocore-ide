@@ -1,6 +1,6 @@
 // Turns a project's old block lists ({setup, loop}) into a Blockly workspace (Blockly's JSON
-// serialization), so existing projects and the examples open in the Blockly editor. The Blockly
-// C++ generator (web/robocore_editors.js) writes the same sketch for these blocks as genBlocks.
+// serialization), so existing projects and the examples open in the Blockly editor, with the
+// hardware-first blocks (docs: block catalogue) wherever one means the same thing.
 import 'dart:convert';
 
 import 'codegen.dart' show toInt, toNum, varName;
@@ -18,6 +18,30 @@ String blocklyFromLists(List<Map<String, dynamic>> setup, List<Map<String, dynam
           'fields': {'NUM': n}
         }
       };
+  Map<String, dynamic> text(String t) => {
+        'shadow': {
+          'type': 'text',
+          'fields': {'TEXT': t}
+        }
+      };
+  // print “label” joined with a sensor value.
+  Map<String, dynamic> printJoin(String label, String reporter) => {
+        'type': 'rc_print',
+        'inputs': {
+          'VALUE': {
+            'block': {
+              'type': 'text_join',
+              'extraState': {'itemCount': 2},
+              'inputs': {
+                'ADD0': text(label),
+                'ADD1': {
+                  'block': {'type': reporter}
+                },
+              },
+            }
+          }
+        },
+      };
   String level(dynamic v) => v == 'LOW' ? 'LOW' : 'HIGH';
 
   Map<String, dynamic>? block(Map<String, dynamic> b) {
@@ -34,8 +58,9 @@ String blocklyFromLists(List<Map<String, dynamic>> setup, List<Map<String, dynam
         };
       case 'tone':
         return {
-          'type': 'rc_tone',
-          'fields': {'PIN': '${toInt(b['pin'])}', 'NOTE': '${b['note'] ?? 'C4'}', 'SECS': toNum(b['secs'])}
+          'type': 'rc_beep',
+          'fields': {'NOTE': '${b['note'] ?? 'C4'}'},
+          'inputs': {'SECS': number(toNum(b['secs']))},
         };
       case 'rgb':
         return {
@@ -48,7 +73,14 @@ String blocklyFromLists(List<Map<String, dynamic>> setup, List<Map<String, dynam
           'fields': {'TIME': toNum(b['secs']), 'UNIT': b['unit'] == 'ms' ? 'ms' : 'secs'}
         };
       case 'button':
-        return {'type': 'rc_wait_button'};
+        return {
+          'type': 'rc_wait_until',
+          'inputs': {
+            'COND': {
+              'block': {'type': 'rc_user_pressed'}
+            }
+          },
+        };
       case 'rand':
         return {
           'type': 'variables_set',
@@ -87,16 +119,23 @@ String blocklyFromLists(List<Map<String, dynamic>> setup, List<Map<String, dynam
           }
         };
       case 'drive':
+        final s = toNum(b['speed']).clamp(0, 100).truncate();
+        final (l, r) = switch ('${b['dir'] ?? 'forward'}') {
+          'backward' => (-s, -s),
+          'left' => (-s, s),
+          'right' => (s, -s),
+          _ => (s, s),
+        };
         return {
-          'type': 'rc_drive',
-          'fields': {'DIR': '${b['dir'] ?? 'forward'}', 'SPEED': toNum(b['speed']).clamp(0, 100).truncate()}
+          'type': 'rc_drive_lr',
+          'inputs': {'L': number(l), 'R': number(r)},
         };
       case 'stop':
-        return {'type': 'rc_stop'};
+        return {'type': 'rc_stop_moving'};
       case 'distance':
-        return {'type': 'rc_print_distance'};
+        return printJoin('distance_cm=', 'rc_distance');
       case 'linesens':
-        return {'type': 'rc_print_line'};
+        return printJoin('line=', 'rc_line');
       case 'serial':
         return {
           'type': 'rc_serial_begin',
@@ -104,8 +143,8 @@ String blocklyFromLists(List<Map<String, dynamic>> setup, List<Map<String, dynam
         };
       case 'print':
         return {
-          'type': 'rc_print_text',
-          'fields': {'TEXT': '${b['text'] ?? ''}'}
+          'type': 'rc_print',
+          'inputs': {'VALUE': text('${b['text'] ?? ''}')},
         };
     }
     return null;

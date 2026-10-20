@@ -71,7 +71,7 @@ class ExampleCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(e.desc, style: tBody(c, size: 13, color: c.muted, height: 18 / 13), maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 10),
-          Text('${e.blocks != null ? 'Blocks + C++' : 'C++'} · ${e.boards}', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
+          Text('${e.hasBlocks ? 'Blocks + C++' : 'C++'} · ${e.boards}', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
         ]),
       ),
     );
@@ -105,10 +105,10 @@ Future<void> showExampleDialog(BuildContext context, Example e) => showDialog<vo
               height: 120,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
-              child: Thumb(blocks: e.blocks != null),
+              child: Thumb(blocks: e.hasBlocks),
             ),
             const SizedBox(height: 12),
-            Text(e.blocks != null ? 'Opens as a Blocks project; switch to C++ any time.' : 'Opens as a C++ project.',
+            Text(e.hasBlocks ? 'Opens as a Blocks project; switch to C++ any time.' : 'Opens as a C++ project.',
                 style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),
           ]),
           actions: [
