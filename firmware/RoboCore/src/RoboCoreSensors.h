@@ -25,10 +25,17 @@ class Sonar {
   // false if the last distanceCm() got no echo (nothing in range, or the sensor is unplugged).
   bool lastEchoOk() const { return _lastOk; }
 
+  // true once, when something comes closer than cm (the IDE's "when obstacle is closer than" block).
+  // It measures each time it is called: call it often, for example on every pass of loop().
+  bool justCloserThan(float cm);
+
  private:
   float _maxCm;
   bool _begun = false, _lastOk = false;
   uint32_t _lastPingMs = 0;
+  // One memory per distance asked about.
+  float _edgeCm[4] = {-1, -1, -1, -1};
+  bool _edgeWas[4] = {false, false, false, false};
 };
 
 // ---------------------------------------------------------------------------
@@ -57,9 +64,16 @@ class LineSensor {
   // Default true: a dark line gives a higher reading. Set false if your sensor board is the other way round.
   void setDarkIsHigh(bool darkIsHigh) { _darkHigh = darkIsHigh; }
 
+  // true while at least one sensor sees the line (darker than half way).
+  bool onLine();
+  // true once, when the line is found / lost (the IDE's "when the line is found / lost" block).
+  bool justFound();
+  bool justLost();
+
  private:
   float _norm(int i, int raw);
   bool _begun = false, _darkHigh = true;
+  bool _wasFound = false, _wasLost = true;  // "lost" only after it was found
   int _lo[3] = {4095, 4095, 4095};
   int _hi[3] = {0, 0, 0};
   float _last = 0;
@@ -90,9 +104,37 @@ class IMU {
   // Reads all six axes at once. Returns false if the read failed.
   bool read(float &ax, float &ay, float &az, float &gx, float &gy, float &gz);
 
+  // ---- Heading and attitude (the IDE's Sensors and Events blocks)
+  // Heading in degrees since begin() or resetYaw(); turning right (clockwise seen from above) counts up.
+  // Kept up to date in the background from the gyro. Keep the robot still while begin() runs: it measures
+  // the gyro's offset. Drifts by about a degree a minute.
+  float yawDeg();
+  void resetYaw();
+  // If yaw counts the wrong way on your robot, reverse it here.
+  void setYawReversed(bool reversed) { _yawSign = reversed ? 1.0f : -1.0f; }
+  // Nose up / right side down, in degrees, from the accelerometer.
+  float pitchDeg();
+  float rollDeg();
+  // More than 30° from flat / a knock or shake (more than 0.5 g away from still) / within 10° of flat.
+  bool isTilted();
+  bool isShaken();
+  bool isFlat();
+  // true once, when it becomes tilted / is shaken / becomes flat.
+  bool justTilted();
+  bool justShaken();
+  bool justFlat();
+  // Adds up the gyro since the last call. The background task calls it every 5 ms.
+  void update();
+
  private:
   bool _readRegs(uint8_t reg, uint8_t *buf, size_t n);
   bool _write(uint8_t reg, uint8_t val);
   int16_t _axis(uint8_t reg);
+  void _startYaw();
   bool _begun = false, _ok = false;
+  volatile float _yaw = 0;
+  float _bias = 0, _yawSign = -1.0f;
+  unsigned long _lastUs = 0;
+  bool _task = false;
+  bool _wasTilted = false, _wasShaken = false, _wasFlat = true;  // "flat" only after a tilt
 };

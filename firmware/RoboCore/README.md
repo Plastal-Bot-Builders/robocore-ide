@@ -12,12 +12,21 @@ The RoboCore IDE's blocks and examples call these classes, and the compile serve
 
 | Class / function | What it does |
 |---|---|
-| `RoboCoreMotors` | `begin()`, `drive(left%, right%)` (−100…100), `stop()` (coast), `brake()`, `leftCount()` / `rightCount()` encoders, `resetEncoders()`, `leftCurrentmA()` / `rightCurrentmA()`, `fault()`, `setReversed(l, r)`, `setEncoderReversed(l, r)` |
-| `Sonar` | `begin()`, `distanceCm()` (returns 400 when nothing echoes), `lastEchoOk()` |
-| `LineSensor` | `begin()`, `read()` (−1 line left … 0 centred … 1 right), `left()` / `centre()` / `right()` darkness 0…1, raw readings, `resetCalibration()`, `setDarkIsHigh()` |
-| `IMU` | `begin()`, `temperature()` °C, `tiltDeg()`, `accelX/Y/Z()` g, `gyroX/Y/Z()` °/s, `read(...)` |
-| `RoboCore::` | `batteryVolts()`, `userPressed()`, `waitForUser()`, `beep()`, `rgb()` |
+| `RoboCoreMotors` | `begin()`, `drive(left%, right%)` (−100…100), `stop()` (coast), `brake()`, `leftCount()` / `rightCount()` encoders, `resetEncoders()`, `leftCurrentmA()` / `rightCurrentmA()`, `fault()`, `setReversed(l, r)`, `setEncoderReversed(l, r)`; one wheel at a time: `run(LEFT, 1, ROTATIONS)`, `start(side, %)`, `stop(side)`, `brake(side)`, `positionDeg(side)`, `resetPosition(side)`, `speedPercent(side)`, `setCountsPerTurn()` |
+| `RoboCoreDrive robot(motors, imu)` | Both wheels together: `move(10, CM)` / `ROTATIONS` / `SECONDS` (negative = back, waits), `turn(90)` (right; uses the IMU, waits), `start(FORWARD)`, `steer(−100…100)`, `stop()` (brake), `setSpeed(%)`, `setWheelCm()`, `setTrackCm()`, `distanceCm()`, `resetDistance()` |
+| `RoboCoreServos` | Servo ports 1–4: `write(port, degrees)`, `angle(port)`, `release(port)`, `setPulseRange()` |
+| `Sonar` | `begin()`, `distanceCm()` (returns 400 when nothing echoes), `lastEchoOk()`, `justCloserThan(cm)` |
+| `LineSensor` | `begin()`, `read()` (−1 line left … 0 centred … 1 right), `left()` / `centre()` / `right()` darkness 0…1, `onLine()`, `justFound()` / `justLost()`, raw readings, `resetCalibration()`, `setDarkIsHigh()` |
+| `IMU` | `begin()`, `temperature()` °C, `tiltDeg()`, `yawDeg()` (kept up to date in the background) / `resetYaw()`, `pitchDeg()` / `rollDeg()`, `isTilted()` / `isShaken()` / `isFlat()` and `just…()`, `accelX/Y/Z()` g, `gyroX/Y/Z()` °/s, `read(...)` |
+| `RoboCore::` | `batteryVolts()`, `batteryPercent()`, `userPressed()`, `userJustPressed()`, `waitForUser()`, `beep(hz, ms)` (waits), `melody(MELODY_POWER_UP …)`, `rgb()`, `ledBrightness(%)`, `timer()` / `resetTimer()` / `timerPassed(s)`, `stopProgram()` |
+| `RoboCoreEdge` | `rose(condition)`: true once each time the condition becomes true |
 | `RC_PIN_...` | Every pin on the board, from `src/RoboCoreV2Pins.h` |
+
+The “just…” checks and `RoboCoreEdge` are for the IDE's “when …” blocks: call them on every pass of `loop()`, and keep
+`loop()` free of long waits so they are seen.
+
+**To check on the first robot:** `RC_COUNTS_PER_WHEEL_TURN` (292.5 for XRP motors: turn a wheel once by hand and read
+`leftCount()`), the yaw direction (`imu.setYawReversed()`), and the 15.5 cm track for turns without the IMU.
 
 ## Safety
 

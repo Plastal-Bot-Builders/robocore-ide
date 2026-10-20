@@ -16,6 +16,16 @@
 #include <Arduino.h>
 #include "RoboCoreV2Pins.h"
 
+// Which wheel, which way, and the units of the IDE's motor and movement blocks.
+enum RoboCoreSide : uint8_t { LEFT, RIGHT };
+enum RoboCoreDirection : int8_t { BACKWARD = -1, FORWARD = 1 };
+enum RoboCoreUnit : uint8_t { CM, ROTATIONS, DEGREES, SECONDS };
+
+// Encoder counts for one turn of the wheel. XRP motors: 3 pulses per motor turn on channel A,
+// counted on both edges (6), through a 48.75:1 gearbox. Turn a wheel once by hand and read
+// leftCount() to check yours, then call setCountsPerTurn().
+constexpr float RC_COUNTS_PER_WHEEL_TURN = 292.5f;
+
 class RoboCoreMotors {
  public:
   // Sets up PWM and the encoders. Returns false if a pin could not be set up.
@@ -53,10 +63,38 @@ class RoboCoreMotors {
   float leftSpeed() const { return _left; }
   float rightSpeed() const { return _right; }
 
+  // ---- One wheel at a time (the IDE's Motors blocks)
+  // Runs one motor for an amount (ROTATIONS, DEGREES or SECONDS; negative = backwards), then brakes it.
+  // Waits until it has finished. Gives up after a while if the wheel cannot turn.
+  void run(RoboCoreSide side, float amount, RoboCoreUnit unit = ROTATIONS, float percent = 50);
+  // Starts one motor at a speed (-100 to 100) and leaves it running.
+  void start(RoboCoreSide side, float percent);
+  // Lets one motor coast to a stop.
+  void stop(RoboCoreSide side);
+  // Stops one motor quickly.
+  void brake(RoboCoreSide side);
+  // The wheel's position in degrees since begin() or resetPosition(): 360 = one turn forward.
+  float positionDeg(RoboCoreSide side) const;
+  void resetPosition(RoboCoreSide side);
+  // The speed last set for that motor, in percent.
+  float speedPercent(RoboCoreSide side) const { return side == LEFT ? _left : _right; }
+  // Encoder count of one side (leftCount() or rightCount()).
+  long count(RoboCoreSide side) const { return side == LEFT ? leftCount() : rightCount(); }
+
+  // Encoder counts for one wheel turn (RC_COUNTS_PER_WHEEL_TURN unless set).
+  void setCountsPerTurn(float counts) { if (counts > 0) _perTurn = counts; }
+  float countsPerTurn() const { return _perTurn; }
+
+  // The motors begin() was last called on, for RoboCore::stopProgram().
+  static RoboCoreMotors *active() { return _active; }
+
  private:
   void _set(uint8_t in1, uint8_t in2, float percent, bool reversed);
   bool _begun = false;
   bool _revL = false, _revR = true;
   bool _encRevL = false, _encRevR = false;
   float _left = 0, _right = 0;
+  float _perTurn = RC_COUNTS_PER_WHEEL_TURN;
+  long _pos0[2] = {0, 0};
+  static RoboCoreMotors *_active;
 };

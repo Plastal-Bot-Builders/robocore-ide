@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string>
 #include <initializer_list>
+#include <cstdlib>
 #define CONFIG_IDF_TARGET_ESP32S3 1
 using std::min; using std::max;
 #define HIGH 1
@@ -40,7 +41,7 @@ extern HWCDC Serial;
 struct EspClass{ const char*getChipModel(){return "";} uint8_t getChipRevision(){return 0;} uint8_t getChipCores(){return 2;} uint32_t getFlashChipSize(){return 0;} uint32_t getPsramSize(){return 0;} };
 extern EspClass ESP;
 void pinMode(uint8_t,uint8_t); void digitalWrite(uint8_t,uint8_t); int digitalRead(uint8_t);
-void delay(uint32_t); void delayMicroseconds(uint32_t); unsigned long millis();
+void delay(uint32_t); void delayMicroseconds(uint32_t); unsigned long millis(); unsigned long micros();
 unsigned long pulseIn(uint8_t pin, uint8_t state, unsigned long timeout = 1000000L);
 uint16_t analogRead(uint8_t); uint32_t analogReadMilliVolts(uint8_t pin); void analogReadResolution(uint8_t bits);
 void analogSetAttenuation(adc_attenuation_t); void analogSetPinAttenuation(uint8_t pin, adc_attenuation_t attenuation);

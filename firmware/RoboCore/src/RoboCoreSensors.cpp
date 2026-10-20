@@ -38,6 +38,17 @@ float Sonar::distanceCm() {
   return cm > _maxCm ? _maxCm : cm;
 }
 
+bool Sonar::justCloserThan(float cm) {
+  const bool now = distanceCm() < cm;
+  int i = 0;
+  while (i < 4 && _edgeCm[i] >= 0 && _edgeCm[i] != cm) i++;
+  if (i == 4) i = 3;  // more than four distances share the last memory
+  _edgeCm[i] = cm;
+  const bool fired = now && !_edgeWas[i];
+  _edgeWas[i] = now;
+  return fired;
+}
+
 // ========================= LineSensor ==========================
 
 bool LineSensor::begin() {
@@ -96,6 +107,26 @@ float LineSensor::read() {
   return _last;
 }
 
+bool LineSensor::onLine() {
+  // All three are read, so the calibration keeps learning from each sensor.
+  const float l = left(), c = centre(), r = right();
+  return l > 0.5f || c > 0.5f || r > 0.5f;
+}
+
+bool LineSensor::justFound() {
+  const bool now = onLine();
+  const bool fired = now && !_wasFound;
+  _wasFound = now;
+  return fired;
+}
+
+bool LineSensor::justLost() {
+  const bool off = !onLine();
+  const bool fired = off && !_wasLost;
+  _wasLost = off;
+  return fired;
+}
+
 // ============================= IMU =============================
 
 namespace {
@@ -128,7 +159,21 @@ bool IMU::_write(uint8_t reg, uint8_t val) {
   return Wire.endTransmission() == 0;
 }
 
+#if defined(ARDUINO_ARCH_ESP32)
+namespace {
+// Keeps the heading up to date while the sketch does other things.
+void yawTask(void *arg) {
+  IMU *imu = static_cast<IMU *>(arg);
+  for (;;) {
+    imu->update();
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
+}  // namespace
+#endif
+
 bool IMU::begin() {
+  if (_begun) return _ok;
   _begun = true;
   if (!gWireStarted) {
     Wire.begin(RC_PIN_I2C_SDA, RC_PIN_I2C_SCL, 400000);
@@ -141,7 +186,86 @@ bool IMU::begin() {
         && _write(kCtrl1Xl, 0x40)   // accelerometer 104 Hz, +/-2 g
         && _write(kCtrl2G, 0x40);   // gyro 104 Hz, 250 dps
   delay(20);
+  if (_ok) _startYaw();
   return _ok;
+}
+
+void IMU::_startYaw() {
+  // The gyro reads a little above or below 0 when still: measure that offset (0.3 s, robot still).
+  float sum = 0;
+  for (int i = 0; i < 100; i++) {
+    sum += gyroZ();
+    delay(3);
+  }
+  _bias = sum / 100.0f;
+  _yaw = 0;
+  _lastUs = micros();
+#if defined(ARDUINO_ARCH_ESP32)
+  _task = xTaskCreatePinnedToCore(yawTask, "rc_yaw", 3072, this, 1, nullptr, 0) == pdPASS;
+#endif
+}
+
+void IMU::update() {
+  if (!_ok) return;
+  const unsigned long now = micros();
+  const float dt = (now - _lastUs) / 1000000.0f;
+  _lastUs = now;
+  if (dt <= 0 || dt > 0.5f) return;  // a long pause: skip it rather than guess
+  const float rate = gyroZ() - _bias;
+  if (fabsf(rate) > 0.3f) _yaw = _yaw + _yawSign * rate * dt;  // below that it is noise
+}
+
+float IMU::yawDeg() {
+  if (!_begun) begin();
+  if (!_task) update();  // no background task (a PC test): add up on each call
+  return _yaw;
+}
+
+void IMU::resetYaw() {
+  if (!_begun) begin();
+  _yaw = 0;
+}
+
+float IMU::pitchDeg() {
+  float ax, ay, az, gx, gy, gz;
+  if (!read(ax, ay, az, gx, gy, gz)) return 0;
+  return atan2f(-ax, sqrtf(ay * ay + az * az)) * 180.0f / (float)M_PI;
+}
+
+float IMU::rollDeg() {
+  float ax, ay, az, gx, gy, gz;
+  if (!read(ax, ay, az, gx, gy, gz)) return 0;
+  return atan2f(ay, az) * 180.0f / (float)M_PI;
+}
+
+bool IMU::isTilted() { return tiltDeg() > 30.0f; }
+bool IMU::isFlat() { return tiltDeg() < 10.0f; }
+
+bool IMU::isShaken() {
+  float ax, ay, az, gx, gy, gz;
+  if (!read(ax, ay, az, gx, gy, gz)) return false;
+  return fabsf(sqrtf(ax * ax + ay * ay + az * az) - 1.0f) > 0.5f;
+}
+
+bool IMU::justTilted() {
+  const bool now = isTilted();
+  const bool fired = now && !_wasTilted;
+  _wasTilted = now;
+  return fired;
+}
+
+bool IMU::justShaken() {
+  const bool now = isShaken();
+  const bool fired = now && !_wasShaken;
+  _wasShaken = now;
+  return fired;
+}
+
+bool IMU::justFlat() {
+  const bool now = isFlat();
+  const bool fired = now && !_wasFlat;
+  _wasFlat = now;
+  return fired;
 }
 
 int16_t IMU::_axis(uint8_t reg) {
