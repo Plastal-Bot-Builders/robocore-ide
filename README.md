@@ -8,6 +8,9 @@ One codebase for the RoboCore IDE on **web, Windows, macOS, Linux, Android and i
 - **Blocks editor**: Google Blockly in the web app (RoboCore blocks plus if / else, loops, comparisons and variables; C++ updates live beside the blocks). The native apps keep a simpler Flutter block editor for now. Blocks generate Arduino C++ code. See `docs/blockly-monaco.md`.
 - **C++ editor**: Monaco (the editor in VS Code) in the web app: C++ highlighting, Arduino and RoboCore suggestions and hovers, find, compile problems in the code, multiple files. The native apps use a Flutter code editor.
 - **Verify and Upload**: with a compile server, a real C++ build (arduino-cli) and an upload over USB-C to the RoboCore V2. Without one, a built-in check like the Arduino compiler's (missing includes, undeclared names, types and board support), then a run on a **simulated RoboCore board** (RGB LED, USER button, motors, servo, sonar, line sensor, IMU, battery and serial in and out).
+- **Cog, the learning partner** (Ask Cog, Ctrl+I): explains errors and blocks, gives hints one at a time before it ever
+  shows a fix, applies a fix only when the student presses Apply, asks a quick question afterwards, and keeps a "You've
+  learned" list per project. It runs through the compile server, which holds the Anthropic API key. See `docs/cog.md`.
 - Projects and settings are saved on the device.
 
 ## Run it

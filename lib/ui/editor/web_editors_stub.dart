@@ -13,13 +13,15 @@ class BlocklyEditor extends StatefulWidget {
       required this.tidy,
       required this.options,
       required this.onChange,
-      this.onZoom});
+      this.onZoom,
+      this.onSelect});
   final String projectId;
   final String? json;
   final bool tidy;
   final Map<String, Object?> options;
   final void Function(String json, String code, int count) onChange;
   final void Function(double scale)? onZoom;
+  final void Function(String json)? onSelect;
 
   @override
   State<BlocklyEditor> createState() => BlocklyEditorState();
@@ -47,13 +49,15 @@ class MonacoEditor extends StatefulWidget {
       this.readOnly = false,
       this.problems = const [],
       this.onChange,
-      this.onCursor});
+      this.onCursor,
+      this.onExplain});
   final String fileKey, text;
   final Map<String, Object?> options;
   final bool readOnly;
   final List<Map<String, Object?>> problems;
   final void Function(String text)? onChange;
   final void Function(int line, int column)? onCursor;
+  final void Function(int line)? onExplain;
 
   @override
   State<MonacoEditor> createState() => MonacoEditorState();

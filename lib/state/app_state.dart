@@ -9,8 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/catalog.dart';
 import '../engine/compiler.dart';
+import '../hw/cog_client.dart';
 import '../hw/compile_client.dart';
 import '../hw/usb_link.dart';
+import 'cog.dart';
 import 'models.dart';
 import 'sim_board.dart';
 
@@ -33,9 +35,10 @@ const kBootTip = 'Could not start the board’s bootloader. Hold BOOT, tap RESET
     '(When the upload finishes, press RESET once to run the new sketch.)';
 
 class AppState extends ChangeNotifier {
-  AppState({UsbLink? usbLink, CompileClient? compileClient})
+  AppState({UsbLink? usbLink, CompileClient? compileClient, CogClient? cogClient})
       : usb = usbLink ?? createUsbLink(),
         compiler = compileClient ?? CompileClient() {
+    cog = CogController(this, client: cogClient);
     sim = SimBoard(
       onSerial: (t, d) => serialPush(t, d),
       onNote: (t) {
@@ -48,6 +51,38 @@ class AppState extends ChangeNotifier {
   }
 
   late final SimBoard sim;
+
+  /// Cog, the learning partner (state/cog.dart).
+  late final CogController cog;
+
+  /// For helpers that keep part of the app's state (Cog): tell the UI something changed.
+  void changed() => notifyListeners();
+
+  /// Replaces a file's content (Cog's Apply). The code editor makes it one undo step.
+  void applyFile(String name, String content) {
+    final p = cur;
+    if (p == null) return;
+    final i = p.files.indexWhere((f) => f.name == name);
+    if (i < 0) return;
+    p.files[i].content = content;
+    if (i == 0 && !p.codeEdited) p.codeEdited = true;
+    problems = [for (final e in problems) if (e.file != name) e];
+    verified = null;
+    if (p.mode != 'code') p.mode = 'code';
+    file = i;
+    closedTabs.remove(i);
+    touch(p);
+    showToast('Fix applied to $name. Press Ctrl+Z in the code to undo it.');
+  }
+
+  /// Adds a concept to the project's "You’ve learned" list.
+  void learn(String concept) {
+    final p = cur;
+    final c = concept.trim();
+    if (p == null || c.isEmpty || p.learned.any((x) => x.toLowerCase() == c.toLowerCase())) return;
+    p.learned.add(c);
+    touch(p);
+  }
 
   /// The real board on USB-C (Web Serial + esptool-js on the web).
   final UsbLink usb;

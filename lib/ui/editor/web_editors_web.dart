@@ -35,7 +35,7 @@ extension type _Api._(JSObject _) implements JSObject {
 }
 
 extension type _Blocks._(JSObject _) implements JSObject {
-  external JSPromise<JSAny?> mount(String options, String? json, bool tidy, JSFunction onChange, JSFunction onZoom);
+  external JSPromise<JSAny?> mount(String options, String? json, bool tidy, JSFunction onChange, JSFunction onZoom, JSFunction onSelect);
   external void load(String? json, bool tidy);
   external void setOptions(String options);
   external void undo();
@@ -48,7 +48,7 @@ extension type _Blocks._(JSObject _) implements JSObject {
 }
 
 extension type _Code._(JSObject _) implements JSObject {
-  external JSPromise<JSAny?> mount(String options, JSFunction onChange, JSFunction onCursor);
+  external JSPromise<JSAny?> mount(String options, JSFunction onChange, JSFunction onCursor, JSFunction? onExplain);
   external void setFile(String key, String text, bool readOnly);
   external void setOptions(String options);
   external void setMarkers(String key, String problems);
@@ -99,7 +99,8 @@ class BlocklyEditor extends StatefulWidget {
       required this.tidy,
       required this.options,
       required this.onChange,
-      this.onZoom});
+      this.onZoom,
+      this.onSelect});
   final String projectId;
 
   /// The workspace to open; [tidy] lays it out first (for blocks converted from the old editor).
@@ -112,6 +113,9 @@ class BlocklyEditor extends StatefulWidget {
 
   /// The workspace scale after every zoom (0.9 = the starting size).
   final void Function(double scale)? onZoom;
+
+  /// The selected block as JSON {type, label, cpp}, or '' when none is selected.
+  final void Function(String json)? onSelect;
 
   @override
   State<BlocklyEditor> createState() => BlocklyEditorState();
@@ -132,6 +136,8 @@ class BlocklyEditorState extends State<BlocklyEditor> {
           if (mounted) widget.onChange(_json!, code.toDart, count.toDartInt);
         }).toJS, ((JSNumber scale) {
           if (mounted) widget.onZoom?.call(scale.toDartDouble);
+        }).toJS, ((JSString json) {
+          if (mounted) widget.onSelect?.call(json.toDart);
         }).toJS)
         .toDart;
     _api = b;
@@ -176,7 +182,8 @@ class MonacoEditor extends StatefulWidget {
       this.readOnly = false,
       this.problems = const [],
       this.onChange,
-      this.onCursor});
+      this.onCursor,
+      this.onExplain});
   final String fileKey, text;
 
   /// theme, fontSize, wrap, autocomplete, words.
@@ -187,6 +194,9 @@ class MonacoEditor extends StatefulWidget {
   final List<Map<String, Object?>> problems;
   final void Function(String text)? onChange;
   final void Function(int line, int column)? onCursor;
+
+  /// "Explain with Cog" on a line (quick fix on a problem, or the context menu).
+  final void Function(int line)? onExplain;
 
   @override
   State<MonacoEditor> createState() => MonacoEditorState();
@@ -212,7 +222,12 @@ class MonacoEditorState extends State<MonacoEditor> {
             }).toJS,
             ((JSNumber line, JSNumber column) {
               if (mounted) widget.onCursor?.call(line.toDartInt, column.toDartInt);
-            }).toJS)
+            }).toJS,
+            widget.onExplain == null
+                ? null
+                : ((JSNumber line) {
+                    if (mounted) widget.onExplain?.call(line.toDartInt);
+                  }).toJS)
         .toDart;
     _api = c;
     _key = null;

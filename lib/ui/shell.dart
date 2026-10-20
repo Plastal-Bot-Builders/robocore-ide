@@ -18,6 +18,7 @@ import 'pages/projects_page.dart';
 import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/welcome_page.dart';
+import 'cog/cog_panel.dart' show CogButton;
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/popover.dart';
@@ -49,6 +50,8 @@ class _ShellState extends State<Shell> {
         const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () => _verify(s),
         const SingleActivator(LogicalKeyboardKey.keyU, control: true): () => _upload(s),
         const SingleActivator(LogicalKeyboardKey.keyU, meta: true): () => _upload(s),
+        const SingleActivator(LogicalKeyboardKey.keyI, control: true): () => _cog(s),
+        const SingleActivator(LogicalKeyboardKey.keyI, meta: true): () => _cog(s),
       },
       child: Focus(
         autofocus: true,
@@ -108,6 +111,10 @@ class _ShellState extends State<Shell> {
 
   void _upload(AppState s) {
     if (s.view == Screen.editor) s.upload();
+  }
+
+  void _cog(AppState s) {
+    if (s.view == Screen.editor && s.cur != null) s.cog.toggle();
   }
 
   /// While a project is open the editor stays built (offstage on other screens), so Blockly and Monaco
@@ -218,6 +225,8 @@ class TopBar extends StatelessWidget {
             BoardChip(compact: phone || (narrow && p != null)),
             const SizedBox(width: 12),
             if (p != null) ...[
+              CogButton(compact: phone || narrow),
+              const SizedBox(width: 8),
               phone
                   ? IconBtn('check', onTap: s.busy == null ? s.verify : null, tip: 'Verify', color: kNavy)
                   : Btn('Verify', icon: 'check', kind: BtnKind.ghostTop, onTap: s.busy == null ? s.verify : null),

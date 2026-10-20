@@ -403,11 +403,28 @@
     return l.join('\n');
   }
 
-  let ws = null, onBlocksChange = null, onZoom = null, loading = false, timer = 0, lastScale = 0;
+  let ws = null, onBlocksChange = null, onZoom = null, onSelect = null, loading = false, timer = 0, lastScale = 0, lastSelection = '';
   const START_SCALE = 0.9;
 
   function reportZoom() {
     if (ws && onZoom && ws.scale !== lastScale) { lastScale = ws.scale; onZoom(ws.scale); }
+  }
+
+  // How a block reads (its own words, not the blocks inside it) and the C++ it makes, for Cog.
+  function blockLabel(b) {
+    return b.inputList.flatMap((i) => i.fieldRow.map((f) => f.getText())).filter((t) => t && t.trim()).join(' ').trim() || b.type;
+  }
+  function blockCpp(b) {
+    cpp.init(ws);
+    if (HATS.includes(b.type)) return (b.type === 'rc_on_start' ? 'void setup() {\n' : 'void loop() {\n') + cpp.statementToCode(b, 'DO') + '}';
+    const code = cpp.blockToCode(b, true);
+    return (Array.isArray(code) ? code[0] : code).replace(/\n$/, '');
+  }
+  function reportSelection() {
+    if (!ws || !onSelect) return;
+    const b = Blockly.getSelected && Blockly.getSelected();
+    const json = b && b.workspace === ws && !b.isShadow() ? JSON.stringify({ type: b.type, label: blockLabel(b), cpp: blockCpp(b) }) : '';
+    if (json !== lastSelection) { lastSelection = json; onSelect(json); }
   }
 
   function zoomBy(dir) { if (ws) ws.zoomCenter(dir); }
@@ -422,6 +439,7 @@
       if (!ws || !onBlocksChange) return;
       const json = JSON.stringify(Blockly.serialization.workspaces.save(ws));
       onBlocksChange(json, generate(ws), countBlocks(ws));
+      reportSelection();
     }, 60);
   }
 
@@ -452,12 +470,13 @@
   }
 
   const blocksApi = {
-    async mount(optionsJson, json, tidy, onChange, onZoomChange) {
+    async mount(optionsJson, json, tidy, onChange, onZoomChange, onSelectBlock) {
       await ready;
       const o = JSON.parse(optionsJson);
       blocksOptions(o);
       onBlocksChange = onChange;
       onZoom = onZoomChange;
+      onSelect = onSelectBlock || null;
       lastScale = 0;
       setTheme(o.theme);
       ws = Blockly.inject(document.getElementById('host'), {
@@ -478,6 +497,7 @@
       ws.addChangeListener(Blockly.Events.disableOrphans);
       ws.addChangeListener((e) => {
         if (e.type === Blockly.Events.VIEWPORT_CHANGE) reportZoom();
+        if (e.type === Blockly.Events.SELECTED) reportSelection();
         if (loading || e.isUiEvent) return;
         emitBlocks();
       });
@@ -517,7 +537,7 @@
 
   // ======================================================================= Code (Monaco)
 
-  let editor = null, models = {}, onCodeChange = null, onCursor = null, applying = false, words = [];
+  let editor = null, models = {}, onCodeChange = null, onCursor = null, onExplain = null, applying = false, words = [];
 
   function defineMonacoThemes() {
     const rules = (navy) => {
@@ -613,10 +633,11 @@
   }
 
   const codeApi = {
-    async mount(optionsJson, onChange, onCursorMove) {
+    async mount(optionsJson, onChange, onCursorMove, onExplainLine) {
       await ready;
       onCodeChange = onChange;
       onCursor = onCursorMove;
+      onExplain = onExplainLine || null;
       const o = JSON.parse(optionsJson);
       const opts = codeOptions(o);
       editor = monaco.editor.create(document.getElementById('host'), Object.assign({
@@ -652,6 +673,24 @@
       editor.onDidChangeCursorPosition((e) => {
         if (onCursor) onCursor(e.position.lineNumber, e.position.column);
       });
+      if (onExplain) {
+        // Explain with Cog: a quick fix on compile problems (lightbulb, Ctrl+. or the hover) and in the menu.
+        const explain = editor.addCommand(0, (_, line) => onExplain(line));
+        monaco.languages.registerCodeActionProvider('cpp', {
+          provideCodeActions(model, range, context) {
+            const marks = context.markers.filter((m) => m.owner === 'arduino-cli');
+            const actions = marks.slice(0, 1).map((m) => ({
+              title: 'Explain with Cog', kind: 'quickfix', diagnostics: [m], isPreferred: false,
+              command: { id: explain, title: 'Explain with Cog', arguments: [m.startLineNumber] },
+            }));
+            return { actions, dispose() {} };
+          },
+        });
+        editor.addAction({
+          id: 'robocore.explainWithCog', label: 'Explain with Cog', contextMenuGroupId: '1_cog', contextMenuOrder: 0,
+          run: (ed) => onExplain(ed.getPosition().lineNumber),
+        });
+      }
     },
     // Shows file `key` with `text`. Text that differs from the editor's (blocks regenerated it,
     // or another file was opened) replaces the model's content.
