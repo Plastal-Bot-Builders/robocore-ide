@@ -3,14 +3,23 @@ import 'package:flutter/widgets.dart';
 
 const kWebEditors = false;
 
+void setEditorFramesInteractive(bool on) {}
+
 class BlocklyEditor extends StatefulWidget {
   const BlocklyEditor(
-      {super.key, required this.projectId, required this.json, required this.tidy, required this.options, required this.onChange});
+      {super.key,
+      required this.projectId,
+      required this.json,
+      required this.tidy,
+      required this.options,
+      required this.onChange,
+      this.onZoom});
   final String projectId;
   final String? json;
   final bool tidy;
   final Map<String, Object?> options;
   final void Function(String json, String code, int count) onChange;
+  final void Function(double scale)? onZoom;
 
   @override
   State<BlocklyEditor> createState() => BlocklyEditorState();
@@ -21,6 +30,9 @@ class BlocklyEditorState extends State<BlocklyEditor> {
   void redo() {}
   void clear() {}
   int get count => 0;
+  void zoom(int dir) {}
+  void zoomToFit() {}
+  void resetZoom() {}
 
   @override
   Widget build(BuildContext context) => const SizedBox.shrink();

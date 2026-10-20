@@ -136,6 +136,15 @@ class Settings {
 
   /// The compile server (server/ in this repo) that builds sketches for a real board. Empty = not set.
   String compileServer;
+
+  /// Pane sizes the user dragged in the editor (logical pixels): the C++ pane beside the blocks and
+  /// the console under the editor. Each is kept within the window when it is laid out.
+  double cppPaneWidth;
+  double consoleHeight;
+
+  static const defaultCppPaneWidth = 400.0;
+  static const defaultConsoleHeight = 232.0;
+
   Settings({
     this.theme = 'paper',
     this.fontSize = 13,
@@ -144,6 +153,8 @@ class Settings {
     this.autosave = true,
     this.lang = 'English',
     this.compileServer = '',
+    this.cppPaneWidth = defaultCppPaneWidth,
+    this.consoleHeight = defaultConsoleHeight,
   });
   Map<String, dynamic> toJson() => {
         'theme': theme,
@@ -153,6 +164,8 @@ class Settings {
         'autosave': autosave,
         'lang': lang,
         'compileServer': compileServer,
+        'cppPaneWidth': cppPaneWidth,
+        'consoleHeight': consoleHeight,
       };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
         theme: j['theme'] as String? ?? 'paper',
@@ -162,6 +175,8 @@ class Settings {
         autosave: j['autosave'] as bool? ?? true,
         lang: j['lang'] as String? ?? 'English',
         compileServer: j['compileServer'] as String? ?? '',
+        cppPaneWidth: (j['cppPaneWidth'] as num?)?.toDouble() ?? defaultCppPaneWidth,
+        consoleHeight: (j['consoleHeight'] as num?)?.toDouble() ?? defaultConsoleHeight,
       );
 }
 

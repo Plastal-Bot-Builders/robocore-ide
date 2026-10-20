@@ -11,6 +11,7 @@ const kWebEditors = true;
 
 extension type _Frame._(JSObject _) implements JSObject {
   external set src(String value);
+  external bool get isConnected;
   external _Style get style;
   external _Win? get contentWindow;
   external void addEventListener(String type, JSFunction listener);
@@ -21,6 +22,7 @@ extension type _Style._(JSObject _) implements JSObject {
   external set width(String value);
   external set height(String value);
   external set display(String value);
+  external set pointerEvents(String value);
 }
 
 extension type _Win._(JSObject _) implements JSObject {
@@ -33,13 +35,16 @@ extension type _Api._(JSObject _) implements JSObject {
 }
 
 extension type _Blocks._(JSObject _) implements JSObject {
-  external JSPromise<JSAny?> mount(String options, String? json, bool tidy, JSFunction onChange);
+  external JSPromise<JSAny?> mount(String options, String? json, bool tidy, JSFunction onChange, JSFunction onZoom);
   external void load(String? json, bool tidy);
   external void setOptions(String options);
   external void undo();
   external void redo();
   external void clear();
   external int count();
+  external void zoom(int dir);
+  external void zoomToFit();
+  external void resetZoom();
 }
 
 extension type _Code._(JSObject _) implements JSObject {
@@ -51,12 +56,24 @@ extension type _Code._(JSObject _) implements JSObject {
   external void find();
 }
 
+final _frames = <_Frame>{};
+
+/// While a pane divider is dragged the editors' iframes must not take the pointer (it would stop
+/// reaching Flutter as soon as it crossed one).
+void setEditorFramesInteractive(bool on) {
+  _frames.removeWhere((f) => !f.isConnected);
+  for (final f in _frames) {
+    f.style.pointerEvents = on ? 'auto' : 'none';
+  }
+}
+
 /// An iframe with robocore_editors.html#[mode]. [onReady] runs after every load, so an editor
 /// whose frame the browser reloads comes back.
 Widget _frame(String mode, void Function(_Api api) onReady) => HtmlElementView.fromTagName(
       tagName: 'iframe',
       onElementCreated: (Object element) {
         final f = element as _Frame;
+        _frames.add(f);
         f.style
           ..border = '0'
           ..width = '100%'
@@ -76,7 +93,13 @@ Widget _frame(String mode, void Function(_Api api) onReady) => HtmlElementView.f
 /// and the number of blocks after every change.
 class BlocklyEditor extends StatefulWidget {
   const BlocklyEditor(
-      {super.key, required this.projectId, required this.json, required this.tidy, required this.options, required this.onChange});
+      {super.key,
+      required this.projectId,
+      required this.json,
+      required this.tidy,
+      required this.options,
+      required this.onChange,
+      this.onZoom});
   final String projectId;
 
   /// The workspace to open; [tidy] lays it out first (for blocks converted from the old editor).
@@ -86,6 +109,9 @@ class BlocklyEditor extends StatefulWidget {
   /// name, board, pins, tonePins, userPin, theme.
   final Map<String, Object?> options;
   final void Function(String json, String code, int count) onChange;
+
+  /// The workspace scale after every zoom (0.9 = the starting size).
+  final void Function(double scale)? onZoom;
 
   @override
   State<BlocklyEditor> createState() => BlocklyEditorState();
@@ -104,6 +130,8 @@ class BlocklyEditorState extends State<BlocklyEditor> {
         .mount(_options, _json ?? widget.json, _json == null && widget.tidy, ((JSString json, JSString code, JSNumber count) {
           _json = json.toDart;
           if (mounted) widget.onChange(_json!, code.toDart, count.toDartInt);
+        }).toJS, ((JSNumber scale) {
+          if (mounted) widget.onZoom?.call(scale.toDartDouble);
         }).toJS)
         .toDart;
     _api = b;
@@ -127,6 +155,11 @@ class BlocklyEditorState extends State<BlocklyEditor> {
   void redo() => _api?.redo();
   void clear() => _api?.clear();
   int get count => _api?.count() ?? 0;
+
+  /// [dir] 1 zooms in, -1 out.
+  void zoom(int dir) => _api?.zoom(dir);
+  void zoomToFit() => _api?.zoomToFit();
+  void resetZoom() => _api?.resetZoom();
 
   @override
   Widget build(BuildContext context) => _view;

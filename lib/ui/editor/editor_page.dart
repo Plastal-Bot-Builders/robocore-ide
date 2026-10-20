@@ -10,6 +10,7 @@ import '../app_scope.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/serial_log.dart';
+import '../widgets/split_handle.dart';
 import 'blocks_view.dart';
 import 'code_view.dart';
 import 'web_editors.dart';
@@ -30,6 +31,10 @@ class _EditorPageState extends State<EditorPage> {
   final _monaco = GlobalKey<MonacoEditorState>();
   final _preview = GlobalKey<MonacoEditorState>();
   bool _showCpp = true;
+  double _zoom = 0.9; // Blockly's scale, shown in the toolbar
+
+  // Pane sizes while a divider is being dragged; saved to Settings when the drag ends.
+  double? _cppWidth, _consoleHeight;
 
   // One CodeView per project + file, so switching tabs loads the right text.
   GlobalKey<CodeViewState> _codeKeyFor(String pid, int fi) =>
@@ -117,7 +122,24 @@ class _EditorPageState extends State<EditorPage> {
           IconBtn('search',
               onTap: () => kWebEditors ? _monaco.currentState?.find() : _active?.currentState?.toggleFind(), tip: 'Find')
         else ...[
-          if (kWebEditors && width >= 1100)
+          if (kWebEditors) ...[
+            IconBtn('zout', onTap: () => _blockly.currentState?.zoom(-1), tip: 'Zoom out (Ctrl −)'),
+            Hover(
+              onTap: () => _blockly.currentState?.resetZoom(),
+              tooltip: 'Back to the normal size (Ctrl 0)',
+              builder: (context, h) => Container(
+                width: 48,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+                child: Text('${(_zoom * 100).round()}%', style: tCaption(c, color: c.ink, w: FontWeight.w600)),
+              ),
+            ),
+            IconBtn('zin', onTap: () => _blockly.currentState?.zoom(1), tip: 'Zoom in (Ctrl +)'),
+            IconBtn('fit', onTap: () => _blockly.currentState?.zoomToFit(), tip: 'Fit all blocks'),
+            Container(width: 1, height: 20, margin: const EdgeInsets.symmetric(horizontal: 6), color: c.line2),
+          ],
+          if (kWebEditors && width >= 900)
             IconBtn('code',
                 onTap: () => setState(() => _showCpp = !_showCpp),
                 active: _showCpp,
@@ -171,23 +193,41 @@ class _EditorPageState extends State<EditorPage> {
 
     return Padding(
       padding: EdgeInsets.all(pad),
-      child: Column(children: [
-        Expanded(child: edCard),
-        SizedBox(height: pad),
-        if (!s.panelOpen)
-          SizedBox(height: 42, child: panel)
-        else
-          SizedBox(
-            height: phone ? 220 : 232,
-            child: showBoard
-                ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Expanded(child: panel),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 280, child: RcCard(child: SingleChildScrollView(child: BoardSummary(boardId: p.board, extra: const LiveBoard())))),
-                  ])
-                : panel,
-          ),
-      ]),
+      child: LayoutBuilder(builder: (context, box) {
+        // The console keeps 120 px at least and leaves the editor 200 px at least.
+        final maxConsole = (box.maxHeight - pad - 200).clamp(120.0, double.infinity);
+        final consoleHeight = phone ? 220.0 : (_consoleHeight ?? s.settings.consoleHeight).clamp(120.0, maxConsole);
+        return Column(children: [
+          Expanded(child: edCard),
+          if (s.panelOpen && !phone)
+            SplitHandle(
+              axis: Axis.vertical,
+              thickness: pad,
+              onDrag: (dy) => setState(() => _consoleHeight = consoleHeight - dy),
+              onEnd: () {
+                final h = consoleHeight;
+                _consoleHeight = null;
+                s.updateSettings((st) => st.consoleHeight = h);
+              },
+              onReset: () => s.updateSettings((st) => st.consoleHeight = Settings.defaultConsoleHeight),
+            )
+          else
+            SizedBox(height: pad),
+          if (!s.panelOpen)
+            SizedBox(height: 42, child: panel)
+          else
+            SizedBox(
+              height: consoleHeight,
+              child: showBoard
+                  ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Expanded(child: panel),
+                      const SizedBox(width: 12),
+                      SizedBox(width: 280, child: RcCard(child: SingleChildScrollView(child: BoardSummary(boardId: p.board, extra: const LiveBoard())))),
+                    ])
+                  : panel,
+            ),
+        ]);
+      }),
     );
   }
 
@@ -217,51 +257,70 @@ class _EditorPageState extends State<EditorPage> {
         'theme': c.dark ? 'navy' : 'paper',
       },
       onChange: (json, code, count) => s.setBlockly(json, code, count: count),
+      onZoom: (scale) {
+        if (mounted && scale != _zoom) setState(() => _zoom = scale);
+      },
     );
-    final show = _showCpp && width >= 1100;
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Expanded(child: editor),
-      // Hidden, the C++ pane keeps its editor loaded (and takes no room).
-      Visibility(
-        visible: show,
-        maintainState: true,
-        child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Container(width: 1, color: c.line2),
-          SizedBox(
-            width: 400,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                alignment: Alignment.centerLeft,
-                color: c.surface,
-                child: Row(children: [
-                  Text('C++ FROM THE BLOCKS', style: tOverline(c)),
-                  const Spacer(),
-                  if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: s.rebuildFromBlocks),
-                ]),
-              ),
-              if (p.codeEdited)
+    return LayoutBuilder(builder: (context, box) {
+      // Blocks keep at least 400 px (the toolbox takes ~150), the C++ pane at least 240 px.
+      const minBlocks = 400.0, minCpp = 240.0, handle = 7.0;
+      final show = _showCpp && width >= 900 && box.maxWidth >= minBlocks + minCpp + handle;
+      final cppWidth = (_cppWidth ?? s.settings.cppPaneWidth).clamp(minCpp, (box.maxWidth - minBlocks - handle).clamp(minCpp, double.infinity));
+      return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: editor),
+        // Hidden, the C++ pane keeps its editor loaded (and takes no room).
+        Visibility(
+          visible: show,
+          maintainState: true,
+          child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SplitHandle(
+              axis: Axis.horizontal,
+              thickness: handle,
+              line: true,
+              onDrag: (dx) => setState(() => _cppWidth = cppWidth - dx),
+              onEnd: () {
+                final w = cppWidth;
+                _cppWidth = null;
+                s.updateSettings((st) => st.cppPaneWidth = w);
+              },
+              onReset: () => s.updateSettings((st) => st.cppPaneWidth = Settings.defaultCppPaneWidth),
+            ),
+            SizedBox(
+              width: cppWidth,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Container(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  alignment: Alignment.centerLeft,
                   color: c.surface,
-                  child: Text('${p.files.first.name} was edited by hand, so these blocks don\'t change it.',
-                      style: tCaption(c, color: c.muted)),
+                  child: Row(children: [
+                    Text('C++ FROM THE BLOCKS', style: tOverline(c)),
+                    const Spacer(),
+                    if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: s.rebuildFromBlocks),
+                  ]),
                 ),
-              Expanded(
-                child: MonacoEditor(
-                  key: _preview,
-                  fileKey: '${p.id}/blocks.cpp',
-                  text: p.blocklyCode ?? p.generate(),
-                  readOnly: true,
-                  options: _monacoOptions(s, c),
+                if (p.codeEdited)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    color: c.surface,
+                    child: Text('${p.files.first.name} was edited by hand, so these blocks don\'t change it.',
+                        style: tCaption(c, color: c.muted)),
+                  ),
+                Expanded(
+                  child: MonacoEditor(
+                    key: _preview,
+                    fileKey: '${p.id}/blocks.cpp',
+                    text: p.blocklyCode ?? p.generate(),
+                    readOnly: true,
+                    options: _monacoOptions(s, c),
+                  ),
                 ),
-              ),
-            ]),
-          ),
-        ]),
-      ),
-    ]);
+              ]),
+            ),
+          ]),
+        ),
+      ]);
+    });
   }
 
   Widget _monacoFor(AppState s, RC c, Project p, int fi) {
