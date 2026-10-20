@@ -21,13 +21,20 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
 - **Switching Blocks ↔ C++ is instant.** Both editors stay loaded while a project is open (an `IndexedStack`; the
   hidden one is only not painted, and Flutter keeps its iframe in the page), so Blockly keeps its undo history.
   The C++ editor is created the first time its tab is shown (about half a second); after that a switch is one frame
-  (~130 ms measured, including the test's polling). Leaving the editor (Home, Projects …) still closes them.
+  (~130 ms measured, including the test's polling). Leaving the editor (Home, Projects …) keeps them too: the
+  editor page stays built offstage while a project is open (`Shell._pages`).
 - **Zoom and pane sizes.** Blocks zoom with the toolbar (− / % / + / fit; click the % to go back to 90 %),
   Ctrl/⌘ + scroll or a trackpad pinch (a plain scroll moves the workspace), Ctrl/⌘ + = / − / 0, or Blockly's corner
   buttons; 40 % to 250 %. Ctrl/⌘ + scroll also zooms the C++ editor. The divider between the blocks and the C++ pane
   and the gap above the console can be dragged (double-click resets); the sizes are kept in Settings
   (`cppPaneWidth`, `consoleHeight`). While a divider is pressed the editor iframes ignore the pointer
   (`setEditorFramesInteractive`), or they would swallow the drag.
+- **Menus, dialogs and focus over the editors.** A click over an iframe goes to the iframe even where Flutter paints on
+  top of it. So while a menu (`Popover`) or a dialog / dropdown (a `PopupRoute`, via `EditorFramesObserver` in
+  main.dart) is open, the iframes take no pointer (`coverEditorFrames`); a click beside a menu then closes it. A panel
+  that floats over an editor but leaves the rest usable (Ask Cog on a narrow window) sits on a `FrameShield`, an
+  invisible element that takes its clicks for Flutter (like package:pointer_interceptor). And a click anywhere outside
+  the editors takes the keyboard focus back from their iframe, so Esc and Ctrl/⌘ + S, R, U, I reach the app.
 - **AppState stays the source of truth.** Every Blockly change sends the workspace (Blockly JSON), the C++ and the
   block count to `AppState.setBlockly`. The project saves them as `blockly` and `blocklyCode`; the main `.ino` follows
   the blocks until it is edited by hand (then the C++ pane offers *Use the blocks again*).

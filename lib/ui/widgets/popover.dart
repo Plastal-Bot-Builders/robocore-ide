@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../editor/web_editors.dart' show coverEditorFrames;
+
 /// Shows [popup] under [child] while [open] is true. Tapping outside calls [onClose].
 class Popover extends StatefulWidget {
   const Popover({
@@ -25,6 +27,20 @@ class Popover extends StatefulWidget {
 class _PopoverState extends State<Popover> {
   final _link = LayerLink();
   final _ctl = OverlayPortalController();
+  bool _covering = false;
+
+  // A popup over Blockly or Monaco only gets its clicks while their iframes take none.
+  void _cover(bool on) {
+    if (on == _covering) return;
+    _covering = on;
+    coverEditorFrames(on);
+  }
+
+  @override
+  void dispose() {
+    _cover(false);
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -42,6 +58,7 @@ class _PopoverState extends State<Popover> {
     if (!mounted) return;
     if (widget.open && !_ctl.isShowing) _ctl.show();
     if (!widget.open && _ctl.isShowing) _ctl.hide();
+    _cover(widget.open);
   }
 
   @override

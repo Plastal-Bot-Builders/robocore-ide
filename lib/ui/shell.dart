@@ -7,6 +7,7 @@ import '../data/catalog.dart';
 import '../state/app_state.dart';
 import '../state/models.dart';
 import '../theme.dart';
+import 'account.dart';
 import 'app_scope.dart';
 import 'dialogs.dart';
 import 'editor/editor_page.dart';
@@ -212,11 +213,16 @@ class TopBar extends StatelessWidget {
                 builder: (context, h) => ProductLockup(scale: phone ? .76 : 1, product: !phone),
               ),
             if (!phone) ...[const SizedBox(width: 12), Container(width: 1, height: 24, color: kNavy.withValues(alpha: .2)), const SizedBox(width: 12)],
-            if (p != null) ...[
-              Flexible(child: _ProjectName(p: p)),
-              if (!phone) ...[const SizedBox(width: 12), _SavePill(p: p)],
-              const Spacer(),
-            ] else if (!phone) ...[
+            // The project name takes the free space itself: a Flexible next to a Spacer would split it in half and leave
+            // the right-hand buttons stranded mid-bar on wide windows.
+            if (p != null)
+              Expanded(
+                child: Row(children: [
+                  Flexible(child: _ProjectName(p: p)),
+                  if (!phone) ...[const SizedBox(width: 12), _SavePill(p: p)],
+                ]),
+              )
+            else if (!phone) ...[
               const SizedBox(width: 260, child: SearchBox()),
               const Spacer(),
             ] else
@@ -254,18 +260,7 @@ class TopBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Hover(
-                onTap: () => s.go(Screen.settings),
-                tooltip: s.school.isEmpty ? '${s.user} · Profile' : '${s.user} · ${s.school}',
-                builder: (context, h) => Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: h ? kNavyHover : kNavy, shape: BoxShape.circle),
-                  child: Text(s.initials,
-                      style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
-                ),
-              ),
+              const AccountButton(),
             ],
           ],
         ),
