@@ -73,7 +73,7 @@ class _ShellState extends State<Shell> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (!phone) SideBar(collapsed: s.sideCollapsed),
-                        Expanded(child: _view(s, phone)),
+                        Expanded(child: _pages(s, phone)),
                       ],
                     ),
                   ),
@@ -108,6 +108,22 @@ class _ShellState extends State<Shell> {
 
   void _upload(AppState s) {
     if (s.view == Screen.editor) s.upload();
+  }
+
+  /// While a project is open the editor stays built (offstage on other screens), so Blockly and Monaco
+  /// keep their work, undo history and zoom instead of reloading when you come back.
+  Widget _pages(AppState s, bool phone) {
+    final open = s.cur != null;
+    final onEditor = open && s.view == Screen.editor;
+    return Stack(fit: StackFit.expand, children: [
+      if (open)
+        Offstage(
+          key: const ValueKey('editor'),
+          offstage: !onEditor,
+          child: TickerMode(enabled: onEditor, child: const EditorPage()),
+        ),
+      if (!onEditor) _view(s, phone),
+    ]);
   }
 
   Widget _view(AppState s, bool phone) {
