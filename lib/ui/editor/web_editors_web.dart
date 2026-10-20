@@ -56,15 +56,106 @@ extension type _Code._(JSObject _) implements JSObject {
   external void find();
 }
 
+@JS('document')
+external _Doc get _document;
+
+extension type _Doc._(JSObject _) implements JSObject {
+  external _Focused? get activeElement;
+  external void addEventListener(String type, JSFunction listener, JSAny options);
+}
+
+extension type _Focused._(JSObject _) implements JSObject {
+  external String get tagName;
+  external void blur();
+}
+
 final _frames = <_Frame>{};
+var _focusReturns = false;
+
+/// The page only sees a pointerdown outside both editors (inside one it goes to the iframe), but the
+/// browser leaves the keyboard focus in the iframe, so Esc and Ctrl/⌘+S, R, U, I would never reach
+/// Flutter after a click on the top bar or a menu. Take the focus back on such clicks.
+void _returnFocusOnOutsideClicks() {
+  if (_focusReturns) return;
+  _focusReturns = true;
+  _document.addEventListener(
+      'pointerdown',
+      ((JSObject _) {
+        final a = _document.activeElement;
+        if (a != null && a.tagName == 'IFRAME') a.blur();
+      }).toJS,
+      true.toJS);
+}
+
+var _dragging = false;
+var _covers = 0;
+
+void _applyPointer() {
+  _frames.removeWhere((f) => !f.isConnected);
+  for (final f in _frames) {
+    f.style.pointerEvents = _dragging || _covers > 0 ? 'none' : 'auto';
+  }
+}
 
 /// While a pane divider is dragged the editors' iframes must not take the pointer (it would stop
 /// reaching Flutter as soon as it crossed one).
 void setEditorFramesInteractive(bool on) {
-  _frames.removeWhere((f) => !f.isConnected);
-  for (final f in _frames) {
-    f.style.pointerEvents = on ? 'auto' : 'none';
+  _dragging = !on;
+  _applyPointer();
+}
+
+/// A click over an iframe goes to the iframe even where Flutter paints on top of it, so a menu or
+/// dialog over an editor could not be clicked (the click landed in Blockly or Monaco). While one is
+/// open the editors take no pointer; a click beside a menu then reaches Flutter and closes it.
+void coverEditorFrames(bool on) {
+  _covers = on ? _covers + 1 : (_covers > 0 ? _covers - 1 : 0);
+  _applyPointer();
+}
+
+/// Covers the editors while a dialog or popup menu (a [PopupRoute]) is open.
+class EditorFramesObserver extends NavigatorObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PopupRoute) coverEditorFrames(true);
   }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PopupRoute) coverEditorFrames(false);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PopupRoute) coverEditorFrames(false);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (oldRoute is PopupRoute) coverEditorFrames(false);
+    if (newRoute is PopupRoute) coverEditorFrames(true);
+  }
+}
+
+/// Takes the clicks over its own area for Flutter: an invisible element above the editors' iframes
+/// (the same trick as package:pointer_interceptor). For panels that float over an editor but leave
+/// the rest of it usable, such as Ask Cog on a narrow window.
+class FrameShield extends StatelessWidget {
+  const FrameShield({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Stack(children: [
+        Positioned.fill(
+          child: HtmlElementView.fromTagName(
+            tagName: 'div',
+            isVisible: false,
+            onElementCreated: (Object element) => (element as _Frame).style
+              ..width = '100%'
+              ..height = '100%',
+          ),
+        ),
+        child,
+      ]);
 }
 
 /// An iframe with robocore_editors.html#[mode]. [onReady] runs after every load, so an editor
@@ -74,11 +165,13 @@ Widget _frame(String mode, void Function(_Api api) onReady) => HtmlElementView.f
       onElementCreated: (Object element) {
         final f = element as _Frame;
         _frames.add(f);
+        _returnFocusOnOutsideClicks();
         f.style
           ..border = '0'
           ..width = '100%'
           ..height = '100%'
-          ..display = 'block';
+          ..display = 'block'
+          ..pointerEvents = _dragging || _covers > 0 ? 'none' : 'auto';
         f.addEventListener(
             'load',
             (() {

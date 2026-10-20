@@ -247,7 +247,7 @@ class _EditorPageState extends State<EditorPage> {
         ]),
       ),
       if (s.cog.open && !cogBeside)
-        Positioned(top: pad, right: pad, bottom: pad, width: math.min(400, width - 2 * pad), child: const CogPanel()),
+        Positioned(top: pad, right: pad, bottom: pad, width: math.min(400, width - 2 * pad), child: const FrameShield(child: CogPanel())),
     ]);
   }
 

@@ -5,6 +5,17 @@ const kWebEditors = false;
 
 void setEditorFramesInteractive(bool on) {}
 
+void coverEditorFrames(bool on) {}
+
+class EditorFramesObserver extends NavigatorObserver {}
+
+class FrameShield extends StatelessWidget {
+  const FrameShield({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
 class BlocklyEditor extends StatefulWidget {
   const BlocklyEditor(
       {super.key,
