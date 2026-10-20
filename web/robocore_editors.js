@@ -460,6 +460,8 @@
         maxTrashcanContents: 32,
         sounds: false,
       });
+      // The app hides this frame while the C++ tab is open; re-measure when it shows again.
+      new ResizeObserver(() => { if (ws) Blockly.svgResize(ws); }).observe(document.getElementById('host'));
       ws.addChangeListener(Blockly.Events.disableOrphans);
       ws.addChangeListener((e) => {
         if (loading || e.isUiEvent) return;

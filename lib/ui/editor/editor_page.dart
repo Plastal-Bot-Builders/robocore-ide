@@ -155,7 +155,13 @@ class _EditorPageState extends State<EditorPage> {
           ? const BlocksView()
           : CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines);
     } else {
-      main = p.mode == 'blocks' ? _blocklyArea(s, c, p, width) : _monacoFor(s, c, p, fi);
+      // Both editors stay loaded while the project is open, so Blocks ↔ C++ is instant and Blockly
+      // keeps its undo history; the hidden one is only not painted (its iframe stays in the page).
+      main = IndexedStack(
+        index: p.mode == 'blocks' ? 0 : 1,
+        sizing: StackFit.expand,
+        children: [_blocklyArea(s, c, p, width), _monacoFor(s, c, p, fi)],
+      );
       _takeGotoLine(s, p);
     }
 
@@ -215,41 +221,46 @@ class _EditorPageState extends State<EditorPage> {
     final show = _showCpp && width >= 1100;
     return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Expanded(child: editor),
-      if (show) ...[
-        Container(width: 1, color: c.line2),
-        SizedBox(
-          width: 400,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              alignment: Alignment.centerLeft,
-              color: c.surface,
-              child: Row(children: [
-                Text('C++ FROM THE BLOCKS', style: tOverline(c)),
-                const Spacer(),
-                if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: s.rebuildFromBlocks),
-              ]),
-            ),
-            if (p.codeEdited)
+      // Hidden, the C++ pane keeps its editor loaded (and takes no room).
+      Visibility(
+        visible: show,
+        maintainState: true,
+        child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Container(width: 1, color: c.line2),
+          SizedBox(
+            width: 400,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Container(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.centerLeft,
                 color: c.surface,
-                child: Text('${p.files.first.name} was edited by hand, so these blocks don\'t change it.',
-                    style: tCaption(c, color: c.muted)),
+                child: Row(children: [
+                  Text('C++ FROM THE BLOCKS', style: tOverline(c)),
+                  const Spacer(),
+                  if (p.codeEdited) Btn('Use the blocks again', icon: 'swap', kind: BtnKind.plain, onTap: s.rebuildFromBlocks),
+                ]),
               ),
-            Expanded(
-              child: MonacoEditor(
-                key: _preview,
-                fileKey: '${p.id}/blocks.cpp',
-                text: p.blocklyCode ?? p.generate(),
-                readOnly: true,
-                options: _monacoOptions(s, c),
+              if (p.codeEdited)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  color: c.surface,
+                  child: Text('${p.files.first.name} was edited by hand, so these blocks don\'t change it.',
+                      style: tCaption(c, color: c.muted)),
+                ),
+              Expanded(
+                child: MonacoEditor(
+                  key: _preview,
+                  fileKey: '${p.id}/blocks.cpp',
+                  text: p.blocklyCode ?? p.generate(),
+                  readOnly: true,
+                  options: _monacoOptions(s, c),
+                ),
               ),
-            ),
-          ]),
-        ),
-      ],
+            ]),
+          ),
+        ]),
+      ),
     ]);
   }
 
