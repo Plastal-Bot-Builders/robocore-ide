@@ -433,14 +433,22 @@
   // Blocks a student placed: not the two hats or the number fields inside other blocks.
   const countBlocks = (w) => w.getAllBlocks(false).filter((b) => !b.isShadow() && !HATS.includes(b.type)).length;
 
+  function sendBlocks() {
+    timer = 0;
+    if (!ws || !onBlocksChange) return;
+    const json = JSON.stringify(Blockly.serialization.workspaces.save(ws));
+    onBlocksChange(json, generate(ws), countBlocks(ws));
+    reportSelection();
+  }
+
   function emitBlocks() {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (!ws || !onBlocksChange) return;
-      const json = JSON.stringify(Blockly.serialization.workspaces.save(ws));
-      onBlocksChange(json, generate(ws), countBlocks(ws));
-      reportSelection();
-    }, 60);
+    timer = setTimeout(sendBlocks, 60);
+  }
+
+  // A Save or Verify pressed right after a change must not wait for the 60 ms pause.
+  function flushBlocks() {
+    if (timer) { clearTimeout(timer); sendBlocks(); }
   }
 
   function blocksOptions(o) {
@@ -761,11 +769,31 @@
     }
   })();
 
+  // ======================================================================= The IDE's shortcuts
+
+  // Ctrl/⌘ + S, R, U and I are the IDE's (Save, Verify, Upload, Ask Cog), also while typing here. Taken
+  // before Blockly, Monaco or the browser see them: otherwise the browser would save the page (S), reload
+  // it (R) or show its source (U), and Monaco would open suggestions (I). The app sets the handler.
+  const IDE_KEYS = { s: 'save', r: 'verify', u: 'upload', i: 'cog' };
+  let onIdeKey = null;
+  window.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : '';
+    const action = IDE_KEYS[k];
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat || !onIdeKey) return;
+    if (MODE === 'blocks') flushBlocks();
+    onIdeKey(action);
+  }, true);
+
   window.rcEditor = {
     mode: MODE,
     ready,
     blocks: blocksApi,
     code: codeApi,
+    setIdeKeys(handler) { onIdeKey = handler || null; },
     // For checks: the C++ for a saved workspace, without showing it.
     generateFor(json, optionsJson) {
       blocksOptions(JSON.parse(optionsJson || '{}'));

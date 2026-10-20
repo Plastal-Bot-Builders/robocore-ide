@@ -87,7 +87,7 @@ built-in preview check. The native apps (Windows, macOS, Linux, Android, iOS) us
 
 | Workflow | What it runs |
 | --- | --- |
-| `build.yml` | USB bridge tests (`node --test test/js/robocore_usb.test.mjs`), `dart analyze`, `flutter test`, and the web, Android, Windows, Linux, macOS and iOS builds. Flutter is pinned (`FLUTTER_VERSION`) and every action is pinned to a commit |
+| `build.yml` | USB bridge and editor shortcut tests (`node --test test/js/robocore_usb.test.mjs test/js/robocore_editors.test.mjs`), `dart analyze`, `flutter test`, and the web, Android, Windows, Linux, macOS and iOS builds. Flutter is pinned (`FLUTTER_VERSION`) and every action is pinned to a commit |
 | `firmware.yml` | Pin map and examples in sync with the app, the library and examples on a PC (`-Werror` plus logic tests), a real ESP32-S3 compile of every example, the compile server's tests, and its Docker image compiling every example end to end |
 
 **GitHub Pages:** the web app is published by the *Publish web app* job. It needs Pages switched on once:

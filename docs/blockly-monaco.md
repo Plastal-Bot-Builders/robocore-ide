@@ -34,7 +34,13 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
   main.dart) is open, the iframes take no pointer (`coverEditorFrames`); a click beside a menu then closes it. A panel
   that floats over an editor but leaves the rest usable (Ask Cog on a narrow window) sits on a `FrameShield`, an
   invisible element that takes its clicks for Flutter (like package:pointer_interceptor). And a click anywhere outside
-  the editors takes the keyboard focus back from their iframe, so Esc and Ctrl/⌘ + S, R, U, I reach the app.
+  the editors takes the keyboard focus back from their iframe, so Esc and the app's shortcuts reach the app.
+- **The IDE's shortcuts inside the editors.** Keys typed in Blockly or Monaco stay in their iframe, so
+  robocore_editors.js takes Ctrl/⌘ + S, R, U and I first (capture phase) and hands them to the app
+  (`setIdeKeys` → `setEditorShortcutHandler` → Shell): Save, Verify, Upload, Ask Cog. That also stops the browser
+  saving the page, reloading it (R) or showing its source (U), and Monaco's Ctrl/⌘ + I suggestions (Ctrl + Space
+  still opens them). Blocks changed in the last 60 ms are sent first, so Verify checks what is on screen. Tests:
+  `node --test test/js/robocore_editors.test.mjs`.
 - **AppState stays the source of truth.** Every Blockly change sends the workspace (Blockly JSON), the C++ and the
   block count to `AppState.setBlockly`. The project saves them as `blockly` and `blocklyCode`; the main `.ino` follows
   the blocks until it is edited by hand (then the C++ pane offers *Use the blocks again*).

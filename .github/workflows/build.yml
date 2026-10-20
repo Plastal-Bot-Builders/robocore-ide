@@ -31,8 +31,8 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
-      - name: USB bridge (web/robocore_usb.js) with a fake Web Serial and esptool
-        run: node --test test/js/robocore_usb.test.mjs
+      - name: USB bridge (fake Web Serial and esptool) and editor shortcuts, in Node
+        run: node --test test/js/robocore_usb.test.mjs test/js/robocore_editors.test.mjs
       - name: Analyze
         run: |
           set +e

@@ -32,6 +32,7 @@ extension type _Win._(JSObject _) implements JSObject {
 extension type _Api._(JSObject _) implements JSObject {
   external _Blocks get blocks;
   external _Code get code;
+  external void setIdeKeys(JSFunction handler);
 }
 
 extension type _Blocks._(JSObject _) implements JSObject {
@@ -71,6 +72,11 @@ extension type _Focused._(JSObject _) implements JSObject {
 
 final _frames = <_Frame>{};
 var _focusReturns = false;
+void Function(String action)? _ideKey;
+
+/// Ctrl/⌘ + S, R, U and I typed inside Blockly or Monaco never reach Flutter (the iframe has the keys), so
+/// the editors hand them over: [handler] gets 'save', 'verify', 'upload' or 'cog'.
+void setEditorShortcutHandler(void Function(String action)? handler) => _ideKey = handler;
 
 /// The page only sees a pointerdown outside both editors (inside one it goes to the iframe), but the
 /// browser leaves the keyboard focus in the iframe, so Esc and Ctrl/⌘+S, R, U, I would never reach
@@ -176,7 +182,9 @@ Widget _frame(String mode, void Function(_Api api) onReady) => HtmlElementView.f
             'load',
             (() {
               final api = f.contentWindow?.rcEditor;
-              if (api != null) onReady(api);
+              if (api == null) return;
+              api.setIdeKeys(((JSString action) => _ideKey?.call(action.toDart)).toJS);
+              onReady(api);
             }).toJS);
         f.src = 'robocore_editors.html#$mode';
       },

@@ -196,8 +196,7 @@ class _ShortcutsDialog extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         Text(
-          'While you’re typing in the code or blocks area, keys go to that editor: click outside it first for Save, '
-          'Verify, Upload and Ask Cog, or use the buttons in the top bar.',
+          'Save, Verify, Upload and Ask Cog work anywhere in the IDE, also while you’re typing in the code or blocks.',
           style: tCaption(c, color: c.faint),
         ),
       ]),
