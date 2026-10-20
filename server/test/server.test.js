@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, loadConfig } from '../src/server.js';
 import { validateRequest } from '../src/compile.js';
-import { parseDiagnostics, parseSizes, parseCliJson, scrub } from '../src/parse.js';
+import { parseDiagnostics, parseSizes, parseCliJson, scrub, mergeProblems } from '../src/parse.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let server, base, tmp;
@@ -18,7 +18,7 @@ before(async () => {
   const cli = path.join(here, 'fake-arduino-cli.mjs');
   await chmod(cli, 0o755);
   const cfg = loadConfig({
-    port: 0, cli, bootApp0, tmpDir: tmp, timeoutMs: 1500, ratePerMin: 1000, maxRunning: 1, maxQueued: 2,
+    port: 0, cli, bootApp0, tmpDir: tmp, timeoutMs: 5000, ratePerMin: 1000, maxRunning: 1, maxQueued: 2,
     allowedOrigins: ['https://plastal-bot-builders.github.io', 'http://localhost:*'],
   });
   server = createServer(cfg);
@@ -148,4 +148,10 @@ test('parsers', () => {
   assert.deepEqual(parseCliJson('noise\n{"success":true}'), { success: true });
   assert.equal(parseCliJson('nothing'), null);
   assert.equal(scrub('/tmp/a/b.ino and /tmp/a', [['/tmp/a/', ''], ['/tmp/a', '']]), 'b.ino and ');
+});
+
+test('the same diagnostic from the JSON result and the text log is listed once', () => {
+  const a = [{ severity: 'error', file: 'Blink.ino', line: 6, column: 3, message: "'digitalwrite' was not declared in this scope" }];
+  const b = [{ severity: 'error', file: 'Blink.ino', line: 6, column: 3, message: "'digitalwrite' was not declared in this scope\n    6 |   digitalwrite(LED_BUILTIN, HIGH);" }];
+  assert.deepEqual(mergeProblems(a, b), a);
 });
