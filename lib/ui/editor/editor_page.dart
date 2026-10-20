@@ -1,12 +1,18 @@
 // The editor: Blocks / Code card, console panel and the board card.
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../data/catalog.dart';
 import '../../engine/blockly_convert.dart';
+import '../../engine/compiler.dart' show Problem;
 import '../../state/app_state.dart';
+import '../../state/cog.dart';
 import '../../state/models.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../cog/cog_panel.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/serial_log.dart';
@@ -47,7 +53,7 @@ class _EditorPageState extends State<EditorPage> {
     final p = s.cur!;
     final width = MediaQuery.sizeOf(context).width;
     final phone = width < 760;
-    final showBoard = width >= 1000;
+    final showBoard = width >= 1000 && !s.cog.open;
     final fi = s.file.clamp(0, p.files.length - 1).toInt();
     final f = p.files[fi];
 
@@ -190,8 +196,9 @@ class _EditorPageState extends State<EditorPage> {
     final edCard = RcCard(child: Column(children: [toolbar, Expanded(child: main)]));
     final panel = ConsolePanel(boardTab: !showBoard);
     final pad = phone ? 8.0 : 12.0;
+    final cogBeside = width >= 1000;
 
-    return Padding(
+    final content = Padding(
       padding: EdgeInsets.all(pad),
       child: LayoutBuilder(builder: (context, box) {
         // The console keeps 120 px at least and leaves the editor 200 px at least.
@@ -229,6 +236,30 @@ class _EditorPageState extends State<EditorPage> {
         ]);
       }),
     );
+
+    // The editor stays the first child in the same place whether Cog is open or not, so the
+    // Blockly and Monaco frames are never moved (moving them would reload them).
+    return Stack(children: [
+      Positioned.fill(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: content),
+          if (s.cog.open && cogBeside) Padding(padding: EdgeInsets.fromLTRB(0, pad, pad, pad), child: const SizedBox(width: 352, child: CogPanel())),
+        ]),
+      ),
+      if (s.cog.open && !cogBeside)
+        Positioned(top: pad, right: pad, bottom: pad, width: math.min(400, width - 2 * pad), child: const CogPanel()),
+    ]);
+  }
+
+  /// "Explain with Cog" on a line of code: the problem on (or nearest to) that line, else the line itself.
+  void _explainLine(AppState s, String file, int line) {
+    final here = [for (final e in s.problems) if (e.file == file) e];
+    if (here.isEmpty) {
+      s.cog.ask('Explain line $line of $file.');
+      return;
+    }
+    here.sort((a, b) => (a.line - line).abs().compareTo((b.line - line).abs()));
+    s.cog.explainError(here.first);
   }
 
   Map<String, Object?> _monacoOptions(AppState s, RC c) => {
@@ -257,6 +288,11 @@ class _EditorPageState extends State<EditorPage> {
         'theme': c.dark ? 'navy' : 'paper',
       },
       onChange: (json, code, count) => s.setBlockly(json, code, count: count),
+      onSelect: (json) {
+        if (json.isEmpty) return s.cog.selectBlock(null);
+        final b = (jsonDecode(json) as Map).cast<String, dynamic>();
+        s.cog.selectBlock(CogBlock(type: '${b['type']}', label: '${b['label']}', cpp: '${b['cpp']}'));
+      },
       onZoom: (scale) {
         if (mounted && scale != _zoom) setState(() => _zoom = scale);
       },
@@ -340,6 +376,7 @@ class _EditorPageState extends State<EditorPage> {
         if (handEdit) s.showToast('Code edited by hand. The blocks will stop updating it.');
       },
       onCursor: (line, column) => s.setCursor('Ln $line, Col $column'),
+      onExplain: (line) => _explainLine(s, f.name, line),
     );
   }
 
@@ -396,7 +433,12 @@ class ConsolePanel extends StatelessWidget {
         case 'serial':
           return const Column(children: [Expanded(child: SerialLog()), SendRow(hint: 'Send a message to the board')]);
         case 'output':
-          return const OutputLog();
+          final firstError = s.problems.where((e) => e.isError).firstOrNull;
+          if (firstError == null) return const OutputLog();
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _ExplainBar(problem: firstError, errors: s.problems.where((e) => e.isError).length),
+            const Expanded(child: OutputLog()),
+          ]);
         case 'board':
           return SingleChildScrollView(child: BoardSummary(boardId: s.cur?.board ?? s.board, extra: const LiveBoard()));
         default:
@@ -417,6 +459,8 @@ class ConsolePanel extends StatelessWidget {
                     Padding(padding: const EdgeInsets.only(top: 2), child: RcIcon(e.isError ? 'alert' : 'info', size: 15, color: e.isError ? c.err : c.muted)),
                     const SizedBox(width: 10),
                     Expanded(child: Text(e.msg, style: tBody(c, size: 13, height: 18 / 13))),
+                    const SizedBox(width: 10),
+                    CogExplainButton(problem: e),
                     const SizedBox(width: 10),
                     Text('${e.file}:${e.line}', style: tMono(c, size: 12, color: c.muted, height: 18 / 12)),
                   ]),
@@ -621,6 +665,32 @@ class _UserButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Above the Output after a failed Verify: offers Cog's explanation of the first error.
+class _ExplainBar extends StatelessWidget {
+  const _ExplainBar({required this.problem, required this.errors});
+  final Problem problem;
+  final int errors;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+      decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
+      child: Row(children: [
+        RcIcon('alert', size: 15, color: c.err),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text('$errors error${errors == 1 ? '' : 's'}: ${problem.file}:${problem.line} ${problem.msg}',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: tCaption(c, color: c.ink)),
+        ),
+        const SizedBox(width: 8),
+        CogExplainButton(problem: problem, label: 'Explain with Cog'),
+      ]),
     );
   }
 }

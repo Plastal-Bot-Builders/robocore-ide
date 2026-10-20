@@ -35,6 +35,9 @@ class Project {
 
   /// Blocks in the Blockly workspace, for the status bar (not saved).
   int? blocklyCount;
+
+  /// What the student has learned with Cog in this project ("You've learned").
+  List<String> learned;
   List<ProjectFile> files;
   bool codeEdited;
   bool autosave;
@@ -54,7 +57,8 @@ class Project {
     required this.updated,
     this.blockly,
     this.blocklyCode,
-  });
+    List<String>? learned,
+  }) : learned = learned ?? [];
 
   bool get hasBlocks => mode == 'blocks' || !codeEdited;
   List<Block> stack(String s) => s == 'setup' ? setup : loop;
@@ -72,6 +76,7 @@ class Project {
         'blocks': {'setup': setup, 'loop': loop},
         if (blockly != null) 'blockly': blockly,
         if (blocklyCode != null) 'blocklyCode': blocklyCode,
+        if (learned.isNotEmpty) 'learned': learned,
         'files': files.map((f) => f.toJson()).toList(),
         'codeEdited': codeEdited,
         'autosave': autosave,
@@ -93,6 +98,7 @@ class Project {
       updated: (j['updated'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       blockly: j['blockly'] as String?,
       blocklyCode: j['blocklyCode'] as String?,
+      learned: [for (final x in (j['learned'] as List? ?? const [])) '$x'],
     );
   }
 
@@ -145,6 +151,12 @@ class Settings {
   static const defaultCppPaneWidth = 400.0;
   static const defaultConsoleHeight = 232.0;
 
+  /// Cog: help style (hints | explain | write), whether it may read the project, and the teacher
+  /// PIN (a hash, empty = none) that guards "Write code for me" and changing the style.
+  String cogStyle;
+  bool cogRead;
+  String cogPin;
+
   Settings({
     this.theme = 'paper',
     this.fontSize = 13,
@@ -155,6 +167,9 @@ class Settings {
     this.compileServer = '',
     this.cppPaneWidth = defaultCppPaneWidth,
     this.consoleHeight = defaultConsoleHeight,
+    this.cogStyle = 'hints',
+    this.cogRead = true,
+    this.cogPin = '',
   });
   Map<String, dynamic> toJson() => {
         'theme': theme,
@@ -166,6 +181,9 @@ class Settings {
         'compileServer': compileServer,
         'cppPaneWidth': cppPaneWidth,
         'consoleHeight': consoleHeight,
+        'cogStyle': cogStyle,
+        'cogRead': cogRead,
+        'cogPin': cogPin,
       };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
         theme: j['theme'] as String? ?? 'paper',
@@ -177,6 +195,9 @@ class Settings {
         compileServer: j['compileServer'] as String? ?? '',
         cppPaneWidth: (j['cppPaneWidth'] as num?)?.toDouble() ?? defaultCppPaneWidth,
         consoleHeight: (j['consoleHeight'] as num?)?.toDouble() ?? defaultConsoleHeight,
+        cogStyle: const ['hints', 'explain', 'write'].contains(j['cogStyle']) ? j['cogStyle'] as String : 'hints',
+        cogRead: j['cogRead'] as bool? ?? true,
+        cogPin: j['cogPin'] as String? ?? '',
       );
 }
 

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../state/app_state.dart';
+import '../../state/cog.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../cog/cog_panel.dart' show CogMark;
 import '../dialogs.dart' show RadioDot;
 import '../widgets/common.dart';
 import 'home_page.dart';
@@ -115,6 +118,13 @@ class SettingsPage extends StatelessWidget {
             ]),
             const SizedBox(height: 20),
             card('Real board and upload', [const _CompileServerRow()]),
+            const SizedBox(height: 20),
+            card('Cog — learning partner', [
+              const _CogStyleRow(),
+              row('Let Cog read this project', RcSwitch(value: st.cogRead, label: 'Let Cog read this project', onChanged: (v) => s.updateSettings((x) => x.cogRead = v)),
+                  hint: 'Open files, Output and the Serial Monitor. Nothing is sent when this is off.'),
+              const _CogStatusRow(),
+            ]),
             const SizedBox(height: 20),
             card('General', [
               row('Language',
@@ -295,6 +305,222 @@ class _ProfileRowState extends State<_ProfileRow> {
           const SizedBox(width: 12),
           Btn('Save', kind: BtnKind.primary, height: 34, onTap: _save),
         ]),
+      ]),
+    );
+  }
+}
+
+/// Settings → Cog: how much Cog shows. "Write code for me" and, once a teacher PIN is set, any change
+/// of style need the PIN.
+class _CogStyleRow extends StatelessWidget {
+  const _CogStyleRow();
+
+  Future<String?> _pin(BuildContext context, {required String title, required String body, bool create = false}) {
+    final a = TextEditingController(), b = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        final c = RC.of(context);
+        String? error;
+        return StatefulBuilder(builder: (context, set) {
+          void done() {
+            final pin = a.text.trim();
+            if (pin.length < 4) return set(() => error = 'Use at least 4 digits.');
+            if (create && pin != b.text.trim()) return set(() => error = 'The two PINs are different.');
+            Navigator.pop(context, pin);
+          }
+
+          Widget field(TextEditingController t, String hint, {bool autofocus = false}) => TextField(
+                controller: t,
+                autofocus: autofocus,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                onSubmitted: (_) => done(),
+                style: tBody(c, size: 14),
+                decoration: InputDecoration(hintText: hint, isDense: true, border: const OutlineInputBorder()),
+              );
+          return AlertDialog(
+            backgroundColor: c.raised,
+            title: Text(title.toUpperCase(), style: tH2(c)),
+            content: SizedBox(
+              width: 360,
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text(body, style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),
+                const SizedBox(height: 14),
+                field(a, 'Teacher PIN', autofocus: true),
+                if (create) ...[const SizedBox(height: 8), field(b, 'The same PIN again')],
+                if (error != null) ...[const SizedBox(height: 8), Text(error!, style: tCaption(c, color: c.err))],
+              ]),
+            ),
+            actions: [
+              Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.pop(context)),
+              Btn(create ? 'Set PIN' : 'OK', kind: BtnKind.primary, onTap: done),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  /// Asks for the PIN when one is set. true = go ahead.
+  Future<bool> _unlock(BuildContext context, AppState s) async {
+    if (s.settings.cogPin.isEmpty) return true;
+    final pin = await _pin(context, title: 'Teacher PIN', body: 'A teacher locked Cog’s help style. Type the PIN to change it.');
+    if (pin == null) return false;
+    if (cogPinHash(pin) == s.settings.cogPin) return true;
+    s.showToast('That PIN is not right.');
+    return false;
+  }
+
+  Future<void> _pick(BuildContext context, AppState s, String style) async {
+    if (s.settings.cogStyle == style) return;
+    if (style == 'write' && s.settings.cogPin.isEmpty) {
+      final pin = await _pin(context,
+          create: true,
+          title: 'Teacher PIN',
+          body: '“Write code for me” is for teachers to turn on. Set a teacher PIN: it will also be needed to change the help style.');
+      if (pin == null) return;
+      s.updateSettings((x) {
+        x.cogPin = cogPinHash(pin);
+        x.cogStyle = style;
+      });
+      return;
+    }
+    if (!context.mounted || !await _unlock(context, s)) return;
+    s.updateSettings((x) => x.cogStyle = style);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = RC.of(context);
+    final st = s.settings;
+    Widget option(String key, String desc, {bool locked = false}) {
+      final on = st.cogStyle == key;
+      return Hover(
+        onTap: () => _pick(context, s, key),
+        builder: (context, h) => Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: on ? c.brandSoft : (h ? c.sunk : Colors.transparent),
+            border: Border.all(color: on ? c.ink : c.line),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            RadioDot(on: on),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(kCogStyles[key]!, style: tLabel(c)),
+                Text(desc, style: tCaption(c)),
+              ]),
+            ),
+            if (locked && st.cogPin.isEmpty) ...[const SizedBox(width: 8), Badge2('Teacher')],
+          ]),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const CogMark(size: 28),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Cog explains errors and blocks, gives hints one at a time, and checks what you learned.', style: tBody(c, size: 13, height: 18 / 13))),
+        ]),
+        const SizedBox(height: 14),
+        Text('How should Cog help?', style: tLabel(c, color: c.muted, w: FontWeight.w500)),
+        const SizedBox(height: 8),
+        option('hints', 'Explains, then gives hints one at a time. Shows the fix only after two hints. (Default)'),
+        option('explain', 'Explains the problem and the fix in words.'),
+        option('write', 'Can write and change code when asked. Off for students.', locked: true),
+        Row(children: [
+          Expanded(
+            child: Text(
+              st.cogPin.isEmpty ? 'Teachers can lock this for a class with a PIN.' : 'Locked with a teacher PIN: changing the help style asks for it.',
+              style: tCaption(c),
+            ),
+          ),
+          if (st.cogPin.isEmpty)
+            Btn('Set a teacher PIN', kind: BtnKind.plain, onTap: () async {
+              final pin = await _pin(context, create: true, title: 'Teacher PIN', body: 'With a PIN, students can’t change Cog’s help style or turn on “Write code for me”.');
+              if (pin != null) s.updateSettings((x) => x.cogPin = cogPinHash(pin));
+            })
+          else
+            Btn('Remove the PIN', kind: BtnKind.plain, onTap: () async {
+              if (!await _unlock(context, s)) return;
+              s.updateSettings((x) {
+                x.cogPin = '';
+                if (x.cogStyle == 'write') x.cogStyle = 'hints';
+              });
+            }),
+        ]),
+      ]),
+    );
+  }
+}
+
+/// Whether the RoboCore server has Cog, with the offline note when it can't be reached.
+class _CogStatusRow extends StatefulWidget {
+  const _CogStatusRow();
+  @override
+  State<_CogStatusRow> createState() => _CogStatusRowState();
+}
+
+class _CogStatusRowState extends State<_CogStatusRow> {
+  (bool?, String)? _status;
+  bool _busy = false;
+
+  Future<void> _test() async {
+    final s = AppScope.read(context);
+    setState(() => _busy = true);
+    final r = await s.cog.client.status(s.settings.compileServer);
+    if (mounted) {
+      setState(() {
+        _status = r;
+        _busy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final st = _status;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Cog on the RoboCore server', style: tLabel(c, w: FontWeight.w500)),
+              const SizedBox(height: 2),
+              Text('Cog answers through the server above. Its Anthropic API key stays on the server.', style: tCaption(c)),
+            ]),
+          ),
+          const SizedBox(width: 16),
+          Btn(_busy ? 'Testing…' : 'Test Cog', kind: BtnKind.outline, onTap: _busy ? null : _test),
+        ]),
+        if (st != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              RcIcon(st.$1 == true ? 'check' : 'alert', size: 18, color: st.$1 == true ? c.ok : c.ink),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(st.$1 == null ? 'Cog is offline' : (st.$1! ? 'Cog is ready' : 'Cog isn’t set up'), style: tLabel(c)),
+                  const SizedBox(height: 2),
+                  Text(st.$2, style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),
+                ]),
+              ),
+            ]),
+          ),
+        ],
       ]),
     );
   }
