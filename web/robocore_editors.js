@@ -248,6 +248,11 @@
         super.show(contents);
         decorateFlyout(this.getWorkspace().getCanvas());
       }
+      // The palette keeps its size when the workspace zooms (as in Scratch and the design); Blockly's default
+      // follows the workspace. A block taken out of it takes the workspace's size.
+      getFlyoutScale() {
+        return 1;
+      }
       // At least the design's 288 px; Blockly fits the flyout to its widest block.
       reflowInternal_() {
         super.reflowInternal_();
