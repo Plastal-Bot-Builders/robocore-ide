@@ -307,7 +307,7 @@ class _ProfileRowState extends State<_ProfileRow> {
     }
     s.setProfile(name: _name.text, school: _school.text);
     setState(() => _error = null);
-    s.showToast('Profile saved.');
+    s.showToast('Profile saved', body: 'Shown on Home and in the account menu.');
   }
 
   @override
@@ -413,7 +413,7 @@ class _CogStyleRow extends StatelessWidget {
     final pin = await _pin(context, title: 'Teacher PIN', body: 'A teacher locked Cog’s help style. Type the PIN to change it.');
     if (pin == null) return false;
     if (cogPinHash(pin) == s.settings.cogPin) return true;
-    s.showToast('That PIN is not right.', error: true);
+    s.showToast('That PIN is not right', body: 'Try again, or ask the teacher who set it.', error: true);
     return false;
   }
 

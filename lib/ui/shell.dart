@@ -124,7 +124,7 @@ class _ShellState extends State<Shell> {
                   left: phone ? 0 : null,
                   right: phone ? 0 : 24,
                   bottom: phone ? 44 : 52,
-                  child: phone ? Center(child: _Toast(text: s.toast!, error: s.toastError)) : _Toast(text: s.toast!, error: s.toastError),
+                  child: phone ? const Center(child: _Toast()) : const _Toast(),
                 ),
             ],
           ),
@@ -137,7 +137,7 @@ class _ShellState extends State<Shell> {
     final p = s.cur;
     if (s.view == Screen.editor && p != null) {
       s.saveNow(p);
-      s.showToast('Saved.');
+      s.showToast('Saved', body: 'Kept on this device.');
     }
   }
 
@@ -196,24 +196,45 @@ class _ShellState extends State<Shell> {
 }
 
 /// Bottom right, as in the design. An error has an alert icon and a close button, and stays (G-16).
+/// A toast as in the design: success and info are white cards (check or info icon); an error is inverted (navy, a
+/// warning icon) — contrast, not colour. A bold title, the message under it, and close.
 class _Toast extends StatelessWidget {
-  const _Toast({required this.text, required this.error});
-  final String text;
-  final bool error;
+  const _Toast();
   @override
   Widget build(BuildContext context) {
-    final s = AppScope.read(context);
+    final s = AppScope.of(context);
+    final c = RC.of(context);
+    final error = s.toastError;
+    final bg = error ? c.ink : c.raised;
+    final fg = error ? (c.dark ? kNavy : kCream) : c.ink;
+    final body = s.toastBody;
     return Material(
       color: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 380, minWidth: 260),
         margin: const EdgeInsets.symmetric(horizontal: 16),
-        padding: EdgeInsets.fromLTRB(14, error ? 6 : 10, error ? 6 : 14, error ? 6 : 10),
-        decoration: BoxDecoration(color: kNavy, borderRadius: BorderRadius.circular(8), boxShadow: popShadow),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (error) ...[const RcIcon('alert', size: 16, color: kBrand), const SizedBox(width: 10)],
-          Flexible(child: Text(text, style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, color: kCream))),
-          if (error) ...[const SizedBox(width: 6), IconBtn('x', onTap: s.closeToast, tip: 'Close', color: kCream, size: 28, iconSize: 16)],
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+        decoration: BoxDecoration(
+          color: bg,
+          border: error ? null : Border.all(color: c.line),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: popShadow,
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: RcIcon(error ? 'alert' : (s.toastInfo ? 'info' : 'check'), size: 18, color: fg),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(s.toast ?? '', style: TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, fontWeight: FontWeight.w600, color: fg)),
+              if (body != null && body.isNotEmpty)
+                Text(body, style: TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, color: fg.withValues(alpha: error ? .85 : .8))),
+            ]),
+          ),
+          const SizedBox(width: 6),
+          IconBtn('x', onTap: s.closeToast, tip: 'Close', color: fg, size: 24, iconSize: 14),
         ]),
       ),
     );

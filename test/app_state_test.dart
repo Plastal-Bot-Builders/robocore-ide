@@ -354,7 +354,8 @@ void main() {
       await s.testConnection();
       expect(s.conn!.kind, 'ok');
       expect(s.conn!.text, contains('ESP32-S3 (QFN56) (revision v0.2)'));
-      expect(s.toast, 'Board answered · ESP32-S3 (QFN56) (revision v0.2)');
+      expect(s.toast, 'Board answered');
+      expect(s.toastBody, startsWith('ESP32-S3 (QFN56) (revision v0.2) on '));
       expect(s.busy, isNull);
       s.closeToast();
     });

@@ -418,7 +418,7 @@ class _EditorPageState extends State<EditorPage> {
   /// “Delete all N blocks?” (BK-10). Undo brings them back.
   void _confirmClear(BuildContext context, AppState s, Project p) {
     final n = p.blocklyCount ?? p.setup.length + p.loop.length;
-    if (n == 0) return s.showToast('There are no blocks to delete.');
+    if (n == 0) return s.showToast('There are no blocks to delete', info: true);
     showDialog<void>(
       context: context,
       barrierColor: const Color(0x521B2A41),
@@ -427,7 +427,7 @@ class _EditorPageState extends State<EditorPage> {
           Navigator.of(dctx).pop();
           if (kWebEditors) {
             _blockly.currentState?.clear();
-            s.showToast('All blocks deleted. Undo ($kMod+Z) brings them back.');
+            s.showToast('All blocks deleted', body: 'Undo ($kMod+Z) brings them back.', info: true);
           } else {
             s.clearBlocks();
           }
@@ -465,7 +465,7 @@ class _EditorPageState extends State<EditorPage> {
       onChange: (text) {
         final handEdit = !p.codeEdited && s.file == 0;
         s.editCode(text);
-        if (handEdit) s.showToast('Code edited by hand. The blocks will stop updating it.');
+        if (handEdit) s.showToast('Code edited by hand', body: 'The blocks will stop updating it.', info: true);
       },
       onCursor: (line, column) => s.setCursor('Ln $line, Col $column'),
       onExplain: (line) => _explainLine(s, f.name, line),

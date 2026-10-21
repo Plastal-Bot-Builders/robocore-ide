@@ -43,11 +43,12 @@ void main() {
     final copy = _named(s, 'Blink LED copy');
     expect(copy.id, isNot(blink.id));
     expect(copy.files.first.content, blink.files.first.content);
-    expect(s.toast, contains('“Blink LED copy 2” is in Projects'));
+    expect(s.toast, 'Project duplicated');
+    expect(s.toastBody, contains('“Blink LED copy 2” is in Projects'));
 
     s.renameProject(copy, '  Disco lights ');
     expect(copy.name, 'Disco lights');
-    expect(s.toast, 'Renamed to “Disco lights”.');
+    expect(s.toast, 'Renamed to “Disco lights”');
   });
 
   test('deleting another project keeps the open one open', () async {
