@@ -432,7 +432,7 @@ class _SavePill extends StatelessWidget {
     final s = AppScope.of(context);
     final (k, l) = s.saveLabel(p);
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      if (k == 'dirty') ...[const Dot(color: Color(0xFFC2362C), size: 7), const SizedBox(width: 6)],
+      if (k == 'dirty') ...[const Dot(color: kNavy, size: 7), const SizedBox(width: 6)],
       Text(l,
           style: TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: kNavy.withValues(alpha: .7))),
     ]);
@@ -452,7 +452,6 @@ class _BoardChipState extends State<BoardChip> {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final c = RC.of(context);
     final b = kBoards[s.boardId]!;
     final portShort = s.portShort;
     return Popover(
@@ -488,7 +487,7 @@ class _BoardChipState extends State<BoardChip> {
               Container(width: 1, height: 20, color: const Color(0xFFE7E5E0)),
             ],
             const SizedBox(width: 10),
-            Dot(color: s.linked ? c.ok : const Color(0xFFA4A8AD)),
+            Dot(color: kNavy, ring: !s.linked),
             if (!widget.compact) ...[
               const SizedBox(width: 6),
               Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : 'Not connected',
@@ -599,7 +598,7 @@ class ConnStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = RC.of(context);
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      Dot(color: connected ? c.ok : c.disabled),
+      LinkDot(on: connected),
       const SizedBox(width: 6),
       Text(connected ? 'Connected' : 'Not connected', style: tLabel(c, w: FontWeight.w500)),
     ]);
@@ -921,14 +920,11 @@ class StatusBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line2))),
       child: Row(children: [
-        Dot(
-          size: 7,
-          color: switch (s.stateKind) {
-            'err' => c.err,
-            'busy' => kBrand,
-            _ => c.ok,
-          },
-        ),
+        // Ink dot, the box yellow while busy, a warning icon on an error (the design's Connection Status).
+        if (s.stateKind == 'err')
+          RcIcon('alert', size: 13, color: c.ink)
+        else
+          Dot(size: 7, color: s.stateKind == 'busy' ? kBrand : c.ink),
         const SizedBox(width: 6),
         Text(s.stateLabel, style: tCaption(c, color: c.ink, w: FontWeight.w500)),
         const SizedBox(width: 16),

@@ -56,7 +56,9 @@ class _HoverState extends State<Hover> {
   }
 }
 
-enum BtnKind { primary, outline, plain, ghostTop, danger }
+// Primary (navy), outline (the design's Secondary), plain (Ghost), and the outline on the yellow top bar.
+// There is no red "danger" button in the design: Reset is Secondary, Delete project is Ghost with a trash icon.
+enum BtnKind { primary, outline, plain, ghostTop }
 
 class Btn extends StatelessWidget {
   const Btn(
@@ -107,11 +109,6 @@ class Btn extends StatelessWidget {
             bg = h ? Colors.white.withValues(alpha: .35) : Colors.transparent;
             fg = kNavy;
             border = kNavy;
-            break;
-          case BtnKind.danger:
-            bg = h ? c.errSoft : Colors.transparent;
-            fg = c.err;
-            border = c.err;
             break;
         }
         if (onTap == null) {
@@ -251,9 +248,10 @@ class RcInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
+    // An error keeps the ink border (1.5 px) and shows a warning icon in the field; the message under it is bold.
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(6),
-      borderSide: BorderSide(color: error ? c.err : c.line),
+      borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide(color: c.line),
     );
     return SizedBox(
       height: height,
@@ -275,11 +273,13 @@ class RcInput extends StatelessWidget {
           contentPadding: EdgeInsets.symmetric(horizontal: icon != null ? 0 : 12, vertical: (height - 18) / 2),
           prefixIcon: icon == null ? null : Padding(padding: const EdgeInsets.only(left: 10, right: 8), child: RcIcon(icon!, size: 16, color: c.ink)),
           prefixIconConstraints: const BoxConstraints(minWidth: 34, minHeight: 16),
+          suffixIcon: error ? Padding(padding: const EdgeInsets.only(right: 10), child: RcIcon('alert', size: 16, color: c.ink)) : null,
+          suffixIconConstraints: const BoxConstraints(minWidth: 26, minHeight: 16),
           enabledBorder: border,
           border: border,
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: error ? c.err : c.ink, width: 1.5),
+            borderSide: BorderSide(color: c.ink, width: 1.5),
           ),
         ),
       ),
@@ -451,13 +451,29 @@ class Badge2 extends StatelessWidget {
   }
 }
 
+/// A status dot: filled = connected / done, [ring] = not connected (the design's Connection Status).
 class Dot extends StatelessWidget {
-  const Dot({super.key, required this.color, this.size = 8});
+  const Dot({super.key, required this.color, this.size = 8, this.ring = false});
   final Color color;
   final double size;
+  final bool ring;
   @override
-  Widget build(BuildContext context) =>
-      Container(width: size, height: size, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: ring
+            ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 1.5))
+            : BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+}
+
+/// The connection dot: filled ink when connected, an ink ring when not.
+class LinkDot extends StatelessWidget {
+  const LinkDot({super.key, required this.on, this.size = 8});
+  final bool on;
+  final double size;
+  @override
+  Widget build(BuildContext context) => Dot(color: RC.of(context).ink, size: size, ring: !on);
 }
 
 class LinkText extends StatelessWidget {

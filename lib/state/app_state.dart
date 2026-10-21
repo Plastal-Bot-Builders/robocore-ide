@@ -1044,7 +1044,7 @@ class AppState extends ChangeNotifier {
       for (final e in r.errors) {
         outLine('${e.file}:${e.line}: error: ${e.msg}', 'err');
       }
-      outLine('Compilation failed with ${r.errors.length} error${r.errors.length > 1 ? 's' : ''}.', 'err');
+      outLine('Compilation failed with ${r.errors.length} error${r.errors.length > 1 ? 's' : ''}.', 'hint');
       if (!hasServer) {
         outLine('This was the built-in preview check. For a full C++ compile, add a compile server in Settings.', 'sys');
       }
@@ -1172,7 +1172,7 @@ class AppState extends ChangeNotifier {
     if (!r.ok) {
       busy = null;
       final n = math.max(1, r.errors.length);
-      outLine('Compilation failed with $n error${n == 1 ? '' : 's'}.', 'err');
+      outLine('Compilation failed with $n error${n == 1 ? '' : 's'}.', 'hint');
       panelTab = 'problems';
       setStatus('Errors', 'err');
       notifyListeners();
@@ -1257,7 +1257,7 @@ class AppState extends ChangeNotifier {
     } else {
       outLine('Upload failed: ${res.message}', 'err');
       if (res.code == 'bootloader') {
-        outLine(kBootTip, 'err');
+        outLine(kBootTip, 'hint');
         showToast('Hold BOOT, tap RESET, release BOOT, then Upload again.', error: true);
       }
       setStatus('Upload failed', 'err');

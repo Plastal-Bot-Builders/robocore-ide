@@ -183,7 +183,7 @@ class BoardSummary extends StatelessWidget {
         child: Row(children: [
           Text('BOARD', style: tH2(c)),
           const Spacer(),
-          Dot(color: s.linked ? c.ok : c.disabled),
+          LinkDot(on: s.linked),
           const SizedBox(width: 6),
           Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : 'Not connected', style: tLabel(c, w: FontWeight.w500)),
         ]),

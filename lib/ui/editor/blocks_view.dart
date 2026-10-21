@@ -190,7 +190,7 @@ class _RebuildButtonState extends State<_RebuildButton> {
   Widget build(BuildContext context) => Btn(
         armed ? 'Click again to replace the code' : 'Replace code with these blocks',
         small: true,
-        kind: armed ? BtnKind.danger : BtnKind.outline,
+        kind: armed ? BtnKind.primary : BtnKind.outline,
         onTap: () {
           if (!armed) return setState(() => armed = true);
           widget.onConfirm();

@@ -178,7 +178,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
           onChanged: (_) => setState(() => error = null),
           onSubmitted: (_) => _create(),
         ),
-        if (error != null) ...[const SizedBox(height: 6), Text(error!, style: tCaption(c, color: c.err))],
+        if (error != null) ...[const SizedBox(height: 6), Text(error!, style: tCaption(c, color: c.err, w: FontWeight.w600))],
         const SizedBox(height: 16),
         LayoutBuilder(builder: (context, k) {
           final narrow = k.maxWidth < 360;
@@ -316,7 +316,8 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
         const FieldLabel('Name'),
         RcInput(controller: _name, height: 36, fontSize: 14, error: error != null, onSubmitted: (_) => _save()),
         const SizedBox(height: 6),
-        Text(error ?? 'Letters, numbers and spaces.', style: tCaption(c, color: error != null ? c.err : c.faint)),
+        Text(error ?? 'Letters, numbers and spaces.',
+            style: tCaption(c, color: error != null ? c.err : c.faint, w: error != null ? FontWeight.w600 : FontWeight.w400)),
         const SizedBox(height: 16),
         const FieldLabel('Board'),
         RcSelect<String>(value: board, height: 36, width: double.infinity, items: _boardItems, onChanged: (v) => setState(() => board = v)),
@@ -333,7 +334,7 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
         ]),
       ]),
       actions: [
-        Btn('Delete project', icon: 'trash', kind: BtnKind.danger, onTap: () {
+        Btn('Delete project', icon: 'trash', kind: BtnKind.plain, onTap: () {
           final nav = Navigator.of(context);
           nav.pop();
           showDeleteProjectDialog(nav.context, p);
@@ -393,7 +394,8 @@ class _RenameDialogState extends State<_RenameDialog> {
           onSubmitted: (_) => _save(),
         ),
         const SizedBox(height: 6),
-        Text(error ?? 'Letters, numbers and spaces.', style: tCaption(c, color: error != null ? c.err : c.faint)),
+        Text(error ?? 'Letters, numbers and spaces.',
+            style: tCaption(c, color: error != null ? c.err : c.faint, w: error != null ? FontWeight.w600 : FontWeight.w400)),
       ]),
       actions: [
         Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),
