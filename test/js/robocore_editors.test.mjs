@@ -37,8 +37,16 @@ function page(mode = 'code') {
     keydown.fn(e);
     return e;
   };
-  return { ctx, actions, press };
+  return { ctx, actions, press, listeners };
 }
+
+// A wheel event as the browser sends it; a touchpad pinch has ctrlKey set.
+const wheel = (init) => {
+  const e = { ctrlKey: false, metaKey: false, deltaY: 4, ...init, prevented: false, stopped: false };
+  e.preventDefault = () => { e.prevented = true; };
+  e.stopPropagation = () => { e.stopped = true; };
+  return e;
+};
 
 test('Ctrl or ⌘ + S, R, U, I, B, J go to the IDE and not to the editor or the browser', () => {
   const { actions, press } = page();
@@ -94,4 +102,21 @@ test('a held key runs the action once; before the app has a handler the key is s
   const e = press({ key: 'r', code: 'KeyR', ctrlKey: true });
   assert.ok(e.prevented, 'no page reload while the app is still starting');
   assert.deepEqual(actions, ['verify']);
+});
+
+test('a touchpad pinch does not zoom the code editor (or the page); the blocks keep their pinch zoom', () => {
+  const { listeners } = page('code');
+  const onWheel = listeners.find((l) => l.type === 'wheel');
+  assert.ok(onWheel, 'the code page listens to the wheel');
+  assert.equal(onWheel.capture.capture, true, 'before Monaco sees it');
+  assert.equal(onWheel.capture.passive, false, 'so it can stop the browser zooming the page');
+  const pinch = wheel({ ctrlKey: true });
+  onWheel.fn(pinch);
+  assert.ok(pinch.prevented && pinch.stopped, 'a pinch (Ctrl + wheel) is swallowed');
+  const scroll = wheel({});
+  onWheel.fn(scroll);
+  assert.ok(!scroll.prevented && !scroll.stopped, 'a plain wheel still scrolls the code');
+
+  const blocks = page('blocks');
+  assert.equal(blocks.listeners.find((l) => l.type === 'wheel'), undefined, 'Blockly handles the pinch in the blocks');
 });
