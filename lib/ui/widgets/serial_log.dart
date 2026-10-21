@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../state/models.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../cog/cog_panel.dart' show CogExplainButton;
 import 'common.dart';
 
 final _hiRe = RegExp('obstacle|warning|error', caseSensitive: false);
@@ -47,12 +48,12 @@ class _SerialLogState extends State<SerialLog> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('No board connected', style: tH2(c)),
+                  Text('NO BOARD CONNECTED', style: tH2(c)),
                   const SizedBox(height: 10),
                   Text('Plug RoboCore V2 in with a USB-C data cable, then press Connect.',
                       style: tBody(c, size: 13, color: c.muted), textAlign: TextAlign.center),
                   const SizedBox(height: 10),
-                  Btn('Connect', icon: 'chip', kind: BtnKind.primary, onTap: s.connectUsb),
+                  Btn('Connect', icon: 'plug', kind: BtnKind.primary, onTap: s.connectUsb),
                 ]),
               ),
             );
@@ -89,7 +90,7 @@ class _SerialLogState extends State<SerialLog> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Btn('Connect', icon: 'chip', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
+                Btn('Connect', icon: 'plug', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
               ]),
             ),
             Expanded(child: list),
@@ -117,8 +118,7 @@ class _SerialLogState extends State<SerialLog> {
         body = TextSpan(text: e.text, style: base.copyWith(color: c.faint));
         break;
       case 'err':
-        body = TextSpan(text: e.text, style: base.copyWith(color: c.err));
-        break;
+        return _ErrorLine(time: ts ? e.t : null, text: e.text);
       default:
         body = TextSpan(text: e.text, style: hi ? base.copyWith(color: c.textBrand) : base);
     }
@@ -135,37 +135,107 @@ class _SerialLogState extends State<SerialLog> {
 }
 
 /// Output panel (build messages).
-class OutputLog extends StatelessWidget {
+/// An error line in a log: inverted (ink bar, light bold text), as in the design's Console Panel.
+class _ErrorLine extends StatelessWidget {
+  const _ErrorLine({required this.time, required this.text, this.trailing});
+  final String? time;
+  final String text;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final fg = c.dark ? kNavy : kCream;
+    final base = tMono(c, size: 12, height: 18 / 12, color: fg);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(3)),
+      child: Row(children: [
+        Expanded(
+          child: Text.rich(
+            TextSpan(children: [
+              if (time != null) TextSpan(text: '$time   ', style: base.copyWith(color: fg.withValues(alpha: .75))),
+              TextSpan(text: text, style: base.copyWith(fontWeight: FontWeight.w700)),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+      ]),
+    );
+  }
+}
+
+/// Output: build and upload messages, top down, following new lines. Errors are inverted lines (the first compile
+/// error has Explain on it), tips and summaries the brand ochre, results bold (the design's Console Panel).
+class OutputLog extends StatefulWidget {
   const OutputLog({super.key});
+  @override
+  State<OutputLog> createState() => _OutputLogState();
+}
+
+class _OutputLogState extends State<OutputLog> {
+  final _scroll = ScrollController();
+  int _seen = 0;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = RC.of(context);
-    if (s.output.isEmpty) {
-      return Padding(padding: const EdgeInsets.all(16), child: Text('Verify or upload to see build output here.', style: tCaption(c)));
-    }
     final base = tMono(c, size: 12, height: 18 / 12, color: c.sPlain);
+    if (s.output.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Text(s.onUsb ? 'Messages from Verify and Upload appear here.' : 'Upload runs the sketch on the preview board.',
+            style: base.copyWith(color: c.faint)),
+      );
+    }
+    if (s.output.length != _seen) {
+      _seen = s.output.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+    }
+    // Explain goes on the line of the first compile error.
+    final problem = s.problems.where((e) => e.isError).firstOrNull;
+    final explainAt =
+        problem == null ? -1 : s.output.indexWhere((o) => o.kind == 'err' && o.text.startsWith('${problem.file}:${problem.line}'));
     return SelectionArea(
       child: ListView(
-        reverse: true,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        controller: _scroll,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         children: [
-          for (final o in s.output.reversed)
+          for (final (i, o) in s.output.indexed)
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
-              child: Text.rich(TextSpan(children: [
-                TextSpan(text: '${o.t}   ', style: base.copyWith(color: c.disabled)),
-                TextSpan(
-                  text: o.text,
-                  style: switch (o.kind) {
-                    'info' => base.copyWith(color: c.faint),
-                    'sys' => base.copyWith(color: c.faint),
-                    'err' => base.copyWith(color: c.err),
-                    'ok' => base.copyWith(color: c.ink, fontWeight: FontWeight.w700),
-                    _ => base,
-                  },
-                ),
-              ])),
+              child: o.kind == 'err'
+                  ? _ErrorLine(
+                      time: o.t,
+                      text: o.text,
+                      trailing: i == explainAt ? CogExplainButton(problem: problem!, onBar: true) : null,
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text.rich(TextSpan(children: [
+                        TextSpan(text: '${o.t}   ', style: base.copyWith(color: c.disabled)),
+                        TextSpan(
+                          text: o.text,
+                          style: switch (o.kind) {
+                            'info' || 'sys' => base.copyWith(color: c.faint),
+                            'hint' => base.copyWith(color: c.textBrand),
+                            'ok' => base.copyWith(color: c.ink, fontWeight: FontWeight.w700),
+                            _ => base,
+                          },
+                        ),
+                      ])),
+                    ),
             ),
         ],
       ),

@@ -128,7 +128,7 @@ class SettingsPage extends StatelessWidget {
       row('Language', RcSelect<String>(value: st.lang, width: 130, label: 'Language', items: const [('English', 'English')], onChanged: (_) {})),
       row('Auto-save projects', RcSwitch(value: st.autosave, label: 'Auto-save projects', onChanged: (v) => s.updateSettings((x) => x.autosave = v)),
           hint: 'Saves a moment after each change, and before upload.'),
-      row('Reset all data', Btn('Reset…', icon: 'trash', kind: BtnKind.danger, onTap: () => _confirmReset(context)),
+      row('Reset all data', Btn('Reset…', icon: 'trash', onTap: () => _confirmReset(context)),
           hint: 'Deletes this device’s projects, profile and settings.'),
     ]);
 
@@ -263,7 +263,7 @@ class _CompileServerRowState extends State<_CompileServerRow> {
         ]),
         if (r != null) ...[
           const SizedBox(height: 8),
-          Text(r.$2, style: tCaption(c, color: r.$1 ? c.ok : c.err)),
+          Text(r.$2, style: tCaption(c, color: c.ink, w: r.$1 ? FontWeight.w400 : FontWeight.w600)),
         ],
       ]),
     );
@@ -342,7 +342,7 @@ class _ProfileRowState extends State<_ProfileRow> {
                 const SizedBox(width: 12),
                 Expanded(child: school),
               ]),
-        if (_error != null) ...[const SizedBox(height: 6), Text(_error!, style: tCaption(c, color: c.err))],
+        if (_error != null) ...[const SizedBox(height: 6), Text(_error!, style: tCaption(c, color: c.err, w: FontWeight.w600))],
         const SizedBox(height: 12),
         Row(children: [
           Expanded(child: Text('Kept on this device only. Each computer or browser has its own profile and projects.', style: tCaption(c))),
@@ -393,7 +393,7 @@ class _CogStyleRow extends StatelessWidget {
                 const SizedBox(height: 14),
                 field(a, 'Teacher PIN', autofocus: true),
                 if (create) ...[const SizedBox(height: 8), field(b, 'The same PIN again')],
-                if (error != null) ...[const SizedBox(height: 8), Text(error!, style: tCaption(c, color: c.err))],
+                if (error != null) ...[const SizedBox(height: 8), Text(error!, style: tCaption(c, color: c.err, w: FontWeight.w600))],
               ]),
             ),
             actions: [

@@ -60,13 +60,29 @@ class CogButton extends StatelessWidget {
 
 /// "Explain with Cog": the inline action beside a problem.
 class CogExplainButton extends StatelessWidget {
-  const CogExplainButton({super.key, required this.problem, this.label = 'Explain'});
+  const CogExplainButton({super.key, required this.problem, this.label = 'Explain', this.onBar = false});
   final Problem problem;
   final String label;
+
+  /// On an inverted (navy) error line in Output: the box yellow chip of the design's Console Panel.
+  final bool onBar;
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
+    if (onBar) {
+      return Hover(
+        onTap: () => s.cog.explainError(problem),
+        tooltip: 'Ask Cog to explain this error',
+        builder: (context, h) => Container(
+          height: 18,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: h ? kBrandPressed : kBrand, borderRadius: BorderRadius.circular(3)),
+          child: Text(label, style: const TextStyle(fontFamily: fBody, fontSize: 11.5, height: 1, fontWeight: FontWeight.w600, color: kNavy)),
+        ),
+      );
+    }
     return Hover(
       onTap: () => s.cog.explainError(problem),
       tooltip: 'Ask Cog to explain this ${problem.isError ? 'error' : 'warning'}',

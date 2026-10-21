@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import '../../data/arduino_api.dart';
 import '../../data/catalog.dart';
 import '../../engine/blockly_convert.dart';
-import '../../engine/compiler.dart' show Problem;
 import '../../state/app_state.dart';
 import '../../state/cog.dart';
 import '../../state/models.dart';
@@ -526,19 +525,18 @@ class ConsolePanel extends StatelessWidget {
         case 'serial':
           return const Column(children: [Expanded(child: SerialLog()), SendRow(hint: 'Send a message to the board')]);
         case 'output':
-          final firstError = s.problems.where((e) => e.isError).firstOrNull;
-          if (firstError == null) return const OutputLog();
-          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            _ExplainBar(problem: firstError, errors: s.problems.where((e) => e.isError).length),
-            const Expanded(child: OutputLog()),
-          ]);
+          return const OutputLog();
         case 'board':
           return SingleChildScrollView(child: BoardCard(boardId: s.cur?.board ?? s.board));
         default:
           if (s.problems.isEmpty) {
             return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('No problems found. Press Verify to check your sketch.', style: tCaption(c)),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                RcIcon('check', size: 15, color: c.muted),
+                const SizedBox(width: 8),
+                Text('No problems in this sketch.', style: tBody(c, size: 13, color: c.muted)),
+              ]),
             );
           }
           return ListView(padding: const EdgeInsets.all(8), children: [
@@ -839,7 +837,7 @@ class _UsbBoardStatus extends StatelessWidget {
       decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Dot(color: s.usbOpen ? c.ok : c.disabled, size: 7),
+          LinkDot(on: s.usbOpen, size: 7),
           const SizedBox(width: 7),
           Expanded(
             child: Text(s.usbOpen ? 'Real board on USB-C' : 'Real board not connected',
@@ -870,7 +868,8 @@ class _UsbBoardStatus extends StatelessWidget {
           else
             Btn('Connect', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
           const SizedBox(width: 8),
-          if (!s.hasServer) Expanded(child: Text('Set a compile server in Settings', style: tCaption(c, color: c.err), overflow: TextOverflow.ellipsis)),
+          if (!s.hasServer)
+            Expanded(child: Text('Set a compile server in Settings', style: tCaption(c, color: c.err, w: FontWeight.w600), overflow: TextOverflow.ellipsis)),
         ]),
       ]),
     );
@@ -904,32 +903,6 @@ class _UserButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Above the Output after a failed Verify: offers Cog's explanation of the first error.
-class _ExplainBar extends StatelessWidget {
-  const _ExplainBar({required this.problem, required this.errors});
-  final Problem problem;
-  final int errors;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = RC.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-      decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
-      child: Row(children: [
-        RcIcon('alert', size: 15, color: c.err),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text('$errors error${errors == 1 ? '' : 's'}: ${problem.file}:${problem.line} ${problem.msg}',
-              maxLines: 1, overflow: TextOverflow.ellipsis, style: tCaption(c, color: c.ink)),
-        ),
-        const SizedBox(width: 8),
-        CogExplainButton(problem: problem, label: 'Explain with Cog'),
-      ]),
     );
   }
 }
@@ -981,7 +954,8 @@ class _NewTabDialogState extends State<_NewTabDialog> {
           onSubmitted: (_) => _add(),
         ),
         const SizedBox(height: 6),
-        Text(error ?? 'Letters, numbers, _ or -, then .ino, .h, .hpp, .c or .cpp', style: tCaption(c, color: error != null ? c.err : c.faint)),
+        Text(error ?? 'Letters, numbers, _ or -, then .ino, .h, .hpp, .c or .cpp',
+            style: tCaption(c, color: error != null ? c.err : c.faint, w: error != null ? FontWeight.w600 : FontWeight.w400)),
       ]),
       actions: [
         Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),

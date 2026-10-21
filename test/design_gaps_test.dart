@@ -112,12 +112,12 @@ void main() {
     state.clearLog();
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.usbOpen, isFalse);
-    expect(find.text('No board connected'), findsOneWidget);
+    expect(find.text('NO BOARD CONNECTED'), findsOneWidget);
 
     // With earlier lines in the log, a bar above them.
     state.serialPush('Hello from before', 'out');
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('No board connected'), findsNothing);
+    expect(find.text('NO BOARD CONNECTED'), findsNothing);
     expect(find.textContaining('No board connected.', findRichText: true), findsOneWidget);
     expect(find.textContaining('Hello from before', findRichText: true), findsOneWidget);
 
