@@ -806,7 +806,7 @@ class _LiveBoardState extends State<LiveBoard> {
   }
 }
 
-/// The editor's board card while the real board is on USB-C.
+/// The editor's board card while the real board is on USB.
 class _UsbBoardStatus extends StatelessWidget {
   const _UsbBoardStatus();
 
@@ -823,7 +823,7 @@ class _UsbBoardStatus extends StatelessWidget {
           LinkDot(on: s.usbOpen, size: 7),
           const SizedBox(width: 7),
           Expanded(
-            child: Text(s.usbOpen ? 'Real board on USB-C' : 'Real board not connected',
+            child: Text(s.usbOpen ? 'Real board on ${s.usbName}' : 'Real board not connected',
                 style: tCaption(c, color: s.usbOpen ? c.ok : c.muted, w: FontWeight.w600), overflow: TextOverflow.ellipsis),
           ),
         ]),

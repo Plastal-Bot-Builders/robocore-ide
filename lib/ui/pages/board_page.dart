@@ -140,18 +140,18 @@ class BoardPage extends StatelessWidget {
           Btn(s.busy == 'test' ? 'Testing…' : 'Test connection', onTap: s.busy == null ? s.testConnection : null),
           s.linked
               ? Btn('Disconnect', kind: BtnKind.plain, onTap: s.busy == 'test' ? null : s.disconnect)
-              : Btn(s.onUsb ? 'Connect USB-C' : 'Connect', kind: BtnKind.primary, onTap: s.connect),
+              : Btn(s.onUsb ? 'Connect ${s.usbName}' : 'Connect', kind: BtnKind.primary, onTap: s.connect),
           if (s.onUsb && s.usbOpen) Btn('Reset board', kind: BtnKind.plain, onTap: s.busy == null ? s.resetUsbBoard : null),
-          if (!s.onUsb) Btn('Use a real board (USB-C)', kind: BtnKind.plain, onTap: () => s.setPort(kPortUsb)),
+          if (!s.onUsb) Btn('Use a real board (${s.usbName})', kind: BtnKind.plain, onTap: () => s.setPort(kPortUsb)),
         ]),
         const SizedBox(height: 10),
         Text(
           !s.usb.supported
               ? 'Real boards connect through Web Serial: open the web app in Chrome or Edge on a computer.'
               : s.onUsb
-                  ? 'Plug the RoboCore into USB-C, press Connect and pick “USB JTAG/serial debug unit” (ESP32-S3). '
+                  ? 'Plug the ${kBoards[s.board]!.name} into ${s.usbName}, press Connect and pick ${kBoards[s.board]!.pickAs}. '
                       'It reconnects by itself after an upload or if you unplug it.'
-                  : 'Sketches run on the preview board. Pick USB-C to use the real RoboCore.',
+                  : 'Sketches run on the preview board. Pick ${s.usbName} to use the real ${kBoards[s.board]!.name}.',
           style: tCaption(c),
         ),
         if (s.conn != null) ...[

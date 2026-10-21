@@ -627,7 +627,7 @@ class BoardMenu extends StatelessWidget {
             ),
             if (s.onUsb && !s.usbOpen) ...[
               const SizedBox(height: 8),
-              Btn('Connect USB-C board', icon: 'chip', kind: BtnKind.primary, small: true, onTap: () {
+              Btn('Connect ${s.usbName} board', icon: 'chip', kind: BtnKind.primary, small: true, onTap: () {
                 s.connectUsb();
                 onDone();
               }),

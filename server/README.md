@@ -52,7 +52,8 @@ Success (`ok: true`) for ESP32 boards:
 ```
 
 Pass `image.parts` straight to esptool-js `writeFlash({ fileArray: parts.map(p => ({ address: p.offset, data })) })`.
-Uno builds return `"image": { "format": "hex", "data": ":10000000..." }`.
+Uno builds return `"image": { "format": "hex", "data": ":10000000..." }`, which the IDE writes through the Uno's Optiboot
+bootloader (`web/robocore_usb.js`, `flashAvr`).
 
 Compile errors return HTTP 200 with `ok: false` and `problems` pointing at the user's file and line
 (`"file": "library"` plus `"source"` when the error is inside a library). Server paths are removed from all output.

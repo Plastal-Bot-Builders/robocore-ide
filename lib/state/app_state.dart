@@ -37,6 +37,10 @@ const _storeKey = 'robocore-ide-v1';
 const kBootTip = 'Could not start the board’s bootloader. Hold BOOT, tap RESET, release BOOT, then press Upload again. '
     '(When the upload finishes, press RESET once to run the new sketch.)';
 
+/// Shown when an Arduino Uno's bootloader does not answer.
+const kAvrTip = 'Check that Board Setup is set to the board you plugged in, and close anything else using its port (the '
+    'Arduino IDE’s Serial Monitor, another browser tab). Then press Upload again.';
+
 class AppState extends ChangeNotifier {
   AppState({UsbLink? usbLink, CompileClient? compileClient, CogClient? cogClient})
       : usb = usbLink ?? createUsbLink(),
@@ -87,7 +91,7 @@ class AppState extends ChangeNotifier {
     touch(p);
   }
 
-  /// The real board on USB-C (Web Serial + esptool-js on the web).
+  /// The real board on USB (Web Serial on the web: esptool-js for an ESP32, Optiboot for an Uno).
   final UsbLink usb;
 
   /// The compile server client (arduino-cli in a container, see server/).
@@ -105,7 +109,7 @@ class AppState extends ChangeNotifier {
   String school = '';
   String board = 'v2';
 
-  /// kPortSim (the preview board) or kPortUsb (a real board on USB-C).
+  /// kPortSim (the preview board) or kPortUsb (a real board on USB).
   String port = kPortSim;
   int baud = 115200;
 
@@ -231,15 +235,18 @@ class AppState extends ChangeNotifier {
   /// Something is there to talk to: the open USB port, or the preview board when it is switched on.
   bool get linked => onUsb ? usbOpen : connected;
 
+  /// The socket of the board in use, as messages name it: USB-C on the RoboCore V2, USB on the others.
+  String get usbName => kBoards[boardId]!.usb;
+
   String get portLabel => onUsb
-      ? (usbOpen ? 'USB-C · ${usbLabel ?? 'board'}' : 'USB-C (not connected)')
+      ? (usbOpen ? '$usbName · ${usbLabel ?? 'board'}' : '$usbName (not connected)')
       : 'Preview board (simulator)';
 
-  String get portShort => onUsb ? (usbOpen ? 'USB-C' : 'no port') : (connected ? 'preview' : 'off');
+  String get portShort => onUsb ? (usbOpen ? usbName : 'no port') : (connected ? 'preview' : 'off');
 
   List<(String, String)> get portItems => [
         (kPortSim, 'Preview board (simulator)'),
-        (kPortUsb, usbOpen ? 'USB-C · ${usbLabel ?? 'board'}' : (usb.supported ? 'USB-C board…' : 'USB-C board (Chrome or Edge only)')),
+        (kPortUsb, usbOpen ? '$usbName · ${usbLabel ?? 'board'}' : (usb.supported ? '$usbName board…' : '$usbName board (Chrome or Edge only)')),
       ];
 
   // ---------- persistence ----------
@@ -254,10 +261,11 @@ class AppState extends ChangeNotifier {
     if (raw != null) _restoreSaved(raw);
     if (projects.isEmpty) _seed();
     if (onUsb) {
-      serialPush('Looking for the board on USB-C…', 'sys');
+      serialPush('Looking for the board on $usbName…', 'sys');
       unawaited(_autoReconnect());
     } else {
-      serialPush('Preview board ready at $baud baud. Plug in a RoboCore and pick USB-C in Board Setup to use the real one.', 'sys');
+      final real = boardId == 'v2' ? 'a RoboCore' : 'the ${kBoards[boardId]!.name}';
+      serialPush('Preview board ready at $baud baud. Plug in $real and pick $usbName in Board Setup to use the real one.', 'sys');
       _bootBoard();
     }
     if (loadNotice != null) showToast(loadNotice!, error: true);
@@ -631,7 +639,7 @@ class AppState extends ChangeNotifier {
                 ? UsbResult.unsupported.message
                 : busy != null
                     ? 'Wait for the ${busy == 'upload' ? 'upload' : 'build'} to finish, then test again.'
-                    : 'No board on USB-C. Plug it in and press Connect.');
+                    : 'No board on $usbName. Plug it in and press Connect.');
         notifyListeners();
         return;
       }
@@ -640,7 +648,7 @@ class AppState extends ChangeNotifier {
       conn = const ConnMsg('', 'Asking the board its name… (it restarts)');
       _flushRx();
       notifyListeners();
-      final r = await usb.identify(baud: baud);
+      final r = await usb.identify(baud: baud, arch: kBoards[board]!.arch);
       busy = null;
       usbOpen = usb.isOpen;
       if (r.ok) {
@@ -655,6 +663,9 @@ class AppState extends ChangeNotifier {
           showToast('Board answered', body: 'It has an $chip, not ${b.chip}. Pick the right board.', error: true);
         }
         serialPush('— board restarted —', 'sys');
+      } else if (r.code == 'avr-sync') {
+        conn = ConnMsg('err', '${r.message} ${kAvrTip.replaceFirst('press Upload', 'press Test connection')}');
+        showToast('The board did not answer', body: 'Check the board in Board Setup, and close other apps using the port.', error: true);
       } else {
         conn = ConnMsg(
             'err',
@@ -719,7 +730,7 @@ class AppState extends ChangeNotifier {
       if (!usbOpen) {
         unawaited(connectUsb());
       } else if (changed) {
-        serialPush('Using the board on USB-C.', 'sys');
+        serialPush('Using the board on $usbName.', 'sys');
       }
     } else {
       if (port == kPortSim) return;
@@ -755,7 +766,7 @@ class AppState extends ChangeNotifier {
       showToast(UsbResult.unsupported.message, error: true);
       return;
     }
-    conn = const ConnMsg('', 'Pick the board in the browser’s list (ESP32-S3: “USB JTAG/serial debug unit”)…');
+    conn = ConnMsg('', 'Pick the board in the browser’s list: ${kBoards[boardId]!.pickAs}…');
     notifyListeners();
     final r = await usb.connect(baud: baud);
     if (!r.ok) {
@@ -779,7 +790,7 @@ class AppState extends ChangeNotifier {
   /// Restarts the sketch on the real board (RESET through the USB serial lines).
   Future<void> resetUsbBoard() async {
     if (!usbOpen) return;
-    final r = await usb.reset();
+    final r = await usb.reset(arch: kBoards[boardId]!.arch);
     if (!r.ok) serialPush('Could not reset the board: ${r.message}', 'err');
   }
 
@@ -792,7 +803,7 @@ class AppState extends ChangeNotifier {
     if (r.ok) {
       _usbUp(r.data['label'] as String?, 'Reconnected to');
     } else {
-      serialPush('No board on USB-C yet. Plug in the RoboCore and press Connect in Board Setup.', 'sys');
+      serialPush('No board on $usbName yet. Plug in the ${kBoards[boardId]!.name} and press Connect in Board Setup.', 'sys');
       notifyListeners();
     }
   }
@@ -875,6 +886,8 @@ class AppState extends ChangeNotifier {
             outLine('Resetting the board into its bootloader…');
           case 'writing':
             outLine('Writing the program…');
+          case 'verifying':
+            outLine('Checking what was written…');
           case 'resetting':
             outLine('Restarting the board…');
           case 'reopening':
@@ -1086,7 +1099,7 @@ class AppState extends ChangeNotifier {
     }
     if (!connected) {
       output.clear();
-      outLine('The preview board is switched off. Connect it in Board Setup, or pick USB-C for a real board.', 'err');
+      outLine('The preview board is switched off. Connect it in Board Setup, or pick $usbName for a real board.', 'err');
       panelTab = 'output';
       panelOpen = true;
       setStatus('Not connected', 'err');
@@ -1125,7 +1138,7 @@ class AppState extends ChangeNotifier {
     _run(r, p.name);
   }
 
-  /// Compiles on the compile server, shows the problems, and (for Upload) flashes the board on USB-C.
+  /// Compiles on the compile server, shows the problems, and (for Upload) flashes the board on USB.
   Future<void> _buildOnServer(Project p, {required bool flash}) async {
     p.syncCode();
     final b = kBoards[p.board]!;
@@ -1208,13 +1221,11 @@ class AppState extends ChangeNotifier {
 
   Future<void> _flash(Project p, BoardDef b, ServerBuild r, int gen) async {
     final img = r.image;
-    if (img == null || img['format'] != 'esp32' || img['parts'] is! List) {
+    // An ESP32 build comes as parts at flash offsets (esptool-js); an Uno build as Intel HEX (its Optiboot bootloader).
+    final hex = img?['format'] == 'hex' && img?['data'] is String;
+    if (!hex && (img == null || img['format'] != 'esp32' || img['parts'] is! List)) {
       busy = null;
-      outLine(
-          img?['format'] == 'hex'
-              ? 'The sketch compiled, but uploading to an Arduino Uno from the browser is not built yet.'
-              : 'The compile server sent no program image for this board.',
-          'err');
+      outLine('The compile server sent no program image for this board.', 'err');
       setStatus('Not uploaded', 'err');
       notifyListeners();
       return;
@@ -1226,7 +1237,7 @@ class AppState extends ChangeNotifier {
         _usbUp(rc.data['label'] as String?, 'Reconnected to');
       } else {
         busy = null;
-        outLine('No board on USB-C. Plug in the RoboCore, press Connect (Board Setup), then Upload again.', 'err');
+        outLine('No board on ${b.usb}. Plug in the ${b.name}, press Connect (Board Setup), then Upload again.', 'err');
         setStatus('Not connected', 'err');
         notifyListeners();
         return;
@@ -1237,15 +1248,18 @@ class AppState extends ChangeNotifier {
     _lastPctLine = -10;
     _flashing = true;
     setStatus('Uploading…', 'busy');
-    outLine('Uploading to the ${b.name} on USB-C…');
+    outLine('Uploading to the ${b.name} on ${b.usb}…');
     notifyListeners();
-    final res = await usb.flash({
-      'parts': img['parts'],
-      'chip': img['chip'] ?? b.chip,
-      'boardName': b.name,
-      'baud': 921600,
-      'monitorBaud': baud,
-    });
+    final res = await usb.flash(hex
+        // 128-byte pages: the ATmega328P's (the Uno is the only AVR board).
+        ? {'format': 'hex', 'hex': img!['data'], 'chip': b.chip, 'boardName': b.name, 'pageSize': 128, 'max': b.max, 'monitorBaud': baud}
+        : {
+            'parts': img!['parts'],
+            'chip': img['chip'] ?? b.chip,
+            'boardName': b.name,
+            'baud': 921600,
+            'monitorBaud': baud,
+          });
     _flashing = false;
     busy = null;
     uploadPct = null;
@@ -1271,6 +1285,9 @@ class AppState extends ChangeNotifier {
       if (res.code == 'bootloader') {
         outLine(kBootTip, 'hint');
         showToast('Upload failed', body: 'Hold BOOT, tap RESET, release BOOT, then Upload again.', error: true);
+      } else if (res.code == 'avr-sync') {
+        outLine(kAvrTip, 'hint');
+        showToast('Upload failed', body: 'The board did not answer. Check the board in Board Setup, and close other apps using the port.', error: true);
       }
       setStatus('Upload failed', 'err');
     }

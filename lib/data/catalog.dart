@@ -9,7 +9,15 @@ class BoardDef {
   final String id, name, full, chip, spec, arch, mcu, rev;
   final int led, max, ram, base, rbase, per;
   final List<List<String>> details;
+
+  /// The board's USB socket, as messages name it (USB-C on the RoboCore V2).
+  final String usb;
+
+  /// How the browser's port chooser lists the board.
+  final String pickAs;
   const BoardDef({
+    this.usb = 'USB',
+    this.pickAs = 'the board',
     required this.id,
     required this.name,
     required this.full,
@@ -35,6 +43,8 @@ const kPortUsb = 'usb';
 const Map<String, BoardDef> kBoards = {
   'v2': BoardDef(
       id: 'v2',
+      usb: 'USB-C',
+      pickAs: '“USB JTAG/serial debug unit” (ESP32-S3)',
       name: 'RoboCore V2',
       full: 'RoboCore V2 (ESP32-S3)',
       chip: 'ESP32-S3',
@@ -60,6 +70,7 @@ const Map<String, BoardDef> kBoards = {
       ]),
   'uno': BoardDef(
       id: 'uno',
+      pickAs: '“Arduino Uno” (a clone with a CH340 chip shows as “USB2.0-Serial”)',
       name: 'Arduino Uno R3',
       full: 'Arduino Uno R3',
       chip: 'ATmega328P',
@@ -83,6 +94,7 @@ const Map<String, BoardDef> kBoards = {
       ]),
   'devkit': BoardDef(
       id: 'devkit',
+      pickAs: '“CP2102 USB to UART Bridge Controller”',
       name: 'ESP32 DevKit V1',
       full: 'ESP32 DevKit V1',
       chip: 'ESP32',
@@ -106,6 +118,7 @@ const Map<String, BoardDef> kBoards = {
       ]),
   'nodemcu': BoardDef(
       id: 'nodemcu',
+      pickAs: '“USB2.0-Serial” (CH340)',
       name: 'NodeMCU-32S',
       full: 'NodeMCU-32S',
       chip: 'ESP32',

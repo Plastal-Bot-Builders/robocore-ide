@@ -21,6 +21,7 @@ class FakeUsb extends UsbLink {
   Completer<void>? flashGate;
   bool flashing = false, cancelled = false;
   final written = <String>[];
+  String? resetArch, identifyArch;
 
   @override
   bool get supported => true;
@@ -52,10 +53,14 @@ class FakeUsb extends UsbLink {
   }
 
   @override
-  Future<UsbResult> reset() async => const UsbResult(true);
+  Future<UsbResult> reset({String arch = 'esp32'}) async {
+    resetArch = arch;
+    return const UsbResult(true);
+  }
 
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) async {
+    if (failBootloader && job['format'] == 'hex') return const UsbResult(false, code: 'avr-sync', message: 'The board did not answer its bootloader.');
     if (failBootloader) return const UsbResult(false, code: 'bootloader', message: 'Failed to connect with the device');
     if (flashGate != null) {
       flashing = true;
@@ -69,7 +74,7 @@ class FakeUsb extends UsbLink {
     onEvent?.call('progress', jsonEncode({'name': 'app', 'address': 65536, 'done': 50, 'total': 100}));
     onEvent?.call('progress', jsonEncode({'name': 'app', 'address': 65536, 'done': 100, 'total': 100}));
     onText?.call('RoboCore V2 ready\r\n');
-    return const UsbResult(true, data: {'ok': true, 'chip': 'ESP32-S3', 'bytes': 100, 'reopened': true});
+    return UsbResult(true, data: {'ok': true, 'chip': job['format'] == 'hex' ? 'ATmega328P' : 'ESP32-S3', 'bytes': 100, 'reopened': true});
   }
 
   @override
@@ -82,7 +87,9 @@ class FakeUsb extends UsbLink {
   }
 
   @override
-  Future<UsbResult> identify({required int baud}) async {
+  Future<UsbResult> identify({required int baud, String arch = 'esp32'}) async {
+    identifyArch = arch;
+    if (failBootloader && arch == 'avr') return const UsbResult(false, code: 'avr-sync', message: 'The board did not answer its bootloader.');
     if (failBootloader) return const UsbResult(false, code: 'bootloader', message: 'Failed to connect with the device');
     return UsbResult(true, data: {'chip': chip, 'label': 'ESP32-S3 USB (303A:1001)', 'reopened': true});
   }
@@ -105,6 +112,21 @@ http.Response _ok() => http.Response(
             {'name': 'app', 'offset': 65536, 'size': 3, 'data': 'AAEC'}
           ]
         },
+      }),
+      200,
+    );
+
+// An Arduino Uno build: Intel HEX for its bootloader.
+http.Response _unoOk() => http.Response(
+      jsonEncode({
+        'ok': true,
+        'problems': [],
+        'sizes': {
+          'flash': {'used': 924, 'max': 32256},
+          'ram': {'used': 9, 'max': 2048}
+        },
+        'log': 'Sketch uses 924 bytes (2%) of program storage space. Maximum is 32256 bytes.',
+        'image': {'format': 'hex', 'data': ':100000000C945C000C946E000C946E000C946E00CA\n:00000001FF\n'},
       }),
       200,
     );
@@ -369,6 +391,54 @@ void main() {
       await s.testConnection();
       expect(s.conn!.kind, 'err');
       expect(s.conn!.text, contains('did not answer'));
+      s.closeToast();
+    });
+
+    test('an Uno project uploads its HEX through the bootloader, on USB (not USB-C)', () async {
+      s.cur!.board = 'uno';
+      reply = _unoOk;
+      await s.upload();
+      expect(requests.single['board'], 'uno');
+      expect(usb.flashed!['format'], 'hex');
+      expect(usb.flashed!['hex'], startsWith(':100000000C945C00'));
+      expect(usb.flashed!['chip'], 'ATmega328P');
+      expect(usb.flashed!['pageSize'], 128);
+      expect(usb.flashed!['max'], 32256);
+      expect(usb.flashed!['monitorBaud'], 115200);
+      final out = s.output.map((o) => o.text).join('\n');
+      expect(out, contains('Uploading to the Arduino Uno R3 on USB…'));
+      expect(out, contains('bytes written to the ATmega328P'));
+      expect(out, isNot(contains('USB-C')));
+      expect(s.stateLabel, 'Uploaded');
+      expect(s.verified!.size, 924);
+    });
+
+    test('an Uno that does not answer its bootloader gets the Uno tip, not BOOT + RESET', () async {
+      s.cur!.board = 'uno';
+      reply = _unoOk;
+      usb.failBootloader = true;
+      await s.upload();
+      final out = s.output.map((o) => o.text);
+      expect(out, contains(kAvrTip));
+      expect(out, isNot(contains(kBootTip)));
+      expect(s.stateLabel, 'Upload failed');
+      s.closeToast();
+    });
+
+    test('Test connection and Reset board on an Uno use its bootloader and DTR', () async {
+      s.setDefaultBoard('uno');
+      s.go(Screen.board); // both buttons are in Board Setup, which follows the default board
+      usb.chip = 'ATmega328P';
+      await s.testConnection();
+      expect(usb.identifyArch, 'avr');
+      expect(s.conn!.kind, 'ok');
+      expect(s.conn!.text, contains('ATmega328P'));
+      await s.resetUsbBoard();
+      expect(usb.resetArch, 'avr');
+      usb.failBootloader = true;
+      await s.testConnection();
+      expect(s.conn!.text, contains('did not answer its bootloader'));
+      expect(s.conn!.text, contains('press Test connection again'));
       s.closeToast();
     });
 

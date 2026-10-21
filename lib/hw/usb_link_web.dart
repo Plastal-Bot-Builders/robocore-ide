@@ -35,10 +35,10 @@ extension type _RcUsb._(JSObject _) implements JSObject {
   external JSPromise<JSString> disconnect();
   external JSPromise<JSString> setBaud(int baud);
   external JSPromise<JSString> write(String text);
-  external JSPromise<JSString> reset();
+  external JSPromise<JSString> reset(String arch);
   external JSPromise<JSString> flash(String job);
   external JSPromise<JSString> cancelFlash();
-  external JSPromise<JSString> identify(int baud);
+  external JSPromise<JSString> identify(int baud, String arch);
 }
 
 class _WebUsb extends UsbLink {
@@ -110,7 +110,7 @@ class _WebUsb extends UsbLink {
   Future<UsbResult> write(String text) => _call((a) => a.write(text));
 
   @override
-  Future<UsbResult> reset() => _call((a) => a.reset());
+  Future<UsbResult> reset({String arch = 'esp32'}) => _call((a) => a.reset(arch));
 
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) => _call((a) => a.flash(jsonEncode(job)));
@@ -119,7 +119,7 @@ class _WebUsb extends UsbLink {
   Future<UsbResult> cancelFlash() => _call((a) => a.cancelFlash());
 
   @override
-  Future<UsbResult> identify({required int baud}) => _call((a) => a.identify(baud));
+  Future<UsbResult> identify({required int baud, String arch = 'esp32'}) => _call((a) => a.identify(baud, arch));
 }
 
 UsbLink createUsbLink() => _WebUsb();

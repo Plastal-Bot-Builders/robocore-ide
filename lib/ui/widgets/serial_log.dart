@@ -1,6 +1,7 @@
 // Serial log view (Serial Monitor page and editor console) and the send row.
 import 'package:flutter/material.dart';
 
+import '../../data/catalog.dart';
 import '../../state/models.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
@@ -50,7 +51,7 @@ class _SerialLogState extends State<SerialLog> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text('NO BOARD CONNECTED', style: tH2(c)),
                   const SizedBox(height: 10),
-                  Text('Plug RoboCore V2 in with a USB-C data cable, then press Connect.',
+                  Text('Plug ${kBoards[s.boardId]!.name} in with a ${s.usbName} data cable, then press Connect.',
                       style: tBody(c, size: 13, color: c.muted), textAlign: TextAlign.center),
                   const SizedBox(height: 10),
                   Btn('Connect', icon: 'plug', kind: BtnKind.primary, onTap: s.connectUsb),
@@ -83,7 +84,7 @@ class _SerialLogState extends State<SerialLog> {
                   child: Text.rich(
                     TextSpan(children: [
                       TextSpan(text: 'No board connected. ', style: tLabel(c)),
-                      TextSpan(text: 'Plug RoboCore V2 in with a USB-C data cable, then press Connect.', style: tCaption(c)),
+                      TextSpan(text: 'Plug ${kBoards[s.boardId]!.name} in with a ${s.usbName} data cable, then press Connect.', style: tCaption(c)),
                     ]),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
