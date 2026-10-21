@@ -1009,6 +1009,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The trash on the Problems tab: the list and the editor's squiggles go until the next Verify.
+  void clearProblems() {
+    problems = [];
+    notifyListeners();
+  }
+
   // ---------- build ----------
   /// Verify: a real C++ compile on the compile server when one is set, otherwise the built-in
   /// preview check. Returns the preview result (used to run the sketch on the preview board).

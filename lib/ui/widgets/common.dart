@@ -51,9 +51,25 @@ class _HoverState extends State<Hover> {
         child: widget.builder(context, _h),
       ),
     );
-    if (widget.tooltip != null) w = Tooltip(message: widget.tooltip!, child: w);
+    if (widget.tooltip != null) w = tipped(widget.tooltip!, w);
     return Semantics(button: widget.onTap != null, label: widget.tooltip, child: w);
   }
+}
+
+final _shortcutTip = RegExp(r'^(.+) \(((?:Cmd|Ctrl)[^()]*)\)$');
+
+/// A tooltip as the design draws it: "Verify (Cmd+R)" shows the label, then the shortcut faint after it.
+Widget tipped(String tip, Widget child) {
+  final m = _shortcutTip.firstMatch(tip);
+  if (m == null) return Tooltip(message: tip, child: child);
+  return Tooltip(
+    richMessage: TextSpan(children: [
+      TextSpan(text: m[1]),
+      const WidgetSpan(child: SizedBox(width: 8)),
+      TextSpan(text: m[2], style: TextStyle(fontSize: 12, color: kCream.withValues(alpha: .7))),
+    ]),
+    child: child,
+  );
 }
 
 // Primary (navy), outline (the design's Secondary), plain (Ghost), and the outline on the yellow top bar.

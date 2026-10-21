@@ -106,7 +106,9 @@ class DialogFrame extends StatelessWidget {
             Flexible(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(24, 16, 24, 20), child: body))
           else
             const SizedBox(height: 12),
-          Padding(
+          // The design's footer has a divider line above the buttons.
+          Container(
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
             padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(width: 8), actions[i]],
@@ -322,16 +324,21 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
         const FieldLabel('Board'),
         RcSelect<String>(value: board, height: 36, width: double.infinity, items: _boardItems, onChanged: (v) => setState(() => board = v)),
         const SizedBox(height: 16),
-        Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Auto-save', style: tLabel(c, w: FontWeight.w500)),
-              const SizedBox(height: 2),
-              Text('Saves a moment after each change and before upload.', style: tCaption(c)),
-            ]),
-          ),
-          RcSwitch(value: autosave, onChanged: (v) => setState(() => autosave = v), label: 'Auto-save'),
-        ]),
+        // A setting row as in the design: a divider line above it.
+        Container(
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
+          padding: const EdgeInsets.only(top: 12),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Auto-save', style: tLabel(c, w: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text('Saves a moment after each change and before upload.', style: tCaption(c)),
+              ]),
+            ),
+            RcSwitch(value: autosave, onChanged: (v) => setState(() => autosave = v), label: 'Auto-save'),
+          ]),
+        ),
       ]),
       actions: [
         Btn('Delete project', icon: 'trash', kind: BtnKind.plain, onTap: () {
@@ -340,7 +347,8 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
           showDeleteProjectDialog(nav.context, p);
         }),
         const Spacer(),
-        Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),
+        // Secondary (outlined) here, as in the design: next to the ghost Delete project.
+        Btn('Cancel', onTap: () => Navigator.of(context).pop()),
         Btn('Save', kind: BtnKind.primary, onTap: _save),
       ],
     );

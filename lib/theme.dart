@@ -155,8 +155,11 @@ ThemeData buildTheme(RC c) {
     hoverColor: c.ink.withValues(alpha: .04),
     textSelectionTheme: TextSelectionThemeData(cursorColor: c.ink, selectionColor: c.sel),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: kNavy, borderRadius: BorderRadius.circular(6)),
-      textStyle: const TextStyle(fontFamily: fBody, fontSize: 12, color: kCream),
+      // The design's Tooltip: a 26 px navy pill, Label/Default text (13 px Medium).
+      decoration: BoxDecoration(color: kNavy, borderRadius: BorderRadius.circular(4)),
+      constraints: const BoxConstraints(minHeight: 26),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      textStyle: const TextStyle(fontFamily: fBody, fontSize: 13, fontWeight: FontWeight.w500, color: kCream, height: 16 / 13),
       waitDuration: const Duration(milliseconds: 500),
     ),
   );
