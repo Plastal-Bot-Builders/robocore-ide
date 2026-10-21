@@ -17,10 +17,13 @@ Upload busy states (eeac9ac), selects and the board selector (66bf230), toasts (
 menu (edba510), top bar order (d253419), choice cards, library buttons, server Test and Cog's send (9da98c8), and the
 sidebar overflow bug (df8a4bb).
 
-Still open (small): tooltips write shortcuts in brackets; example descriptions wrap to two lines; dialogs lack the
-divider lines and Project Settings' Cancel is a Ghost button; the preview board's USER button is filled when up and a
-white LED is drawn white (design: yellow); the Problems tab has no clear button; an empty port reads "—". And the four
-"Not in the design" items at the end are still yours to decide.
+The small differences are done too: tooltips show the shortcut faint after the label (and take the design's 26 px
+pill, 13 px Medium text); example descriptions stay on one line; dialogs have the divider above the buttons, Project
+settings has the one above Auto-save and an outlined Cancel; the preview board's USER button is an outlined pill that
+fills while held, and a white LED is lit in the box yellow; the Problems tab has its trash button; an empty port reads
+"None selected". A touchpad pinch no longer zooms the code editor (afc10f1).
+
+Still open: the four "Not in the design" items at the end are yours to decide.
 
 ## Summary
 

@@ -164,14 +164,14 @@ class BoardSummary extends StatelessWidget {
     final s = AppScope.of(context);
     final c = RC.of(context);
     final b = kBoards[boardId]!;
-    Widget row(String k, String v, {bool mono = false}) => Padding(
+    Widget row(String k, String v, {bool mono = false, Color? color}) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             SizedBox(width: 60, child: Text(k, style: tCaption(c))),
             Expanded(
               child: Text(v,
                   overflow: TextOverflow.ellipsis,
-                  style: mono ? tMono(c, size: 12, height: 18 / 12) : tBody(c, size: 13, height: 18 / 13)),
+                  style: mono ? tMono(c, size: 12, height: 18 / 12, color: color) : tBody(c, size: 13, height: 18 / 13, color: color)),
             ),
           ]),
         );
@@ -193,7 +193,7 @@ class BoardSummary extends StatelessWidget {
         child: Column(children: [
           row('Board', b.name),
           row('MCU', b.mcu),
-          row('Port', s.linked ? s.portLabel : '—', mono: true),
+          s.linked ? row('Port', s.portLabel, mono: true) : row('Port', 'None selected', color: c.faint),
         ]),
       ),
       Padding(

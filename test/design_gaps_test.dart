@@ -1,14 +1,18 @@
 // The last design gaps: Help in search (G-11), the Serial Monitor without a board (SM-07), Stop in the top bar
-// (E-07) and the preview board's sensors, live and settable (PB-01).
-import 'package:flutter/material.dart' show EditableText, FontWeight, Slider, Text;
+// (E-07) and the preview board's sensors, live and settable (PB-01). Then the small differences from the component review.
+import 'package:flutter/material.dart'
+    show AnimatedContainer, BoxDecoration, Container, EditableText, FontWeight, SizedBox, Slider, Text, TextSpan, Tooltip;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:robocore_ide/data/catalog.dart';
+import 'package:robocore_ide/engine/compiler.dart' show Problem;
 import 'package:robocore_ide/hw/usb_link.dart';
 import 'package:robocore_ide/main.dart';
 import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/sim_board.dart';
+import 'package:robocore_ide/theme.dart' show kBrand;
 import 'package:robocore_ide/ui/shell.dart' show SearchBox, TopBar, kHelpTopics;
+import 'package:robocore_ide/ui/widgets/common.dart' show tipped;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A browser with Web Serial and no board plugged in, until Connect.
@@ -211,6 +215,81 @@ void main() {
     expect(state.sim.held[SimSensor.line], greaterThan(.9));
     expect(find.textContaining('R 1.0'), findsOneWidget);
     state.sim.hold(SimSensor.line, null);
+
+    await _stop(tester, state);
+  });
+
+  // The small differences in docs/component-review.md.
+  test('a tooltip shows its shortcut faint after the label', () {
+    final tip = tipped('Verify (Cmd+R)', const SizedBox()) as Tooltip;
+    final spans = (tip.richMessage! as TextSpan).children!;
+    expect((spans.first as TextSpan).text, 'Verify');
+    expect((spans.last as TextSpan).text, 'Cmd+R');
+    expect((spans.last as TextSpan).style!.color!.a, closeTo(.7, .01));
+    expect((tipped('Zoom out (Ctrl −)', const SizedBox()) as Tooltip).richMessage, isNotNull);
+    expect((tipped('Board setup', const SizedBox()) as Tooltip).message, 'Board setup', reason: 'no shortcut: plain');
+  });
+
+  testWidgets('the Problems tab has a trash button that clears the list', (tester) async {
+    final state = await _start(tester);
+    state.openProject(state.sortedProjects.firstWhere((p) => p.mode == 'code' && p.board == 'v2').id);
+    if (!state.panelOpen) state.togglePanel();
+    state.problems = [const Problem('Blink.ino', 2, "'digitalwrite' was not declared in this scope")];
+    state.setPanelTab('problems');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byTooltip('Clear problems'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(state.problems, isEmpty);
+    expect(find.text('No problems in this sketch.'), findsOneWidget);
+
+    await _stop(tester, state);
+  });
+
+  testWidgets('without a board the board card reads the port as None selected', (tester) async {
+    final state = await _start(tester, usb: _NoBoardUsb());
+    state.setPort(kPortUsb);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    state.go(Screen.home);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(state.linked, isFalse);
+    expect(find.text('None selected'), findsOneWidget);
+
+    await _stop(tester, state);
+  });
+
+  testWidgets('the preview board: USER is outlined until held, and a white LED is lit in the box yellow', (tester) async {
+    final state = await _start(tester);
+    state.openProject(state.sortedProjects.firstWhere((p) => p.mode == 'code' && p.board == 'v2').id);
+    if (!state.panelOpen) state.togglePanel();
+    await tester.pump(const Duration(milliseconds: 100));
+    if (find.text('USER').evaluate().isEmpty) {
+      await tester.tap(find.text('Board').last);
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    BoxDecoration user() => tester
+        .widget<AnimatedContainer>(find.ancestor(of: find.text('USER'), matching: find.byType(AnimatedContainer)).first)
+        .decoration! as BoxDecoration;
+    expect(user().color, isNull, reason: 'outlined when up');
+    final press = await tester.startGesture(tester.getCenter(find.text('USER')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(state.sim.user, isTrue);
+    expect(user().color, isNotNull, reason: 'filled while held');
+    await press.up();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(user().color, isNull);
+
+    // The sketch turns the RGB LED white (digitalWrite on LED_BUILTIN).
+    state.sim.running = true;
+    state.sim.rgbColor = const [255, 255, 255];
+    state.sim.setUser(false); // tells the board card
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('RGB · white'), findsOneWidget);
+    final yellow = find.byWidgetPredicate((w) =>
+        w is Container &&
+        w.constraints?.maxWidth == 44 && // the LED ring
+        w.decoration is BoxDecoration &&
+        (w.decoration! as BoxDecoration).color == kBrand);
+    expect(yellow, findsOneWidget);
 
     await _stop(tester, state);
   });

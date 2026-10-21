@@ -593,6 +593,7 @@ class ConsolePanel extends StatelessWidget {
               IconBtn('trash', onTap: s.clearLog, tip: 'Clear serial output'),
             ],
             if (s.panelOpen && t == 'output') IconBtn('trash', onTap: s.clearOutput, tip: 'Clear output'),
+            if (s.panelOpen && t == 'problems') IconBtn('trash', onTap: s.clearProblems, tip: 'Clear problems'),
             Transform.rotate(
               angle: s.panelOpen ? 0 : 3.14159,
               child: IconBtn('chev', onTap: s.togglePanel, tip: s.panelOpen ? 'Collapse console' : 'Expand console'),
@@ -662,6 +663,8 @@ class _LiveBoardState extends State<LiveBoard> {
                 ? (rgb[0] + rgb[1] + rgb[2] > 0 ? Color.fromARGB(255, rgb[0], rgb[1], rgb[2]) : null)
                 : (sim.led != 0 ? kBrand : null);
         final white = lit != null && rgb[0] == rgb[1] && rgb[1] == rgb[2];
+        // A white LED would read as off on the cream page: the design draws a lit LED in the box yellow.
+        final glow = white ? kBrand : lit;
         final io = <String>[
           if (!v2 && (sim.motorSpeeds[0] != 0 || sim.motorSpeeds[1] != 0)) 'motors ${sim.motorSpeeds[0]} / ${sim.motorSpeeds[1]}',
           if (!v2 && sim.servoAngle != null) 'servo ${sim.servoAngle}°',
@@ -693,10 +696,10 @@ class _LiveBoardState extends State<LiveBoard> {
                     height: 44,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: lit ?? c.sunk,
+                      color: glow ?? c.sunk,
                       shape: BoxShape.circle,
                       border: Border.all(color: kNavy, width: 1.5),
-                      boxShadow: lit == null ? null : [BoxShadow(color: lit.withValues(alpha: .6), blurRadius: 16, spreadRadius: 3)],
+                      boxShadow: glow == null ? null : [BoxShadow(color: glow.withValues(alpha: .6), blurRadius: 16, spreadRadius: 3)],
                     ),
                     child: Container(
                       width: 20,
@@ -882,6 +885,8 @@ class _UserButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = AppScope.read(context).sim;
+    final c = RC.of(context);
+    // The design's USER button: an outlined pill, filled with ink only while it is held.
     return Tooltip(
       message: 'Hold to press. Pulls input pins LOW.',
       child: Listener(
@@ -892,14 +897,15 @@ class _UserButton extends StatelessWidget {
           cursor: SystemMouseCursors.click,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 60),
-            transform: Matrix4.translationValues(0, sim.user ? 2 : 0, 0),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            height: 26,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: sim.user ? kNavyHover : kNavy,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [BoxShadow(color: Colors.black, offset: Offset(0, sim.user ? 1 : 2))],
+              color: sim.user ? c.ink : null,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: c.ink),
             ),
-            child: Text(label, style: const TextStyle(fontFamily: fMono, fontSize: 11, height: 16 / 11, color: kCream)),
+            child: Text(label, style: tBody(c, size: 12, w: FontWeight.w500, height: 16 / 12, color: sim.user ? c.bg : c.ink)),
           ),
         ),
       ),
