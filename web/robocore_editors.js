@@ -141,6 +141,7 @@
         this.FIELD_BORDER_RECT_X_PADDING = 8;
         this.FIELD_DROPDOWN_SVG_ARROW_PADDING = 6;
         this.FIELD_DROPDOWN_SVG_ARROW_DATAURI = svgUri(CHEVRON, CREAM, 12, 2.5);
+        this.FIELD_DROPDOWN_COLOURED_DIV = false; // the design's white menu, not one in the block's colour
         this.MEDIUM_PADDING = 9; // between the parts of a block and at its ends (the design: 8-12)
         this.STATEMENT_INPUT_PADDING_LEFT = 20; // the arm of a C-block
       }
@@ -168,6 +169,26 @@
       '.robocore-renderer .blocklyEditableText > .blocklyText:not(.blocklyDropdownText) { fill: ' + INK + '; }',
       // Number and text fields are white pills, as in the design (dropdowns keep 4 px corners).
       '.robocore-renderer .blocklyInputField > .blocklyFieldRect { rx: 12px; ry: 12px; }',
+      // Empty yes/no slots are a darker tint of the block (navy over it), not solid navy.
+      '.robocore-renderer .blocklyOutlinePath { fill: rgba(27,42,65,.28) !important; }',
+      '.robocore-renderer .rcNavyText > .blocklyOutlinePath { fill: rgba(27,42,65,.14) !important; }',
+      // A dropdown's menu: white, the chosen option on a yellow row with a check on the right (the design's Menu Item).
+      '.blocklyDropDownDiv { background: #FFFFFF !important; border: 1px solid rgba(27,42,65,.16) !important; border-radius: 8px !important;' +
+        ' box-shadow: 0 8px 24px rgba(27,42,65,.16) !important; }',
+      '.blocklyDropDownDiv .blocklyDropDownArrow { background: #FFFFFF !important; border-color: rgba(27,42,65,.16) !important; }',
+      '.blocklyDropDownDiv .blocklyMenu { padding: 4px !important; }',
+      '.blocklyDropDownDiv .blocklyMenuItem { position: relative; border-radius: 6px; padding: 7px 36px 7px 10px !important; min-width: 120px;' +
+        ' font: 500 13px Barlow, sans-serif; }',
+      '.blocklyDropDownDiv .blocklyMenuItemContent { color: ' + INK + ' !important; }',
+      '.blocklyDropDownDiv .blocklyMenuItemHighlight { background: #F0EDE7 !important; }',
+      '.blocklyDropDownDiv .blocklyMenuItemSelected { background: #FCE9BF !important; font-weight: 600; }',
+      '.blocklyDropDownDiv .blocklyMenuItemSelected .blocklyMenuItemCheckbox { position: absolute; right: 10px; top: 50%; margin: -8px 0 0 0;' +
+        ` float: none; background: url("${svgUri('<path d="M20 6 9 17l-5-5"/>', INK, 16, 2.5)}") center / 16px no-repeat !important; }`,
+      '.rcNavy .blocklyDropDownDiv, .rcNavy .blocklyDropDownDiv .blocklyDropDownArrow { background: ' + INK + ' !important; border-color: rgba(247,241,227,.2) !important; }',
+      '.rcNavy .blocklyDropDownDiv .blocklyMenuItemContent { color: ' + CREAM + ' !important; }',
+      '.rcNavy .blocklyDropDownDiv .blocklyMenuItemHighlight { background: #22344F !important; }',
+      '.rcNavy .blocklyDropDownDiv .blocklyMenuItemSelected { background: rgba(242,176,30,.2) !important; }',
+      `.rcNavy .blocklyDropDownDiv .blocklyMenuItemSelected .blocklyMenuItemCheckbox { background-image: url("${svgUri('<path d="M20 6 9 17l-5-5"/>', CREAM, 16, 2.5)}") !important; }`,
       // Dropdowns are a darker tint of the block (navy over it), without an outline.
       '.robocore-renderer .blocklyDropdownField > .blocklyFieldRect { fill: rgba(27,42,65,.28) !important; stroke: none !important; }',
       '.robocore-renderer .rcNavyText > .blocklyDropdownField > .blocklyFieldRect { fill: rgba(27,42,65,.14) !important; }',
@@ -505,6 +526,9 @@
         args0: [{ type: 'field_number', name: 'TIME', value: 1, min: 0 }, dd('UNIT', ['secs', 'ms'])], tooltip: 'delay(1000);' }),
       stmt({ type: 'rc_wait_until', message0: 'wait until %1', args0: [num('COND', 'Boolean')], style: 'rc_control',
         tooltip: 'while (!(condition)) delay(10);' }),
+      // "repeat until ◇" as in the design (Blockly's while/until block keeps working in saved projects).
+      stmt({ type: 'rc_repeat_until', message0: 'repeat until %1', args0: [num('BOOL', 'Boolean')],
+        message1: '%1', args1: [{ type: 'input_statement', name: 'DO' }], style: 'rc_control', tooltip: 'while (!(condition)) { … }' }),
       { type: 'rc_stop_program', message0: 'stop program', previousStatement: null, style: 'rc_control', tooltip: 'Motors and sound off, then nothing more: RoboCore::stopProgram();' },
       // ---- Operators
       { type: 'rc_between', message0: 'is %1 between %2 and %3 ?', args0: [num('X'), num('LO'), num('HI')], output: 'Boolean', style: 'rc_operators',
@@ -581,9 +605,30 @@
     for (const t of ['logic_compare', 'logic_operation', 'logic_negate', 'logic_boolean', 'math_number', 'math_arithmetic',
       'math_random_int', 'math_round', 'text']) restyle(t, 'rc_operators');
     for (const t of ['controls_if', 'controls_repeat_ext', 'controls_whileUntil']) restyle(t, 'rc_control');
-    // Their words, as in the catalogue.
+    // "if ◇ then" on one row, as in the design: "then" follows each condition (else if too), not the mouth below.
+    const thenAfterIf = (b) => {
+      for (let i = 0; b.getInput('IF' + i); i++) {
+        if (b.getInput('THEN' + i)) continue;
+        b.appendDummyInput('THEN' + i).appendField('then');
+        b.moveInputBefore('THEN' + i, 'DO' + i);
+      }
+    };
+    const ifInit = Blockly.Blocks.controls_if.init;
+    Blockly.Blocks.controls_if.init = function () {
+      ifInit.call(this);
+      this.setInputsInline(true);
+      const shape = this.updateShape_;
+      this.updateShape_ = function () {
+        for (let i = 1; this.getInput('THEN' + i); i++) this.removeInput('THEN' + i);
+        shape.call(this);
+        thenAfterIf(this);
+      };
+      thenAfterIf(this);
+    };
+    // Their words, as in the catalogue (no "do" beside the mouths).
     Object.assign(Blockly.Msg, {
-      CONTROLS_IF_MSG_THEN: 'then',
+      CONTROLS_IF_MSG_THEN: '',
+      CONTROLS_REPEAT_INPUT_DO: '',
       MATH_RANDOM_INT_TITLE: 'pick random %1 to %2',
       TEXT_JOIN_TITLE_CREATEWITH: 'join',
       PROCEDURES_DEFNORETURN_TITLE: 'define',
@@ -626,7 +671,7 @@
         blk('rc_timer'), blk('rc_reset_timer')]),
       category('control', [
         blk('rc_wait'), blk('controls_repeat_ext', { TIMES: num(5) }), blk('controls_if'), blk('controls_if', null, { extraState: { hasElse: true } }),
-        blk('rc_wait_until'), blk('controls_whileUntil', null, { fields: { MODE: 'UNTIL' } }), blk('rc_stop_program')]),
+        blk('rc_wait_until'), blk('rc_repeat_until'), blk('rc_stop_program')]),
       category('operators', [
         blk('math_arithmetic', { A: num(0), B: num(0) }), blk('logic_compare', { A: num(0), B: num(20) }, { fields: { OP: 'LT' } }),
         blk('logic_operation'), blk('logic_negate'), blk('math_random_int', { FROM: num(1), TO: num(10) }),
@@ -843,6 +888,7 @@
       if (until) cond = '!' + cond;
       return 'while (' + cond + ') {\n' + g.statementToCode(b, 'DO') + '}\n';
     };
+    f.rc_repeat_until = (b) => 'while (!' + (g.valueToCode(b, 'BOOL', O.PREFIX) || 'false') + ') {\n' + g.statementToCode(b, 'DO') + '}\n';
     f.logic_compare = (b) => {
       const op = { EQ: '==', NEQ: '!=', LT: '<', LTE: '<=', GT: '>', GTE: '>=' }[b.getFieldValue('OP')];
       const order = op === '==' || op === '!=' ? O.EQ : O.REL;
@@ -1227,6 +1273,8 @@
   function setTheme(t) {
     CTX.theme = t === 'navy' ? 'navy' : 'paper';
     document.documentElement.style.setProperty('--rc-bg', CTX.theme === 'navy' ? '#17253A' : PAPER);
+    // Menus Blockly puts outside the workspace (dropdowns) follow the theme through this class.
+    document.body.classList.toggle('rcNavy', CTX.theme === 'navy');
   }
 
   // ======================================================================= Code (Monaco)
