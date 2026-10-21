@@ -128,7 +128,7 @@ class CodeViewState extends State<CodeView> {
       final p = s.cur;
       final handEdit = p != null && !p.codeEdited && s.file == 0;
       s.editCode(_ctl.text);
-      if (handEdit) s.showToast('Code edited by hand. The blocks will stop updating it.');
+      if (handEdit) s.showToast('Code edited by hand', body: 'The blocks will stop updating it.', info: true);
       _updateAc();
     } else if (_ac.isNotEmpty && !sel.isCollapsed) {
       setState(() => _ac = []);

@@ -75,7 +75,7 @@ class AppState extends ChangeNotifier {
     file = i;
     closedTabs.remove(i);
     touch(p);
-    showToast('Fix applied to $name. Press Ctrl+Z in the code to undo it.');
+    showToast('Fix applied to $name', body: 'Press Ctrl+Z in the code to undo it.');
   }
 
   /// Adds a concept to the project's "You’ve learned" list.
@@ -148,10 +148,12 @@ class AppState extends ChangeNotifier {
   CompileResult? lastRun;
   String? lastRunName;
   String cursorPos = 'Ln 1, Col 1';
-  String? toast;
+  /// The toast's title, its optional message, and its kind (the design's three: success, info, error).
+  String? toast, toastBody;
 
   /// The toast is an error: it stays until it is closed (G-16).
   bool toastError = false;
+  bool toastInfo = false;
   Timer? _toastTimer;
   int logVersion = 0;
 
@@ -369,10 +371,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Success and info hide after 4 s; an [error] stays until closed (G-16).
-  void showToast(String msg, {bool error = false}) {
-    toast = msg;
+  /// A toast: a short [title] and, under it, a [body]. Success (the default) and [info] hide after 4 s; an [error]
+  /// stays until closed (G-16).
+  void showToast(String title, {String? body, bool error = false, bool info = false}) {
+    toast = title;
+    toastBody = body;
     toastError = error;
+    toastInfo = info && !error;
     _toastTimer?.cancel();
     if (!error) {
       _toastTimer = Timer(const Duration(seconds: 4), () {
@@ -441,7 +446,7 @@ class AppState extends ChangeNotifier {
     p.autosave = settings.autosave;
     projects.add(p);
     persist(now: true);
-    showToast('Copied “${ex.name}” into your projects as $name.');
+    showToast('Copied to your projects', body: '“${ex.name}” is in Projects as $name.');
     openProject(p.id);
   }
 
@@ -470,7 +475,7 @@ class AppState extends ChangeNotifier {
   void renameProject(Project p, String name) {
     p.name = name.trim();
     saveNow(p);
-    showToast('Renamed to “${p.name}”.');
+    showToast('Renamed to “${p.name}”');
   }
 
   /// A copy named “… copy”, at the top of Projects (PR-06).
@@ -482,7 +487,7 @@ class AppState extends ChangeNotifier {
       ..updated = DateTime.now().millisecondsSinceEpoch;
     projects.add(d);
     persist(now: true);
-    showToast('Project duplicated. “${d.name}” is in Projects.');
+    showToast('Project duplicated', body: '“${d.name}” is in Projects.');
     notifyListeners();
   }
 
@@ -497,11 +502,12 @@ class AppState extends ChangeNotifier {
         ? downloadFile(main, utf8.encode(p.files.first.content), 'text/plain;charset=utf-8')
         : downloadFile('$folder.zip', zipFiles({for (final f in p.files) '$folder/${f.name}': f.content}), 'application/zip');
     if (ok) {
-      showToast(one ? 'Downloaded $main. Open it in Arduino IDE 2 to work offline.' : 'Downloaded $folder.zip. Unzip it and open $main in Arduino IDE 2.');
+      showToast(one ? 'Downloaded $main' : 'Downloaded $folder.zip',
+          body: one ? 'Open it in Arduino IDE 2 to work offline.' : 'Unzip it and open $main in Arduino IDE 2.');
       return;
     }
     await Clipboard.setData(ClipboardData(text: p.files.first.content));
-    showToast('Copied $main to the clipboard. Downloads work in the web app.');
+    showToast('Copied $main to the clipboard', body: 'Downloads work in the web app.', info: true);
   }
 
   void createProject({required String name, required String mode, required String boardId}) {
@@ -537,7 +543,7 @@ class AppState extends ChangeNotifier {
     if (autosave) p.dirty = false;
     saveNow(p);
     touch(p, immediate: true);
-    showToast('Project settings saved.');
+    showToast('Project settings saved');
   }
 
   void deleteProject(Project p) {
@@ -545,7 +551,7 @@ class AppState extends ChangeNotifier {
     final open = p.id == pid;
     projects.remove(p);
     persist(now: true);
-    showToast('Deleted $name.');
+    showToast('Deleted $name');
     if (open) {
       sim.stop();
       pid = null;
@@ -600,14 +606,14 @@ class AppState extends ChangeNotifier {
       board = id;
       persist(now: true);
     }
-    showToast('Board set to ${kBoards[id]!.name}.');
+    showToast('Board set to ${kBoards[id]!.name}', info: true);
   }
 
   void setDefaultBoard(String id) {
     board = id;
     bsel = null;
     persist(now: true);
-    showToast('${kBoards[id]!.name} is now your default board.');
+    showToast('${kBoards[id]!.name} is now your default board');
   }
 
   void selectBoardDetail(String id) {
@@ -643,10 +649,10 @@ class AppState extends ChangeNotifier {
         final same = chip.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '').startsWith(b.chip.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), ''));
         if (same) {
           conn = ConnMsg('ok', 'Board answered: $chip on ${r.data['label'] ?? usbLabel ?? 'USB'}. It restarted and is running its sketch again.');
-          showToast('Board answered · $chip');
+          showToast('Board answered', body: '$chip on ${r.data['label'] ?? usbLabel ?? 'USB'}.');
         } else {
           conn = ConnMsg('err', 'The board answered, but it has an $chip and Board Setup is set to ${b.name} (${b.chip}). Pick the right board.');
-          showToast('Board answered · $chip, not ${b.chip}', error: true);
+          showToast('Board answered', body: 'It has an $chip, not ${b.chip}. Pick the right board.', error: true);
         }
         serialPush('— board restarted —', 'sys');
       } else {
@@ -655,7 +661,7 @@ class AppState extends ChangeNotifier {
             r.code == 'bootloader'
                 ? 'The board did not answer. Hold BOOT, tap RESET, release BOOT, then press Test connection again.'
                 : r.message);
-        showToast('The board did not answer.', error: true);
+        showToast('The board did not answer', body: 'Hold BOOT, tap RESET, release BOOT, then test again.', error: true);
       }
       notifyListeners();
       return;
@@ -838,21 +844,21 @@ class AppState extends ChangeNotifier {
         usbOpen = false;
         serialPush('Board unplugged ($msg). Plug it back in and it reconnects by itself.', 'err');
         setStatus('Not connected', 'err');
-        showToast('The board was unplugged. Plug it back in to reconnect.', error: true);
+        showToast('Board unplugged', body: 'Plug it back in to reconnect.', error: true);
         break;
       case 'reconnected':
         usbOpen = true;
         usbLabel = msg;
         serialPush('Board reconnected ($msg).', 'sys');
         setStatus('Ready');
-        showToast('Board reconnected.');
+        showToast('Board reconnected');
         break;
       case 'restarted':
         usbOpen = true;
         serialPush('— board restarted —', 'sys');
         break;
       case 'plugged':
-        if (!usbOpen) showToast('A board was plugged in ($msg). Press Connect in Board Setup to use it.');
+        if (!usbOpen) showToast('A board was plugged in', body: '$msg. Press Connect in Board Setup to use it.', info: true);
         break;
       case 'error':
         serialPush(msg, 'err');
@@ -918,14 +924,14 @@ class AppState extends ChangeNotifier {
       installing.remove(id);
       libs[id] = true;
       persist(now: true);
-      showToast('${l.name} ${l.ver} installed.');
+      showToast('${l.name} installed', body: 'Version ${l.ver}. You can #include it now.');
     });
   }
 
   void uninstall(String id) {
     libs[id] = false;
     persist(now: true);
-    showToast('${kLibs.firstWhere((x) => x.id == id).name} removed.');
+    showToast('${kLibs.firstWhere((x) => x.id == id).name} removed', info: true);
   }
 
   // ---------- settings ----------
@@ -1126,7 +1132,7 @@ class AppState extends ChangeNotifier {
       outLine('Uploading to a real board needs the compile server. Add its address in Settings → Compile server '
           '(server/README.md shows how to run one).', 'err');
       setStatus('No compile server', 'err');
-      showToast('Add a compile server in Settings to upload to the real board.', error: true);
+      showToast('No compile server', body: 'Add one in Settings to upload to the real board.', error: true);
       notifyListeners();
       return;
     }
@@ -1258,7 +1264,7 @@ class AppState extends ChangeNotifier {
       outLine('Upload failed: ${res.message}', 'err');
       if (res.code == 'bootloader') {
         outLine(kBootTip, 'hint');
-        showToast('Hold BOOT, tap RESET, release BOOT, then Upload again.', error: true);
+        showToast('Upload failed', body: 'Hold BOOT, tap RESET, release BOOT, then Upload again.', error: true);
       }
       setStatus('Upload failed', 'err');
     }
@@ -1383,7 +1389,7 @@ class AppState extends ChangeNotifier {
     p.mode = 'code';
     openFile(p.files.length - 1);
     touch(p, immediate: true);
-    showToast(header ? 'Added $t. Use it with #include "$t".' : 'Added $t.');
+    showToast('Added $t', body: header ? 'Use it with #include "$t".' : null);
   }
 
   void closeTab(int i) {
@@ -1414,7 +1420,7 @@ class AppState extends ChangeNotifier {
     if (p == null) return;
     p.codeEdited = false;
     touch(p, immediate: true);
-    showToast('Code rebuilt from the blocks.');
+    showToast('Code rebuilt from the blocks');
   }
 
   void gotoProblem(Problem pr) {
@@ -1562,13 +1568,13 @@ class AppState extends ChangeNotifier {
     p.setup = [];
     p.loop = [];
     _afterBlocks(p);
-    showToast('All blocks removed. Press Undo to bring them back.');
+    showToast('All blocks removed', body: 'Press Undo to bring them back.', info: true);
   }
 
   void undo() {
     final p = cur;
     if (p == null) return;
-    if (_past.isEmpty) return showToast('Nothing to undo.');
+    if (_past.isEmpty) return showToast('Nothing to undo', info: true);
     _future.add(_snapStr(p));
     _restore(p, _past.removeLast());
     _afterBlocks(p);
@@ -1577,7 +1583,7 @@ class AppState extends ChangeNotifier {
   void redo() {
     final p = cur;
     if (p == null) return;
-    if (_future.isEmpty) return showToast('Nothing to redo.');
+    if (_future.isEmpty) return showToast('Nothing to redo', info: true);
     _past.add(_snapStr(p));
     _restore(p, _future.removeLast());
     _afterBlocks(p);
