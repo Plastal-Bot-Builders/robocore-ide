@@ -297,9 +297,8 @@ class TopBar extends StatelessWidget {
             const SizedBox(width: 12),
             BoardChip(compact: phone || (narrow && p != null)),
             const SizedBox(width: 12),
+            // Editor: Verify · Upload · (Stop) · Ask Cog, as in the design's Top Bar.
             if (p != null) ...[
-              CogButton(compact: phone || narrow),
-              const SizedBox(width: 8),
               phone
                   ? IconBtn('check', onTap: s.busy == null ? s.verify : null, tip: 'Verify', color: kNavy)
                   : Btn(s.busy == 'verify' ? 'Verifying…' : 'Verify',
@@ -336,6 +335,8 @@ class TopBar extends StatelessWidget {
                         ),
                       ),
               ),
+              const SizedBox(width: 8),
+              CogButton(compact: phone || narrow),
             ] else
               phone
                   ? _PrimaryIcon(icon: 'plus', onTap: () => showNewProjectDialog(context), tip: 'New project')
