@@ -1463,7 +1463,8 @@
         lightbulb: { enabled: 'on' },
         renderLineHighlight: 'all',
         bracketPairColorization: { enabled: false },
-        mouseWheelZoom: true,
+        // A touchpad pinch must not change the code's size: that is Settings → Font size (see the wheel listener below).
+        mouseWheelZoom: false,
         guides: { bracketPairs: false, indentation: true },
         scrollBeyondLastLine: false,
         fixedOverflowWidgets: true,
@@ -1593,6 +1594,16 @@
     if (MODE === 'blocks') flushBlocks();
     onIdeKey(action);
   }, true);
+
+  // A touchpad pinch arrives as Ctrl + wheel. In the code editor it does nothing (the font size is in Settings); without
+  // this Monaco would scroll on it and Chrome would zoom the whole page. In the blocks, Blockly zooms the workspace.
+  if (MODE === 'code') {
+    window.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+    }, { capture: true, passive: false });
+  }
 
   window.rcEditor = {
     mode: MODE,
