@@ -44,7 +44,8 @@ class SettingsPage extends StatelessWidget {
           ]),
         );
 
-    Widget theme(String key, String name, String desc, Color sw) {
+    // The design's Theme Choice: name and description, the radio on the right.
+    Widget theme(String key, String name, String desc) {
       final on = st.theme == key;
       return Hover(
         onTap: () => s.updateSettings((x) => x.theme = key),
@@ -56,23 +57,14 @@ class SettingsPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(children: [
-            RadioDot(on: on),
-            const SizedBox(width: 10),
-            Container(
-              width: 36,
-              height: 24,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(color: sw, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
-              alignment: Alignment.topCenter,
-              child: Container(height: 6, color: kBrand),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(name, style: tLabel(c)),
                 Text(desc, style: tCaption(c), overflow: TextOverflow.ellipsis),
               ]),
             ),
+            const SizedBox(width: 10),
+            RadioDot(on: on),
           ]),
         ),
       );
@@ -80,8 +72,8 @@ class SettingsPage extends StatelessWidget {
 
     final phone = MediaQuery.sizeOf(context).width < 760;
     final themes = [
-      theme('paper', 'Paper', 'The box colours', kCream),
-      theme('navy', 'Navy', 'Dark, for low light', kNavy),
+      theme('paper', 'Paper', 'Light · the box colours'),
+      theme('navy', 'Navy', 'Dark · the box, inverted'),
     ];
 
     final profile = card('Profile', [const _ProfileRow()]);
@@ -260,7 +252,7 @@ class _CompileServerRowState extends State<_CompileServerRow> {
             ),
           ),
           const SizedBox(width: 8),
-          Btn(_testing ? 'Testing…' : 'Test', height: 36, onTap: _testing ? null : _test),
+          Btn(_testing ? 'Testing…' : 'Test', icon: 'plug', busy: _testing, height: 36, onTap: _testing ? null : _test),
         ]),
         if (r != null) ...[
           const SizedBox(height: 8),
@@ -452,9 +444,8 @@ class _CogStyleRow extends StatelessWidget {
             border: Border.all(color: on ? c.ink : c.line),
             borderRadius: BorderRadius.circular(8),
           ),
+          // The design's Help Style: title and description, the radio on the right.
           child: Row(children: [
-            RadioDot(on: on),
-            const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(kCogStyles[key]!, style: tLabel(c)),
@@ -462,6 +453,8 @@ class _CogStyleRow extends StatelessWidget {
               ]),
             ),
             if (locked && st.cogPin.isEmpty) ...[const SizedBox(width: 8), Badge2('Teacher')],
+            const SizedBox(width: 10),
+            RadioDot(on: on),
           ]),
         ),
       );
@@ -546,7 +539,7 @@ class _CogStatusRowState extends State<_CogStatusRow> {
             ]),
           ),
           const SizedBox(width: 16),
-          Btn(_busy ? 'Testing…' : 'Test Cog', kind: BtnKind.outline, onTap: _busy ? null : _test),
+          Btn(_busy ? 'Testing…' : 'Test Cog', kind: BtnKind.outline, busy: _busy, onTap: _busy ? null : _test),
         ]),
         if (st != null) ...[
           const SizedBox(height: 10),

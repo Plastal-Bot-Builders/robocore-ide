@@ -57,18 +57,30 @@ class LibrariesPage extends StatelessWidget {
     final s = AppScope.of(context);
     final c = RC.of(context);
     final l = kLibs.firstWhere((x) => x.id == id);
+    // The design's Library Action: Install → Installing… → ✓ Installed, which turns into Remove on hover.
     if (l.kind == 'included') return const Badge2('Included', bg: kBrand, fg: kNavy);
     final inst = s.installing[id];
-    if (inst != null) return Badge2(inst);
+    if (inst != null) return Btn(inst, kind: BtnKind.plain, busy: true, small: true);
     if (s.libs[id] ?? false) {
       return Hover(
         onTap: () => s.uninstall(id),
         tooltip: 'Remove ${l.name}',
-        builder: (context, h) => h
-            ? Text('Remove', style: tCaption(c).copyWith(decoration: TextDecoration.underline))
-            : const Badge2('Installed'),
+        builder: (context, h) => SizedBox(
+          height: 28,
+          child: h
+              ? Btn('Remove', icon: 'trash', small: true, onTap: () => s.uninstall(id))
+              : Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(6)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    RcIcon('check', size: 16, color: c.ink),
+                    const SizedBox(width: 6),
+                    Text('Installed', style: tLabel(c)),
+                  ]),
+                ),
+        ),
       );
     }
-    return Btn('Install', onTap: () => s.install(id));
+    return Btn('Install', icon: 'download', small: true, onTap: () => s.install(id));
   }
 }

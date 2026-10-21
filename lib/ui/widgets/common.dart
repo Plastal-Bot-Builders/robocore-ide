@@ -244,6 +244,7 @@ class RcInput extends StatelessWidget {
     this.focusNode,
     this.autofocus = false,
     this.error = false,
+    this.trailing,
   });
   final TextEditingController? controller;
   final String? hint, icon;
@@ -251,6 +252,9 @@ class RcInput extends StatelessWidget {
   final ValueChanged<String>? onChanged, onSubmitted;
   final FocusNode? focusNode;
   final bool autofocus, error;
+
+  /// A button inside the field, on the right (Cog's send).
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +284,9 @@ class RcInput extends StatelessWidget {
           contentPadding: EdgeInsets.symmetric(horizontal: icon != null ? 0 : 12, vertical: (height - 18) / 2),
           prefixIcon: icon == null ? null : Padding(padding: const EdgeInsets.only(left: 10, right: 8), child: RcIcon(icon!, size: 16, color: c.ink)),
           prefixIconConstraints: const BoxConstraints(minWidth: 34, minHeight: 16),
-          suffixIcon: error ? Padding(padding: const EdgeInsets.only(right: 10), child: RcIcon('alert', size: 16, color: c.ink)) : null,
+          suffixIcon: error
+              ? Padding(padding: const EdgeInsets.only(right: 10), child: RcIcon('alert', size: 16, color: c.ink))
+              : (trailing == null ? null : Padding(padding: const EdgeInsets.only(right: 4), child: trailing)),
           suffixIconConstraints: const BoxConstraints(minWidth: 26, minHeight: 16),
           enabledBorder: border,
           border: border,
