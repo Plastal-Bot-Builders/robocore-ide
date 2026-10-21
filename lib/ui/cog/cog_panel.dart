@@ -196,18 +196,14 @@ class _CogPanelState extends State<CogPanel> {
           ]),
           const SizedBox(height: 10),
         ],
-        Row(children: [
-          Expanded(
-            child: RcInput(
-              controller: _ask,
-              hint: 'Ask Cog about your code…',
-              height: 40,
-              onSubmitted: (_) => _send(cog),
-            ),
-          ),
-          const SizedBox(width: 6),
-          IconBtn('arrow', onTap: cog.busy ? null : () => _send(cog), tip: 'Send to Cog'),
-        ]),
+        // The design's Cog Composer: the send (paper plane) inside the field.
+        RcInput(
+          controller: _ask,
+          hint: 'Ask Cog about your code…',
+          height: 40,
+          onSubmitted: (_) => _send(cog),
+          trailing: IconBtn('send', onTap: cog.busy ? null : () => _send(cog), tip: 'Send to Cog', size: 30, iconSize: 16),
+        ),
         const SizedBox(height: 6),
         Text(
           s.settings.cogRead
