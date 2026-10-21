@@ -939,18 +939,22 @@ class _NavItem extends StatelessWidget {
                 ),
               ),
             Positioned.fill(
-              child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
-                RcIcon(icon, size: 20, color: c.ink),
-                if (!collapsed) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(label,
-                        overflow: TextOverflow.ellipsis,
-                        style: tLabel(c, color: on ? c.ink : c.muted, w: on ? FontWeight.w600 : FontWeight.w500)),
-                  ),
-                  if (dot) Dot(color: c.ok, size: 6),
-                ],
-              ]),
+              // While the sidebar animates open, show the label only once there is room for it (no overflow).
+              child: LayoutBuilder(builder: (context, k) {
+                final iconOnly = collapsed || k.maxWidth < 72;
+                return Row(mainAxisAlignment: iconOnly ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
+                  RcIcon(icon, size: 20, color: c.ink),
+                  if (!iconOnly) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(label,
+                          overflow: TextOverflow.ellipsis,
+                          style: tLabel(c, color: on ? c.ink : c.muted, w: on ? FontWeight.w600 : FontWeight.w500)),
+                    ),
+                    if (dot) Dot(color: c.ok, size: 6),
+                  ],
+                ]);
+              }),
             ),
             if (collapsed && dot) Positioned(right: 6, top: 8, child: Dot(color: c.ok, size: 6)),
           ]),
