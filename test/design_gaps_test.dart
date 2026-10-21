@@ -8,7 +8,7 @@ import 'package:robocore_ide/hw/usb_link.dart';
 import 'package:robocore_ide/main.dart';
 import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/sim_board.dart';
-import 'package:robocore_ide/ui/shell.dart' show SearchBox, kHelpTopics;
+import 'package:robocore_ide/ui/shell.dart' show SearchBox, TopBar, kHelpTopics;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A browser with Web Serial and no board plugged in, until Connect.
@@ -151,6 +151,8 @@ void main() {
     state.verify();
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.busy, 'verify');
+    expect(find.descendant(of: find.byType(TopBar), matching: find.text('Verifying…')), findsOneWidget,
+        reason: 'the Verify button shows it is working');
     await tester.tap(find.byTooltip('Cancel Verify'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.busy, isNull);

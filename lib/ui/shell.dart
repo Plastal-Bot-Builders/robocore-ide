@@ -281,11 +281,22 @@ class TopBar extends StatelessWidget {
               const SizedBox(width: 8),
               phone
                   ? IconBtn('check', onTap: s.busy == null ? s.verify : null, tip: 'Verify', color: kNavy)
-                  : Btn('Verify', icon: 'check', kind: BtnKind.ghostTop, tooltip: 'Verify ($kMod+R)', onTap: s.busy == null ? s.verify : null),
+                  : Btn(s.busy == 'verify' ? 'Verifying…' : 'Verify',
+                      icon: 'check',
+                      kind: BtnKind.ghostTop,
+                      busy: s.busy == 'verify',
+                      tooltip: 'Verify ($kMod+R)',
+                      onTap: s.busy == null ? s.verify : null),
               const SizedBox(width: 8),
               phone
                   ? _PrimaryIcon(icon: 'arrow', onTap: s.busy == null ? s.upload : null, tip: 'Upload')
-                  : _TopPrimary(label: 'Upload', icon: 'arrow', tooltip: 'Upload ($kMod+U)', onTap: s.busy == null ? s.upload : null),
+                  : _TopPrimary(
+                      label: s.busy != 'upload' ? 'Upload' : (s.uploadPct == null ? 'Uploading…' : 'Uploading ${s.uploadPct} %'),
+                      icon: 'arrow',
+                      busy: s.busy == 'upload',
+                      progress: s.busy == 'upload' && s.uploadPct != null ? s.uploadPct! / 100 : null,
+                      tooltip: 'Upload ($kMod+U)',
+                      onTap: s.busy == null ? s.upload : null),
               // Stop: only while a Verify or Upload runs, or the preview board runs the sketch (E-07).
               ListenableBuilder(
                 listenable: s.sim,
@@ -335,25 +346,47 @@ class TopBar extends StatelessWidget {
 
 /// Navy button on the yellow bar (stays navy in both themes).
 class _TopPrimary extends StatelessWidget {
-  const _TopPrimary({required this.label, required this.icon, this.onTap, this.tooltip});
+  const _TopPrimary({required this.label, required this.icon, this.onTap, this.tooltip, this.busy = false, this.progress});
   final String label, icon;
   final VoidCallback? onTap;
   final String? tooltip;
+
+  /// Uploading: a turning loader, not dimmed, and (with [progress], 0-1) the yellow bar along the bottom.
+  final bool busy;
+  final double? progress;
+
   @override
   Widget build(BuildContext context) {
     return Hover(
       onTap: onTap,
       tooltip: tooltip,
       builder: (context, h) => Opacity(
-        opacity: onTap == null ? .6 : 1,
+        opacity: onTap == null && !busy ? .4 : 1,
         child: Container(
           height: 32,
-          padding: const EdgeInsets.only(left: 12, right: 14),
-          decoration: BoxDecoration(color: h ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(6)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            RcIcon(icon, size: 16, color: kCream),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kCream)),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: h && !busy ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(6)),
+          child: Stack(children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 14),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (busy) const Spinner(size: 16, color: kCream) else RcIcon(icon, size: 16, color: kCream),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 32 / 13, fontWeight: FontWeight.w600, color: kCream)),
+              ]),
+            ),
+            if (progress != null)
+              Positioned(
+                left: 0,
+                bottom: 0,
+                right: 0,
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: progress!.clamp(0.0, 1.0),
+                  child: Container(height: 3, color: kBrand),
+                ),
+              ),
           ]),
         ),
       ),

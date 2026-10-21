@@ -71,6 +71,7 @@ class Btn extends StatelessWidget {
     this.small = false,
     this.expand = false,
     this.tooltip,
+    this.busy = false,
   });
   final String label;
   final String? icon;
@@ -79,6 +80,9 @@ class Btn extends StatelessWidget {
   final BtnKind kind;
   final double height;
   final bool small, expand;
+
+  /// Working (Verifying…, Installing…): a turning loader instead of the icon, and not dimmed.
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +115,7 @@ class Btn extends StatelessWidget {
             border = kNavy;
             break;
         }
-        if (onTap == null) {
+        if (onTap == null && !busy) {
           fg = fg.withValues(alpha: .45);
           border = border.withValues(alpha: .3);
         }
@@ -124,7 +128,10 @@ class Btn extends StatelessWidget {
             mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[RcIcon(icon!, size: 16, color: fg), const SizedBox(width: 8)],
+              if (busy)
+                ...[Spinner(size: 16, color: fg), const SizedBox(width: 8)]
+              else if (icon != null)
+                ...[RcIcon(icon!, size: 16, color: fg), const SizedBox(width: 8)],
               Text(label,
                   style: TextStyle(
                       fontFamily: fBody, fontSize: small ? 12.5 : 13, height: 16 / 13, fontWeight: FontWeight.w600, color: fg)),
@@ -449,6 +456,28 @@ class Badge2 extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The design's loader icon, turning: Verifying…, Uploading…, Installing…, Testing….
+class Spinner extends StatefulWidget {
+  const Spinner({super.key, this.size = 16, required this.color});
+  final double size;
+  final Color color;
+  @override
+  State<Spinner> createState() => _SpinnerState();
+}
+
+class _SpinnerState extends State<Spinner> with SingleTickerProviderStateMixin {
+  late final AnimationController _turn = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+
+  @override
+  void dispose() {
+    _turn.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RotationTransition(turns: _turn, child: RcIcon('loader', size: widget.size, color: widget.color));
 }
 
 /// A status dot: filled = connected / done, [ring] = not connected (the design's Connection Status).
