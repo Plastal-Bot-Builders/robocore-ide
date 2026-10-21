@@ -23,9 +23,10 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
   The C++ editor is created the first time its tab is shown (about half a second); after that a switch is one frame
   (~130 ms measured, including the test's polling). Leaving the editor (Home, Projects …) keeps them too: the
   editor page stays built offstage while a project is open (`Shell._pages`).
-- **Zoom and pane sizes.** Blocks zoom with the toolbar (− / % / + / fit; click the % to go back to 90 %),
-  Ctrl/⌘ + scroll or a trackpad pinch (a plain scroll moves the workspace), Ctrl/⌘ + = / − / 0, or Blockly's corner
-  buttons; 40 % to 250 %. Ctrl/⌘ + scroll also zooms the C++ editor. The divider between the blocks and the C++ pane
+- **Zoom and pane sizes.** Blocks zoom with Blockly's canvas buttons (+ / − / fit, as in the design), Ctrl/⌘ +
+  scroll or a trackpad pinch (a plain scroll moves the workspace), or Ctrl/⌘ + = / − / 0; 40 % to 250 %. (The toolbar
+  − / % / + / fit buttons were removed on 21 October: not in the design.) The C++ editor does not zoom: a pinch or
+  Ctrl/⌘ + scroll there is ignored, so it cannot zoom the page either. The divider between the blocks and the C++ pane
   and the gap above the console can be dragged (double-click resets); the sizes are kept in Settings
   (`cppPaneWidth`, `consoleHeight`). While a divider is pressed the editor iframes ignore the pointer
   (`setEditorFramesInteractive`), or they would swallow the drag.

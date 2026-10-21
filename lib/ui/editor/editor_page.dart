@@ -40,7 +40,6 @@ class _EditorPageState extends State<EditorPage> {
   final _monaco = GlobalKey<MonacoEditorState>();
   final _preview = GlobalKey<MonacoEditorState>();
   bool _showCpp = true;
-  double _zoom = 1; // Blockly's scale, shown in the toolbar
 
   // Pane sizes while a divider is being dragged; saved to Settings when the drag ends.
   double? _cppWidth, _consoleHeight;
@@ -135,23 +134,7 @@ class _EditorPageState extends State<EditorPage> {
           IconBtn('search',
               onTap: () => kWebEditors ? _monaco.currentState?.find() : _active?.currentState?.toggleFind(), tip: 'Find')
         else ...[
-          if (kWebEditors) ...[
-            IconBtn('zout', onTap: () => _blockly.currentState?.zoom(-1), tip: 'Zoom out (Ctrl −)'),
-            Hover(
-              onTap: () => _blockly.currentState?.resetZoom(),
-              tooltip: 'Back to the normal size (Ctrl 0)',
-              builder: (context, h) => Container(
-                width: 48,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-                child: Text('${(_zoom * 100).round()}%', style: tCaption(c, color: c.ink, w: FontWeight.w600)),
-              ),
-            ),
-            IconBtn('zin', onTap: () => _blockly.currentState?.zoom(1), tip: 'Zoom in (Ctrl +)'),
-            IconBtn('fit', onTap: () => _blockly.currentState?.zoomToFit(), tip: 'Fit all blocks'),
-            Container(width: 1, height: 20, margin: const EdgeInsets.symmetric(horizontal: 6), color: c.line2),
-          ],
+          // Zoom is on the canvas (Blockly's buttons, Ctrl/Cmd + wheel, pinch, Ctrl +/−/0), as in the design.
           if (kWebEditors && width >= 900)
             IconBtn('code',
                 onTap: () => setState(() => _showCpp = !_showCpp),
@@ -293,9 +276,6 @@ class _EditorPageState extends State<EditorPage> {
         if (json.isEmpty) return s.cog.selectBlock(null);
         final b = (jsonDecode(json) as Map).cast<String, dynamic>();
         s.cog.selectBlock(CogBlock(type: '${b['type']}', label: '${b['label']}', cpp: '${b['cpp']}'));
-      },
-      onZoom: (scale) {
-        if (mounted && scale != _zoom) setState(() => _zoom = scale);
       },
     );
     return LayoutBuilder(builder: (context, box) {
