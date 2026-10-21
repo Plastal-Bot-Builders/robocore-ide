@@ -100,7 +100,8 @@ class SettingsPage extends StatelessWidget {
             value: st.fontSize,
             width: 110,
             label: 'Font size',
-            items: [for (final n in const [12, 13, 14, 15, 16, 18]) (n, '$n px')],
+            // The design's sizes; a size saved before (15 or 18 px) stays in the list.
+            items: [for (final n in ({12, 13, 14, 16, st.fontSize}.toList()..sort())) (n, '$n px')],
             onChanged: (v) => s.updateSettings((x) => x.fontSize = v),
           )),
       row('Autocomplete', RcSwitch(value: st.autocomplete, label: 'Autocomplete', onChanged: (v) => s.updateSettings((x) => x.autocomplete = v)),

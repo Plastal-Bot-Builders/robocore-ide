@@ -295,7 +295,9 @@ class RcInput extends StatelessWidget {
 }
 
 /// A compact dropdown styled like the Figma selects (border, chevron, 6px radius).
-class RcSelect<T> extends StatelessWidget {
+/// A select as in the design: white field with a chevron; while open, an ink border and an up chevron. In the menu the
+/// chosen option has a yellow row, bold text and a check.
+class RcSelect<T> extends StatefulWidget {
   const RcSelect({
     super.key,
     required this.value,
@@ -313,54 +315,84 @@ class RcSelect<T> extends StatelessWidget {
   final String? label;
 
   @override
+  State<RcSelect<T>> createState() => _RcSelectState<T>();
+}
+
+class _RcSelectState<T> extends State<RcSelect<T>> {
+  bool _open = false;
+
+  void _set(bool v) {
+    if (mounted && _open != v) setState(() => _open = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    final current = items.where((e) => e.$1 == value).map((e) => e.$2).firstOrNull ?? '$value';
+    final w = widget;
+    final current = w.items.where((e) => e.$1 == w.value).map((e) => e.$2).firstOrNull ?? '${w.value}';
     return Semantics(
-      label: label,
+      label: w.label,
       child: PopupMenuButton<T>(
         tooltip: '',
-        initialValue: value,
-        onSelected: onChanged,
+        initialValue: w.value,
+        onOpened: () => _set(true),
+        onCanceled: () => _set(false),
+        onSelected: (v) {
+          _set(false);
+          w.onChanged(v);
+        },
         position: PopupMenuPosition.under,
         color: c.raised,
         elevation: 6,
+        menuPadding: const EdgeInsets.all(4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.line)),
-        constraints: BoxConstraints(minWidth: (width != null && width!.isFinite) ? width! : 160),
+        constraints: BoxConstraints(minWidth: (w.width != null && w.width!.isFinite) ? w.width! : 160),
         itemBuilder: (_) => [
-          for (final it in items)
+          for (final it in w.items)
             PopupMenuItem<T>(
               value: it.$1,
-              height: 34,
-              child: Text(it.$2,
-                  style: TextStyle(
-                      fontFamily: fBody,
-                      fontSize: 13,
-                      fontWeight: it.$1 == value ? FontWeight.w600 : FontWeight.w500,
-                      color: c.ink)),
+              height: 33,
+              padding: EdgeInsets.zero,
+              child: Container(
+                height: 33,
+                padding: const EdgeInsets.only(left: 10, right: 8),
+                decoration: BoxDecoration(
+                  color: it.$1 == w.value ? (c.dark ? kBrand.withValues(alpha: .2) : c.brandSoft) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(it.$2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontFamily: fBody, fontSize: 13, fontWeight: it.$1 == w.value ? FontWeight.w600 : FontWeight.w500, color: c.ink)),
+                  ),
+                  if (it.$1 == w.value) ...[const SizedBox(width: 8), RcIcon('check', size: 16, color: c.ink)],
+                ]),
+              ),
             ),
         ],
         child: Container(
-          width: width,
-          height: height,
+          width: w.width,
+          height: w.height,
           padding: const EdgeInsets.only(left: 10, right: 8),
           decoration: BoxDecoration(
             color: c.dark ? c.sunk : Colors.white,
-            border: Border.all(color: c.line),
+            border: _open ? Border.all(color: c.ink, width: 1.5) : Border.all(color: c.line),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
-            mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
+            mainAxisSize: w.width == null ? MainAxisSize.min : MainAxisSize.max,
             children: [
               Flexible(
-                fit: width == null ? FlexFit.loose : FlexFit.tight,
+                fit: w.width == null ? FlexFit.loose : FlexFit.tight,
                 child: Text(current,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: c.ink)),
               ),
               const SizedBox(width: 8),
-              RcIcon('chev', size: 16, color: c.ink),
+              RotatedBox(quarterTurns: _open ? 2 : 0, child: RcIcon('chev', size: 16, color: c.ink)),
             ],
           ),
         ),
