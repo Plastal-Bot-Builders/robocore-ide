@@ -9,6 +9,19 @@ source (`RoboCore_IDE_Design/figma-plugin/src/04c_blockly.js`), as it was for th
 
 `docs/design-coverage.md` counts *behaviour* (does it work); this review is about *looks*: colour, layout, states.
 
+## Fixed since the review (21 October)
+
+The eight groups in the list below are done and checked in the running app: no green or red (13471c0, which also
+did the Output panel: inverted error lines with Explain on them, top-aligned log, the design's empty texts), Verify and
+Upload busy states (eeac9ac), selects and the board selector (66bf230), toasts (43d2184), blocks and Blockly's dropdown
+menu (edba510), top bar order (d253419), choice cards, library buttons, server Test and Cog's send (9da98c8), and the
+sidebar overflow bug (df8a4bb).
+
+Still open (small): tooltips write shortcuts in brackets; example descriptions wrap to two lines; dialogs lack the
+divider lines and Project Settings' Cancel is a Ghost button; the preview board's USER button is filled when up and a
+white LED is drawn white (design: yellow); the Problems tab has no clear button; an empty port reads "—". And the four
+"Not in the design" items at the end are still yours to decide.
+
 ## Summary
 
 Counted by table row below (a row can cover a group, for example the nine select menus):
