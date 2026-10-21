@@ -498,9 +498,10 @@ class _BoardChipState extends State<BoardChip> {
         builder: (context, h) => Container(
           height: 40,
           padding: const EdgeInsets.only(left: 8, right: 10),
+          // Open: an ink border and an up chevron (the design's Board Selector).
           decoration: BoxDecoration(
-            color: h ? Colors.white : const Color(0xFFFFFCF5),
-            border: Border.all(color: const Color(0xFFDBDBD8)),
+            color: h || open ? Colors.white : const Color(0xFFFFFCF5),
+            border: open ? Border.all(color: kNavy, width: 1.5) : Border.all(color: const Color(0xFFDBDBD8)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -527,7 +528,7 @@ class _BoardChipState extends State<BoardChip> {
                   style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: kNavy)),
             ],
             const SizedBox(width: 10),
-            const RcIcon('chev', size: 16, color: kNavy),
+            RotatedBox(quarterTurns: open ? 2 : 0, child: const RcIcon('chev', size: 16, color: kNavy)),
           ]),
         ),
       ),
