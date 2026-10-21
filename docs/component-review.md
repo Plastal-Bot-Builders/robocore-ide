@@ -23,7 +23,8 @@ settings has the one above Auto-save and an outlined Cancel; the preview board's
 fills while held, and a white LED is lit in the box yellow; the Problems tab has its trash button; an empty port reads
 "None selected". A touchpad pinch no longer zooms the code editor (afc10f1).
 
-Still open: the four "Not in the design" items at the end are yours to decide.
+Of the "Not in the design" items at the end, the toolbar zoom is removed and the C++ pane stays; Cog's "+" and Explain
+on Problems rows are still yours to decide.
 
 ## Summary
 
@@ -185,11 +186,12 @@ The differences that show most, in a suggested order of fixing:
 
 ## Not in the design (yours to decide)
 
-- **Zoom buttons and % in the blocks toolbar.** The design's blocks header has only Undo, Redo, Clear; zoom is the
-  canvas buttons, which now match the design. Added with the zoom work on 20 October.
-- **"C++ from the blocks" pane** beside the blocks (and its toggle). The design shows the C++ only in Code mode.
-- **"+" new conversation** in the Cog header, and **Explain** on Problems rows.
-- **Red Reset… and Delete project buttons** (see Actions).
+- **Zoom buttons and % in the blocks toolbar.** Removed on 21 October (Fred's call): the blocks header has the C++
+  toggle, Undo, Redo and Clear; zoom is on the canvas buttons, as in the design.
+- **"C++ from the blocks" pane** beside the blocks (and its toggle). Kept (Fred's call), though the design shows the C++
+  only in Code mode.
+- **"+" new conversation** in the Cog header, and **Explain** on Problems rows. Still to decide.
+- **Red Reset… and Delete project buttons.** Gone: both follow the design now (13471c0).
 
 ## Bugs found while reviewing
 

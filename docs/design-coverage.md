@@ -39,7 +39,7 @@ and unplug, all tested so far against a stand-in board and flasher; and how far 
 | G-11 Search | Done | Projects, Examples and Help (pages and dialogs, found by name or a word like “baud”); Esc works |
 | G-12 New project | Done | |
 | G-13 Status bar · board → Board Setup | Done | |
-| G-14 Tooltips with shortcut | Done | Verify (Ctrl/⌘+R), Upload (Ctrl/⌘+U), Ask Cog, zoom |
+| G-14 Tooltips with shortcut | Done | Verify (Ctrl/⌘+R), Upload (Ctrl/⌘+U), Ask Cog, Undo, Redo |
 | G-15 Esc closes the top-most thing | Done | Every menu, the search and every dialog |
 | G-16 Toasts | Done | Bottom right; 4 s; errors stay with a close button |
 | G-17 Hover states | Done | |

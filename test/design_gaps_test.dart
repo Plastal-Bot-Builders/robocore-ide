@@ -226,7 +226,7 @@ void main() {
     expect((spans.first as TextSpan).text, 'Verify');
     expect((spans.last as TextSpan).text, 'Cmd+R');
     expect((spans.last as TextSpan).style!.color!.a, closeTo(.7, .01));
-    expect((tipped('Zoom out (Ctrl −)', const SizedBox()) as Tooltip).richMessage, isNotNull);
+    expect((tipped('Close Cog (Ctrl+I)', const SizedBox()) as Tooltip).richMessage, isNotNull);
     expect((tipped('Board setup', const SizedBox()) as Tooltip).message, 'Board setup', reason: 'no shortcut: plain');
   });
 
