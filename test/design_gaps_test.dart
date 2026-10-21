@@ -43,13 +43,13 @@ class _NoBoardUsb extends UsbLink {
   @override
   Future<UsbResult> write(String text) async => const UsbResult(true);
   @override
-  Future<UsbResult> reset() async => const UsbResult(true);
+  Future<UsbResult> reset({String arch = 'esp32'}) async => const UsbResult(true);
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) async => const UsbResult(false, code: 'none');
   @override
   Future<UsbResult> cancelFlash() async => const UsbResult(true);
   @override
-  Future<UsbResult> identify({required int baud}) async => const UsbResult(false, code: 'none');
+  Future<UsbResult> identify({required int baud, String arch = 'esp32'}) async => const UsbResult(false, code: 'none');
 }
 
 Future<AppState> _start(WidgetTester tester, {UsbLink? usb}) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/catalog.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../shell.dart' show ConnStatus;
@@ -25,8 +26,8 @@ class SerialPage extends StatelessWidget {
         PageHeader(
           title: 'Serial Monitor',
           subtitle: s.onUsb
-              ? 'Read and send text over the RoboCore’s USB-C port.'
-              : 'Read and send text to the preview board. Pick USB-C to talk to the real one.',
+              ? 'Read and send text over the ${kBoards[s.boardId]!.name}’s ${s.usbName} port.'
+              : 'Read and send text to the preview board. Pick ${s.usbName} to talk to the real one.',
           trailing: ConnStatus(connected: s.linked),
         ),
         const SizedBox(height: 24),

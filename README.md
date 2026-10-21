@@ -69,7 +69,7 @@ The IDE talks to a real RoboCore V2 (schematic Rev 2.0, ESP32-S3-WROOM-1-N8R2) o
 | Board test and examples | `firmware/RoboCore/examples`. The IDE's RoboCore V2 examples are these files (`tools/gen_examples.py` writes `lib/data/robocore_v2_examples.dart`) |
 | Compile server | `server/`: arduino-cli 1.5.1, esp32 core 3.3.12, Docker. Deploy with `render.yaml` or Cloud Run (`server/README.md`) |
 | Connect and Serial Monitor | Web Serial in Chrome or Edge (`web/robocore_usb.js`): plug-in and unplug notices, automatic reconnect |
-| Upload | The project goes to the compile server, then esptool-js (`web/vendor/esptool-js`) writes it over the same USB-C port, resets the board and reopens the Serial Monitor |
+| Upload | The project goes to the compile server, then esptool-js (`web/vendor/esptool-js`) writes it over the same USB-C port, resets the board and reopens the Serial Monitor. An Arduino Uno gets the server's HEX through its Optiboot bootloader instead (STK500v1 in `web/robocore_usb.js`: written page by page, read back to check) |
 
 To use it:
 
@@ -77,6 +77,8 @@ To use it:
 2. Open the web app in Chrome or Edge, plug in the RoboCore, and in **Board Setup** pick **USB-C** and press **Connect**
    (the ESP32-S3 shows up as “USB JTAG/serial debug unit”).
 3. **Upload** compiles and flashes. If the board doesn't answer, hold **BOOT**, tap **RESET**, release **BOOT**, and upload again.
+   (An Arduino Uno needs no buttons: check that Board Setup is set to the Uno and that no other program, such as the
+   Arduino IDE's Serial Monitor, has its port open.)
 
 Without a board the IDE keeps using the **preview board** (the simulator), and without a compile server **Verify** uses the
 built-in preview check. The native apps (Windows, macOS, Linux, Android, iOS) use the preview board for now; USB serial there is a later step.

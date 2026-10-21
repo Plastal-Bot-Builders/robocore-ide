@@ -48,9 +48,11 @@ abstract class UsbLink {
   Future<UsbResult> disconnect();
   Future<UsbResult> setBaud(int baud);
   Future<UsbResult> write(String text);
-  Future<UsbResult> reset();
+  /// Restarts the sketch: an RTS pulse on an ESP32, a DTR pulse on an Uno ([arch] `avr`).
+  Future<UsbResult> reset({String arch = 'esp32'});
 
-  /// Writes a compiled program: `{parts: [{name, offset, data(base64)}], chip, boardName, baud, monitorBaud}`.
+  /// Writes a compiled program: `{parts: [{name, offset, data(base64)}], chip, boardName, baud, monitorBaud}` for an
+  /// ESP32 (esptool), or `{format: 'hex', hex, chip, boardName, pageSize, max, monitorBaud}` for an Uno (Optiboot).
   /// Stopped with [cancelFlash], it fails with code `cancelled` (`partial` true if writing had started).
   Future<UsbResult> flash(Map<String, dynamic> job);
 
@@ -58,7 +60,7 @@ abstract class UsbLink {
   Future<UsbResult> cancelFlash();
 
   /// Asks the chip its name through its bootloader (`chip`, `label`), then restarts it.
-  Future<UsbResult> identify({required int baud});
+  Future<UsbResult> identify({required int baud, String arch = 'esp32'});
 }
 
 UsbLink createUsbLink() => impl.createUsbLink();

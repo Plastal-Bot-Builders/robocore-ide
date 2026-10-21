@@ -3,12 +3,14 @@
 //  - Serial Monitor over Web Serial (Chrome / Edge on a computer, or Chrome on Android with USB OTG).
 //  - Plug-in / unplug notices and automatic reconnect to a board the user has already allowed.
 //  - Flashing with esptool-js (vendor/esptool-js/bundle.js), loaded only when an upload starts.
+//  - Flashing an Arduino Uno (ATmega328P) through its Optiboot bootloader (STK500v1), below.
 //
 // The Flutter app loads this file as a module and talks to window.robocoreUsb.
 // Every call resolves with a JSON string { ok, ... } and never rejects, so errors reach Dart as data.
 // Events go to the onEvent(type, message) handler:
 //   unplugged, reconnected, plugged, error, log (flash output), progress (JSON), stage (flash step)
 // identify() asks the chip its name (Test connection); cancelFlash() stops an upload.
+// identify() and reset() take the board's arch: 'esp32' (default) or 'avr'.
 
 const ESPRESSIF_VID = 0x303a;
 const ESPTOOL_URL = new URL('./vendor/esptool-js/bundle.js', import.meta.url).href;
@@ -68,6 +70,7 @@ function labelOf(info) {
   if (info.vid === ESPRESSIF_VID) return `Espressif USB (303A:${hex4(info.pid)})`;
   if (info.vid === 0x10c4) return `CP210x USB-UART (10C4:${hex4(info.pid)})`;
   if (info.vid === 0x1a86) return `CH340 USB-UART (1A86:${hex4(info.pid)})`;
+  if ((info.vid === 0x2341 || info.vid === 0x2a03) && [0x0001, 0x0043, 0x0243].includes(info.pid)) return `Arduino Uno (${hex4(info.vid)}:${hex4(info.pid)})`;
   if (info.vid === 0x2341) return `Arduino (2341:${hex4(info.pid)})`;
   return `USB serial (${hex4(info.vid)}:${hex4(info.pid)})`;
 }
@@ -267,6 +270,7 @@ async function flash(jobJson) {
   } catch (e) {
     return fail('bad-job', 'The program image is damaged.');
   }
+  if (job.format === 'hex') return flashAvr(job);
   const parts = Array.isArray(job.parts) ? job.parts : [];
   if (!parts.length) return fail('bad-job', 'The compile server sent no program image.');
 
@@ -387,7 +391,8 @@ async function flash(jobJson) {
 }
 
 // Test connection (B-04): asks the chip its name through the bootloader, then restarts it.
-async function identify(baud) {
+async function identify(baud, arch) {
+  if (arch === 'avr') return identifyAvr(baud);
   if (!supported()) return fail('unsupported', 'This browser has no Web Serial. Use Chrome or Edge on a computer.');
   if (state.busy) return fail('busy', 'An upload is running. Wait for it to finish.');
   state.busy = true;
@@ -439,6 +444,331 @@ async function identify(baud) {
     return fail(e && e.code === 'esptool' ? 'esptool' : 'identify', errText(e));
   } finally {
     await release(transport, monitorBaud, 3000);
+  }
+}
+
+// ---------------------------------------------------------------- Arduino Uno (Optiboot, STK500v1)
+//
+// The Uno's bootloader runs for about a second after a reset. Opening the port and pulsing DTR resets it (the board's
+// auto-reset capacitor), then the bootloader takes the same few STK500v1 commands avrdude sends: get in sync, read the
+// signature, enter programming mode, load an address and write a page (128 bytes on the ATmega328P), read pages back
+// to check them, and leave programming mode, which starts the sketch.
+
+const STK = { OK: 0x10, INSYNC: 0x14, EOP: 0x20, SYNC: 0x30, ENTER: 0x50, LEAVE: 0x51, ADDR: 0x55, PROG: 0x64, READ: 0x74, SIGN: 0x75 };
+
+const AVR_CHIPS = {
+  '1e950f': 'ATmega328P',
+  '1e9514': 'ATmega328',
+  '1e9516': 'ATmega328PB',
+  '1e940b': 'ATmega168P',
+  '1e9406': 'ATmega168',
+  '1e9587': 'ATmega32U4',
+};
+
+// Intel HEX (what avr-gcc makes) to one block of bytes from address 0. Gaps are 0xFF, like erased flash.
+function parseHex(text) {
+  const records = [];
+  let base = 0;
+  let end = 0;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line[0] !== ':' || line.length < 11 || line.length % 2 === 0) throw new Error(`bad line "${line.slice(0, 16)}"`);
+    const b = [];
+    for (let i = 1; i < line.length; i += 2) b.push(parseInt(line.slice(i, i + 2), 16));
+    if (b.some(Number.isNaN) || b.length !== b[0] + 5) throw new Error(`bad line "${line.slice(0, 16)}"`);
+    if ((b.reduce((s, x) => s + x, 0) & 0xff) !== 0) throw new Error(`checksum error in "${line.slice(0, 16)}"`);
+    const type = b[3];
+    if (type === 0) {
+      const at = base + ((b[1] << 8) | b[2]);
+      records.push([at, b.slice(4, 4 + b[0])]);
+      end = Math.max(end, at + b[0]);
+    } else if (type === 1) {
+      break;
+    } else if (type === 2) {
+      base = ((b[4] << 8) | b[5]) << 4;
+    } else if (type === 4) {
+      base = ((b[4] << 8) | b[5]) << 16;
+    }
+  }
+  const out = new Uint8Array(end).fill(0xff);
+  for (const [at, data] of records) out.set(data, at);
+  return out;
+}
+
+// The bootloader's bytes, read in the background so a reply can be waited for with a timeout.
+function byteLink(port) {
+  const buf = [];
+  let wake = null;
+  let closed = false;
+  const reader = port.readable.getReader();
+  const writer = port.writable.getWriter();
+  const poke = () => {
+    if (wake) wake();
+    wake = null;
+  };
+  const pump = (async () => {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) for (const x of value) buf.push(x);
+        poke();
+      }
+    } catch (e) {
+      /* the port closed */
+    }
+    closed = true;
+    poke();
+  })();
+  return {
+    async send(bytes) {
+      await writer.write(Uint8Array.from(bytes));
+    },
+    drain() {
+      buf.length = 0;
+    },
+    async take(n, ms) {
+      const end = Date.now() + ms;
+      while (buf.length < n) {
+        const left = end - Date.now();
+        if (left <= 0 || closed) throw Object.assign(new Error('The board stopped answering.'), { code: 'timeout' });
+        await new Promise((r) => {
+          wake = r;
+          setTimeout(r, left);
+        });
+      }
+      return buf.splice(0, n);
+    },
+    async close() {
+      try {
+        await reader.cancel();
+      } catch (e) {
+        /* already closed */
+      }
+      await pump;
+      for (const l of [reader, writer]) {
+        try {
+          l.releaseLock();
+        } catch (e) {
+          /* already released */
+        }
+      }
+    },
+  };
+}
+
+// One command: the bytes, then EOP; the answer is INSYNC, `reply` bytes, OK.
+async function stk(io, bytes, reply = 0, ms = 1000) {
+  await io.send([...bytes, STK.EOP]);
+  const [sync] = await io.take(1, ms);
+  if (sync !== STK.INSYNC) throw Object.assign(new Error('The bootloader lost sync.'), { code: 'sync' });
+  const data = reply ? await io.take(reply, ms) : [];
+  const [ok] = await io.take(1, ms);
+  if (ok !== STK.OK) throw Object.assign(new Error('The bootloader refused a command.'), { code: 'sync' });
+  return data;
+}
+
+// Opens the port, resets the board into its bootloader and gets in sync. The Uno's Optiboot talks at 115200 baud;
+// older bootloaders (Duemilanove, old Nano) at 57600, so that is tried next. Resolves the link, or null.
+async function avrStart(port, bauds) {
+  for (const baud of bauds) {
+    checkCancel();
+    try {
+      await port.open({ baudRate: baud, bufferSize: 4096 });
+    } catch (e) {
+      throw Object.assign(new Error(`Could not open the port: ${errText(e)}. Close the Arduino IDE or any other app using it, then try again.`), { code: 'open' });
+    }
+    const io = byteLink(port);
+    try {
+      await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+      await sleep(250);
+      await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+      await sleep(50);
+      for (let i = 0; i < 8; i++) {
+        checkCancel();
+        io.drain();
+        await io.send([STK.SYNC, STK.EOP]);
+        try {
+          const r = await io.take(2, 150);
+          if (r[0] === STK.INSYNC && r[1] === STK.OK) return io;
+        } catch (e) {
+          /* not yet: the bootloader may still be starting */
+        }
+      }
+    } catch (e) {
+      // Stop, or the adapter refused the reset lines: let go of the port before giving up.
+      await io.close();
+      await port.close().catch(() => {});
+      throw e;
+    }
+    await io.close();
+    await port.close();
+  }
+  return null;
+}
+
+async function avrChip(io) {
+  const s = await stk(io, [STK.SIGN], 3);
+  const key = s.map((x) => x.toString(16).padStart(2, '0')).join('');
+  return AVR_CHIPS[key] || `an unknown chip (signature ${key.toUpperCase()})`;
+}
+
+// The app adds what to check (the board picked in Board Setup, another program holding the port).
+const AVR_NO_ANSWER = 'The board did not answer its bootloader.';
+
+// Closes the bootloader link and the port, then reopens the Serial Monitor on the same port.
+async function avrFinish(port, io, info, monitorBaud) {
+  if (io) await io.close();
+  try {
+    await port.close();
+  } catch (e) {
+    /* already closed */
+  }
+  state.want = true;
+  state.busy = false;
+  state.cancel = false;
+  state.opening = true;
+  try {
+    return await waitAndOpen(info, monitorBaud, 4000);
+  } finally {
+    state.opening = false;
+  }
+}
+
+async function flashAvr(job) {
+  let image;
+  try {
+    image = parseHex(job.hex || '');
+  } catch (e) {
+    return fail('bad-job', `The program image is damaged: ${errText(e)}.`);
+  }
+  if (!image.length) return fail('bad-job', 'The compile server sent no program image.');
+  if (job.max && image.length > job.max) return fail('too-big', `The sketch is ${image.length} bytes; the board has room for ${job.max}.`);
+  const pageSize = job.pageSize || 128;
+  const monitorBaud = job.monitorBaud || state.baud || 115200;
+
+  state.busy = true;
+  state.cancel = false;
+  let port = state.port;
+  let io = null;
+  let programming = false;
+  let writing = false;
+  try {
+    if (!port) port = await grantedPort(state.last);
+    if (!port) return fail('no-port', 'No board connected. Press Connect and pick the board.');
+    const info = infoOf(port);
+    state.last = info;
+
+    // 1. Free the port, reset the board into its bootloader and get in sync.
+    emit('stage', 'connecting');
+    await closePort();
+    io = await avrStart(port, [job.baud || 115200, 57600]);
+    if (!io) return fail('avr-sync', AVR_NO_ANSWER);
+
+    // 2. The right chip?
+    const chip = await avrChip(io);
+    if (job.chip && chipKey(chip) !== chipKey(job.chip)) {
+      await stk(io, [STK.LEAVE]).catch(() => {});
+      await avrFinish(port, io, info, monitorBaud);
+      io = null;
+      return fail('wrong-chip', `This board has an ${chip}, but the project is set to ${job.boardName || job.chip}. Pick the right board and upload again.`);
+    }
+    checkCancel();
+
+    // 3. Write the pages, then read them back.
+    await stk(io, [STK.ENTER]);
+    programming = true;
+    emit('stage', 'writing');
+    writing = true;
+    const pages = Math.ceil(image.length / pageSize);
+    const total = image.length;
+    for (let i = 0; i < pages; i++) {
+      checkCancel();
+      const at = i * pageSize;
+      const page = new Uint8Array(pageSize).fill(0xff);
+      page.set(image.subarray(at, at + pageSize));
+      await stk(io, [STK.ADDR, (at >> 1) & 0xff, (at >> 9) & 0xff]);
+      await stk(io, [STK.PROG, pageSize >> 8, pageSize & 0xff, 0x46, ...page]);
+      emit('progress', JSON.stringify({ part: 0, parts: 1, name: 'sketch', address: at, done: Math.min(total, at + pageSize), total }));
+    }
+    writing = false;
+    emit('stage', 'verifying');
+    for (let i = 0; i < pages; i++) {
+      checkCancel();
+      const at = i * pageSize;
+      await stk(io, [STK.ADDR, (at >> 1) & 0xff, (at >> 9) & 0xff]);
+      const back = await stk(io, [STK.READ, pageSize >> 8, pageSize & 0xff, 0x46], pageSize);
+      for (let j = 0; j < pageSize && at + j < total; j++) {
+        if (back[j] !== image[at + j]) {
+          const where = (at + j).toString(16).toUpperCase().padStart(4, '0');
+          throw Object.assign(new Error(`The board did not keep what was written (first difference at 0x${where}). Upload again.`), { code: 'verify' });
+        }
+      }
+    }
+
+    // 4. Leave programming mode: the bootloader starts the new sketch. Then the Serial Monitor comes back.
+    emit('stage', 'resetting');
+    await stk(io, [STK.LEAVE]);
+    programming = false;
+    emit('stage', 'reopening');
+    const reopened = await avrFinish(port, io, info, monitorBaud);
+    io = null;
+    return result({ ok: true, chip, bytes: total, reopened, label: labelOf(info) });
+  } catch (e) {
+    if (io && programming) await stk(io, [STK.LEAVE], 0, 300).catch(() => {});
+    if (e instanceof Cancelled) return result({ ok: false, code: 'cancelled', message: 'Upload cancelled.', partial: writing });
+    const code = e && e.code;
+    if (code === 'verify' || code === 'open') return fail(code, errText(e));
+    if (code === 'sync' || code === 'timeout') return fail('avr-sync', errText(e));
+    return fail('flash', errText(e));
+  } finally {
+    if (io) {
+      await io.close();
+      try {
+        await port.close();
+      } catch (e) {
+        /* already closed */
+      }
+    }
+    await release(null, monitorBaud, 3000);
+  }
+}
+
+// Test connection on an Uno: the bootloader's signature names the chip; leaving it starts the sketch again.
+async function identifyAvr(baud) {
+  if (!supported()) return fail('unsupported', 'This browser has no Web Serial. Use Chrome or Edge on a computer.');
+  if (state.busy) return fail('busy', 'An upload is running. Wait for it to finish.');
+  state.busy = true;
+  state.cancel = false;
+  const monitorBaud = baud || state.baud || 115200;
+  let port = state.port;
+  let io = null;
+  try {
+    if (!port) port = await grantedPort(state.last);
+    if (!port) return fail('no-port', 'No board connected. Press Connect and pick the board.');
+    const info = infoOf(port);
+    state.last = info;
+    await closePort();
+    io = await avrStart(port, [115200, 57600]);
+    if (!io) return fail('avr-sync', AVR_NO_ANSWER);
+    const chip = await avrChip(io);
+    await stk(io, [STK.LEAVE]).catch(() => {});
+    const reopened = await avrFinish(port, io, info, monitorBaud);
+    io = null;
+    return result({ ok: true, chip, label: labelOf(info), reopened });
+  } catch (e) {
+    return fail(e && e.code === 'open' ? 'open' : 'identify', errText(e));
+  } finally {
+    if (io) {
+      await io.close();
+      try {
+        await port.close();
+      } catch (e) {
+        /* already closed */
+      }
+    }
+    await release(null, monitorBaud, 3000);
   }
 }
 
@@ -543,10 +873,17 @@ window.robocoreUsb = {
   },
 
   // Restarts the sketch (EN pulse through RTS). The ESP32-S3 drops off USB for a moment and comes back.
-  async reset() {
+  // An Uno resets on a DTR pulse instead (its auto-reset capacitor) and stays on USB.
+  async reset(arch) {
     const port = state.port;
     if (!port) return fail('closed', 'The board is not connected.');
     try {
+      if (arch === 'avr') {
+        await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+        await sleep(100);
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+        return result({ ok: true });
+      }
       state.quietUntil = Date.now() + 6000;
       await port.setSignals({ dataTerminalReady: false, requestToSend: true });
       await sleep(120);

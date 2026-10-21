@@ -17,13 +17,13 @@ class _NoUsb extends UsbLink {
   @override
   Future<UsbResult> write(String text) async => UsbResult.unsupported;
   @override
-  Future<UsbResult> reset() async => UsbResult.unsupported;
+  Future<UsbResult> reset({String arch = 'esp32'}) async => UsbResult.unsupported;
   @override
   Future<UsbResult> flash(Map<String, dynamic> job) async => UsbResult.unsupported;
   @override
   Future<UsbResult> cancelFlash() async => const UsbResult(true);
   @override
-  Future<UsbResult> identify({required int baud}) async => UsbResult.unsupported;
+  Future<UsbResult> identify({required int baud, String arch = 'esp32'}) async => UsbResult.unsupported;
 }
 
 UsbLink createUsbLink() => _NoUsb();
