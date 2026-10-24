@@ -82,7 +82,9 @@ To use it:
    Arduino IDE's Serial Monitor, has its port open.)
 
 Without a board the IDE keeps using the **preview board** (the simulator), and without a compile server **Verify** uses the
-built-in preview check. The native apps (Windows, macOS, Linux, Android, iOS) use the preview board for now; USB serial there is a later step.
+built-in preview check. The macOS app uploads over USB too: the same USB helper runs in a hidden WebView on the Mac's
+serial ports (`lib/hw/usb_link_native.dart`, `web/robocore_serial_shim.js`, `macos/Runner/SerialPorts.swift`), with the
+app's own port chooser. The other native apps (Windows, Linux, Android, iOS) use the preview board for now.
 
 `docs/robocore-v2-support.md` has the full status and the test checklist for the real board.
 

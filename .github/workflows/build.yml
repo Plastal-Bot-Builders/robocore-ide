@@ -32,7 +32,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - name: USB bridge (fake Web Serial and esptool) and editor shortcuts, in Node
-        run: node --test test/js/robocore_usb.test.mjs test/js/robocore_editors.test.mjs
+        run: node --test test/js/robocore_usb.test.mjs test/js/robocore_editors.test.mjs test/js/robocore_serial_shim.test.mjs
       - name: Analyze
         run: |
           set +e

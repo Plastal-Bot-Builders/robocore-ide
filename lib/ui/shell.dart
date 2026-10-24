@@ -21,6 +21,7 @@ import 'pages/projects_page.dart';
 import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/welcome_page.dart';
+import 'port_chooser.dart';
 import 'cog/cog_panel.dart' show CogButton;
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
@@ -60,6 +61,7 @@ class _ShellState extends State<Shell> {
       }
     });
     attachMenuBar((id) => _menuCommand(s, id));
+    s.usb.choosePort = (ports) => showPortChooser(context, ports);
   }
 
   /// A command from the Mac menu bar (macos/Runner/MenuBar.swift).
@@ -182,6 +184,8 @@ class _ShellState extends State<Shell> {
               : null,
           body: Stack(
             children: [
+              // The macOS app's USB helper (a hidden page), kept in the window under everything else.
+              if (s.usb.hostView != null) Positioned(left: 0, bottom: 0, width: 1, height: 1, child: s.usb.hostView!),
               Column(
                 children: [
                   TopBar(phone: phone, onMenu: () => _scaffold.currentState?.openDrawer()),

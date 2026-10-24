@@ -29,6 +29,15 @@ flutter:
       platforms: [macos]
     - path: web/robocore_editors.js
       platforms: [macos]
+    # and the USB helper for the macOS app (lib/hw/usb_link_native.dart).
+    - path: web/robocore_usb_host.html
+      platforms: [macos]
+    - path: web/robocore_serial_shim.js
+      platforms: [macos]
+    - path: web/robocore_usb.js
+      platforms: [macos]
+    - path: web/vendor/esptool-js/
+      platforms: [macos]
     - path: web/vendor/blockly/
       platforms: [macos]
     - path: web/vendor/blockly/media/

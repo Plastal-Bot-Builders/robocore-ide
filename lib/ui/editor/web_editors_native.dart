@@ -1,15 +1,14 @@
 // Blockly and Monaco for the macOS app: the web app's page (web/robocore_editors.html, bundled for macOS in
-// pubspec.yaml) in a WebView, so the desktop editors look and work like the web ones. A small server on
-// 127.0.0.1 serves the page from the app's assets, so Monaco's workers and the fonts load as they do on the
-// web. The other native apps keep the Flutter BlocksView and CodeView for now (kWebEditors is false there).
+// pubspec.yaml) in a WebView, so the desktop editors look and work like the web ones; lib/hw/page_server.dart
+// serves it. The other native apps keep the Flutter BlocksView and CodeView for now (kWebEditors is false there).
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+import '../../hw/page_server.dart';
 
 bool get kWebEditors => defaultTargetPlatform == TargetPlatform.macOS;
 
@@ -34,48 +33,6 @@ void Function(String action)? _ideKey;
 /// the editors hand them over: [handler] gets 'save', 'verify', 'upload' or 'cog'.
 void setEditorShortcutHandler(void Function(String action)? handler) => _ideKey = handler;
 
-const _types = {
-  'html': 'text/html; charset=utf-8',
-  'js': 'text/javascript; charset=utf-8',
-  'css': 'text/css; charset=utf-8',
-  'json': 'application/json',
-  'svg': 'image/svg+xml',
-  'png': 'image/png',
-  'gif': 'image/gif',
-  'cur': 'image/x-icon',
-  'ttf': 'font/ttf',
-  'mp3': 'audio/mpeg',
-  'wav': 'audio/wav',
-  'ogg': 'audio/ogg',
-};
-
-Future<Uri>? _origin;
-
-/// The page and web/vendor come from the assets under web/, and the fonts from assets/fonts/, which the
-/// page asks for as assets/assets/fonts/ (where the web build puts them).
-Future<Uri> _serve() => _origin ??= () async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((req) async {
-        final path = req.uri.path.substring(1);
-        final key = path.startsWith('assets/assets/fonts/') ? path.substring(7) : 'web/$path';
-        final res = req.response;
-        try {
-          if (req.method != 'GET' || path.startsWith('assets/') && !key.startsWith('assets/fonts/')) {
-            throw StateError('not served');
-          }
-          final data = await rootBundle.load(key);
-          res.headers
-            ..set(HttpHeaders.contentTypeHeader, _types[key.split('.').last] ?? 'application/octet-stream')
-            ..set(HttpHeaders.cacheControlHeader, 'no-store');
-          res.add(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
-        } catch (_) {
-          res.statusCode = HttpStatus.notFound;
-        }
-        await res.close();
-      });
-      return Uri(scheme: 'http', host: '127.0.0.1', port: server.port);
-    }();
-
 /// A JavaScript call with JSON arguments (JSON is valid JavaScript).
 String _js(String fn, [List<Object?> args = const []]) => '$fn(${args.map(jsonEncode).join(',')})';
 
@@ -88,7 +45,7 @@ class _Page {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel('RoboCoreHost', onMessageReceived: _message)
       ..setNavigationDelegate(NavigationDelegate(onNavigationRequest: _navigate));
-    unawaited(_serve().then((origin) {
+    unawaited(servePages().then((origin) {
       _home = origin;
       return controller.loadRequest(origin.replace(path: '/robocore_editors.html', fragment: mode));
     }));

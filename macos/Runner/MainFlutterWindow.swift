@@ -21,6 +21,7 @@ class MainFlutterWindow: NSWindow {
     let messenger = flutterViewController.engine.binaryMessenger
     MenuBar.shared.attach(to: messenger)
     Notifications.shared.attach(to: messenger)
+    SerialPorts.shared.attach(to: messenger)
 
     super.awakeFromNib()
   }
