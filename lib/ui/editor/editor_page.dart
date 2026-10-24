@@ -16,6 +16,7 @@ import '../../theme.dart';
 import '../app_scope.dart';
 import '../cog/cog_panel.dart';
 import '../dialogs.dart' show DialogFrame, FieldLabel;
+import '../mac_app.dart' show editorMenuCommand;
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/serial_log.dart';
@@ -39,10 +40,54 @@ class _EditorPageState extends State<EditorPage> {
   final _blockly = GlobalKey<BlocklyEditorState>();
   final _monaco = GlobalKey<MonacoEditorState>();
   final _preview = GlobalKey<MonacoEditorState>();
-  bool _showCpp = true;
 
   // Pane sizes while a divider is being dragged; saved to Settings when the drag ends.
   double? _cppWidth, _consoleHeight;
+
+  @override
+  void initState() {
+    super.initState();
+    editorMenuCommand = _menuCommand;
+  }
+
+  @override
+  void dispose() {
+    if (editorMenuCommand == _menuCommand) editorMenuCommand = null;
+    super.dispose();
+  }
+
+  /// The Mac menu bar's editor commands: Edit (Undo, Comment, Find …) and View (Zoom). Zoom is Blockly's
+  /// zoom in the blocks and the font size in the code.
+  void _menuCommand(String id) {
+    final s = AppScope.read(context);
+    final p = s.cur;
+    if (p == null) return;
+    final blocks = p.mode == 'blocks';
+    final code = _monaco.currentState;
+    void font(int size) => s.updateSettings((st) => st.fontSize = size.clamp(10, 24));
+    switch (id) {
+      case 'undo':
+        blocks ? _blockly.currentState?.undo() : code?.action('undo');
+      case 'redo':
+        blocks ? _blockly.currentState?.redo() : code?.action('redo');
+      case 'comment':
+        code?.action('editor.action.commentLine');
+      case 'indent':
+        code?.action('editor.action.indentLines');
+      case 'outdent':
+        code?.action('editor.action.outdentLines');
+      case 'find':
+        code?.find();
+      case 'goToLine':
+        code?.action('editor.action.gotoLine');
+      case 'zoomIn':
+        blocks ? _blockly.currentState?.zoom(1) : font(s.settings.fontSize + 1);
+      case 'zoomOut':
+        blocks ? _blockly.currentState?.zoom(-1) : font(s.settings.fontSize - 1);
+      case 'zoomReset':
+        blocks ? _blockly.currentState?.resetZoom() : font(13);
+    }
+  }
 
   // One CodeView per project + file, so switching tabs loads the right text.
   GlobalKey<CodeViewState> _codeKeyFor(String pid, int fi) =>
@@ -137,9 +182,9 @@ class _EditorPageState extends State<EditorPage> {
           // Zoom is on the canvas (Blockly's buttons, Ctrl/Cmd + wheel, pinch, Ctrl +/−/0), as in the design.
           if (kWebEditors && width >= 900)
             IconBtn('code',
-                onTap: () => setState(() => _showCpp = !_showCpp),
-                active: _showCpp,
-                tip: _showCpp ? 'Hide the C++ from the blocks' : 'Show the C++ from the blocks'),
+                onTap: () => s.updateSettings((st) => st.showCpp = !st.showCpp),
+                active: s.settings.showCpp,
+                tip: s.settings.showCpp ? 'Hide the C++ from the blocks' : 'Show the C++ from the blocks'),
           // Greyed out when there is nothing to undo or redo (BK-09).
           IconBtn('undo', onTap: kWebEditors ? (_canUndo ? () => _blockly.currentState?.undo() : null) : s.undo, tip: 'Undo ($kMod+Z)'),
           IconBtn('redo', onTap: kWebEditors ? (_canRedo ? () => _blockly.currentState?.redo() : null) : s.redo, tip: 'Redo ($kMod+Shift+Z)'),
@@ -180,9 +225,10 @@ class _EditorPageState extends State<EditorPage> {
     final content = Padding(
       padding: EdgeInsets.all(pad),
       child: LayoutBuilder(builder: (context, box) {
-        // The console keeps 120 px at least and leaves the editor 200 px at least.
+        // The console keeps 120 px at least and leaves the editor 200 px at least (also in a short window,
+        // e.g. a Mac window tiled to a quarter of the screen).
         final maxConsole = (box.maxHeight - pad - 200).clamp(120.0, double.infinity);
-        final consoleHeight = phone ? 220.0 : (_consoleHeight ?? s.settings.consoleHeight).clamp(120.0, maxConsole);
+        final consoleHeight = (phone ? 220.0 : _consoleHeight ?? s.settings.consoleHeight).clamp(120.0, maxConsole);
         return Column(children: [
           Expanded(child: edCard),
           if (s.panelOpen && !phone)
@@ -281,7 +327,7 @@ class _EditorPageState extends State<EditorPage> {
     return LayoutBuilder(builder: (context, box) {
       // Blocks keep at least 400 px (the toolbox takes ~150), the C++ pane at least 240 px.
       const minBlocks = 400.0, minCpp = 240.0, handle = 7.0;
-      final show = _showCpp && width >= 900 && box.maxWidth >= minBlocks + minCpp + handle;
+      final show = s.settings.showCpp && width >= 900 && box.maxWidth >= minBlocks + minCpp + handle;
       final cppWidth = (_cppWidth ?? s.settings.cppPaneWidth).clamp(minCpp, (box.maxWidth - minBlocks - handle).clamp(minCpp, double.infinity));
       return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: editor),

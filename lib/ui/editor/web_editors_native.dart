@@ -342,6 +342,9 @@ class MonacoEditorState extends State<MonacoEditor> {
   void find() => _call('find');
   void reveal(int line, [int column = 1]) => _call('reveal', [line, column]);
 
+  /// Runs a Monaco command by id ('undo', 'editor.action.commentLine' …).
+  void action(String id) => _call('action', [id]);
+
   @override
   Widget build(BuildContext context) => _page.view(ready: _ready, theme: widget.options['theme']);
 }

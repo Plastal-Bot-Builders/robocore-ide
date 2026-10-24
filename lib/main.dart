@@ -4,12 +4,15 @@ import 'state/app_state.dart';
 import 'theme.dart';
 import 'ui/app_scope.dart';
 import 'ui/editor/web_editors.dart' show EditorFramesObserver;
+import 'ui/mac_app.dart';
 import 'ui/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final state = AppState();
   await state.load();
+  // The Mac app's messages go to Notification Centre.
+  if (isMacApp) state.systemToast = showMacNotification;
   runApp(RoboCoreApp(state: state));
 }
 

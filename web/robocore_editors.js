@@ -1549,6 +1549,8 @@
       editor.focus();
     },
     find() { if (editor) { editor.focus(); editor.getAction('actions.find').run(); } },
+    // A Monaco command by id (undo, redo, editor.action.commentLine …), for the macOS app's menu bar.
+    action(id) { if (editor) { editor.focus(); editor.trigger('menu', id, null); } },
     focus() { if (editor) editor.focus(); },
   };
 

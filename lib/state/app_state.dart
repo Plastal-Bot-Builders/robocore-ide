@@ -159,6 +159,10 @@ class AppState extends ChangeNotifier {
   bool toastError = false;
   bool toastInfo = false;
   Timer? _toastTimer;
+
+  /// Set in the macOS app: shows a toast as a system notification instead, and answers false when the
+  /// system won't (the user turned them off), so the toast shows in the window after all.
+  Future<bool> Function(String title, String? body, bool error)? systemToast;
   int logVersion = 0;
 
   // ---- USB board ----
@@ -382,6 +386,17 @@ class AppState extends ChangeNotifier {
   /// A toast: a short [title] and, under it, a [body]. Success (the default) and [info] hide after 4 s; an [error]
   /// stays until closed (G-16).
   void showToast(String title, {String? body, bool error = false, bool info = false}) {
+    final system = systemToast;
+    if (system != null) {
+      system(title, body, error).then((shown) {
+        if (!shown) _showToast(title, body, error, info);
+      });
+      return;
+    }
+    _showToast(title, body, error, info);
+  }
+
+  void _showToast(String title, String? body, bool error, bool info) {
     toast = title;
     toastBody = body;
     toastError = error;

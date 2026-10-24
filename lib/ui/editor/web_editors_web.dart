@@ -56,6 +56,7 @@ extension type _Code._(JSObject _) implements JSObject {
   external void setMarkers(String key, String problems);
   external void reveal(int line, int column);
   external void find();
+  external void action(String id);
 }
 
 @JS('document')
@@ -373,6 +374,9 @@ class MonacoEditorState extends State<MonacoEditor> {
 
   void find() => _api?.find();
   void reveal(int line, [int column = 1]) => _api?.reveal(line, column);
+
+  /// Runs a Monaco command by id ('undo', 'editor.action.commentLine' …).
+  void action(String id) => _api?.action(id);
 
   @override
   Widget build(BuildContext context) => _view;

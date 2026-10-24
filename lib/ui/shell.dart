@@ -12,6 +12,7 @@ import 'app_scope.dart';
 import 'dialogs.dart';
 import 'editor/editor_page.dart';
 import 'editor/web_editors.dart' show setEditorShortcutHandler;
+import 'mac_app.dart';
 import 'pages/board_page.dart';
 import 'pages/examples_page.dart';
 import 'pages/home_page.dart';
@@ -58,6 +59,82 @@ class _ShellState extends State<Shell> {
           _console(s);
       }
     });
+    attachMenuBar((id) => _menuCommand(s, id));
+  }
+
+  /// A command from the Mac menu bar (macos/Runner/MenuBar.swift).
+  void _menuCommand(AppState s, String id) {
+    final p = s.cur;
+    switch (id) {
+      case 'about':
+        showAboutRoboCoreDialog(context);
+      case 'settings':
+        s.go(Screen.settings);
+      case 'newProject':
+        showNewProjectDialog(context);
+      case 'openProject':
+        s.go(Screen.projects);
+      case 'examples':
+        s.go(Screen.examples);
+      case 'save':
+        _save(s);
+      case 'rename':
+        if (p != null) showRenameProjectDialog(context, p);
+      case 'duplicate':
+        if (p != null) s.duplicateProject(p);
+      case 'projectSettings':
+        if (p != null) showProjectSettingsDialog(context);
+      case 'verify':
+        _verify(s);
+      case 'upload':
+        _upload(s);
+      case 'stop':
+        if (s.canStop) s.stop();
+      case 'cog':
+        _cog(s);
+      case 'libraries':
+        s.go(Screen.libraries);
+      case 'board':
+        s.go(Screen.board);
+      case 'serial':
+        s.go(Screen.serial);
+      case 'sidebar':
+        s.toggleSidebar();
+      case 'console':
+        _console(s);
+      case 'cppPane':
+        s.updateSettings((st) => st.showCpp = !st.showCpp);
+      case 'modeBlocks':
+        s.setMode('blocks');
+      case 'modeCode':
+        s.setMode('code');
+      case 'shortcuts':
+        showShortcutsDialog(context);
+      default:
+        editorMenuCommand?.call(id);
+    }
+  }
+
+  /// What the menu bar can do on this screen, and which of its toggles are on.
+  void _updateMenuBar(AppState s) {
+    final p = s.cur;
+    final editor = p != null && s.view == Screen.editor;
+    final blocks = editor && p.mode == 'blocks';
+    updateMenuBar(enabled: {
+      'about', 'settings', 'newProject', 'openProject', 'examples', 'libraries', 'board', 'serial', 'shortcuts', //
+      'sidebar',
+      if (p != null) ...['rename', 'duplicate', 'projectSettings'],
+      if (editor) ...['save', 'verify', 'upload', 'cog', 'console', 'modeBlocks', 'modeCode', 'undo', 'redo'],
+      if (editor) ...['zoomIn', 'zoomOut', 'zoomReset'],
+      if (blocks) 'cppPane',
+      if (editor && !blocks) ...['comment', 'indent', 'outdent', 'find', 'goToLine'],
+      if (s.canStop) 'stop',
+    }, checked: {
+      if (!s.sideCollapsed) 'sidebar',
+      if (editor && s.panelOpen) 'console',
+      if (s.settings.showCpp) 'cppPane',
+      if (editor) blocks ? 'modeBlocks' : 'modeCode',
+    });
   }
 
   @override
@@ -74,6 +151,7 @@ class _ShellState extends State<Shell> {
     final phone = w < kPhone;
     // First start on this device: ask who is using it before anything else.
     if (s.needsProfile) return const WelcomePage();
+    _updateMenuBar(s);
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => _save(s),
