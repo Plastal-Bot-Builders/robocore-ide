@@ -359,6 +359,8 @@
   // whatever the board. [list]: pins, tonePins or analogPins (CTX, from the app).
   const SAVED_PINS = new Set();
   const isUnoAnalog = (n) => CTX.board === 'uno' && n >= 14 && n <= 19;
+  // An HC-SR04's TRIG and ECHO pins when the sketch doesn't say: the usual 9 and 10 on an Uno, 5 and 18 on an ESP32.
+  const sonarDefaults = () => (CTX.board === 'uno' ? ['9', '10'] : ['5', '18']);
   const pinLabel = (p) => (CTX.board === 'v2' ? 'IO' + p : isUnoAnalog(+p) ? 'A' + (p - 14) : p);
   function pinMenu(list) {
     return function () {
@@ -505,9 +507,10 @@
         tooltip: 'RoboCore::melody(MELODY_POWER_UP);' }),
       stmt({ type: 'rc_sound_stop', message0: 'stop sound', style: 'rc_light', tooltip: 'noTone(RC_PIN_BUZZER);' }),
       // ---- Sensors
-      { type: 'rc_distance', message0: 'distance (cm)', output: 'Number', style: 'rc_sensors', tooltip: 'sonar.distanceCm()' },
+      { type: 'rc_distance', message0: 'distance (cm)', output: 'Number', style: 'rc_sensors',
+        tooltip: 'The ultrasonic distance sensor: sonar.distanceCm() on the RoboCore V2, distanceCm() on other boards' },
       { type: 'rc_closer', message0: 'is obstacle closer than %1 cm?', args0: [num('CM')], output: 'Boolean', style: 'rc_sensors', inputsInline: true,
-        tooltip: 'sonar.distanceCm() < 20' },
+        tooltip: 'distanceCm() < 20' },
       { type: 'rc_line', message0: 'line position', output: 'Number', style: 'rc_sensors', tooltip: '-1 (line on the left) to 1 (right): line.read()' },
       { type: 'rc_on_line', message0: 'is %1 sensor on the line?', args0: [dd('SENSOR', ['centre', 'left', 'right'])], output: 'Boolean', style: 'rc_sensors',
         tooltip: 'line.centre() > 0.5' },
@@ -591,6 +594,19 @@
         this.setTooltip('digitalWrite(pin, HIGH);');
       },
     };
+    // Where an HC-SR04 distance sensor is wired on an Uno or an ESP32 board (the RoboCore V2's sonar port is fixed).
+    // It starts on pins that are free on that board; a saved project keeps its own.
+    Blockly.Blocks.rc_sonar_pins = {
+      init() {
+        this.appendDummyInput().appendField('distance sensor on TRIG pin').appendField(new Blockly.FieldDropdown(pinMenu('pins')), 'TRIG')
+          .appendField('ECHO pin').appendField(new Blockly.FieldDropdown(pinMenu('pins')), 'ECHO');
+        const [trig, echo] = sonarDefaults();
+        this.setFieldValue(trig, 'TRIG');
+        this.setFieldValue(echo, 'ECHO');
+        this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_sensors');
+        this.setTooltip('Put it in "on start": the pins the sensor\'s TRIG and ECHO wires go to. The RoboCore V2 has its own sonar port, so it does not need this block.');
+      },
+    };
     // From the first block set: a tone on a chosen pin.
     Blockly.Blocks.rc_tone = {
       init() {
@@ -670,7 +686,7 @@
         blk('rc_led'), blk('rc_rgb'), blk('rc_led_brightness', { PCT: num(50) }), blk('rc_beep', null, { fields: { NOTE: 'C5' }, inputs: { SECS: num(0.2) } }),
         blk('rc_beep_start', null, { fields: { NOTE: 'C5' } }), blk('rc_melody'), blk('rc_sound_stop')]),
       category('sensors', [
-        blk('rc_distance'), blk('rc_closer', { CM: num(20) }), blk('rc_line'), blk('rc_on_line'), blk('rc_line_sensor'), blk('rc_tilt'),
+        blk('rc_sonar_pins'), blk('rc_distance'), blk('rc_closer', { CM: num(20) }), blk('rc_line'), blk('rc_on_line'), blk('rc_line_sensor'), blk('rc_tilt'),
         blk('rc_angle'), blk('rc_reset_yaw'), blk('rc_is_tilted'), blk('rc_user_pressed'), blk('rc_battery'), blk('rc_temperature'),
         blk('rc_timer'), blk('rc_reset_timer')]),
       category('control', [
@@ -827,8 +843,11 @@
     f.rc_melody = (b) => 'RoboCore::melody(' + (MELODIES[b.getFieldValue('TUNE')] || 'MELODY_POWER_UP') + ');\n';
     f.rc_sound_stop = () => 'noTone(' + tonePin() + ');\n';
     // Sensors
-    f.rc_distance = () => ['sonar.distanceCm()', O.POSTFIX];
-    f.rc_closer = (b) => ['sonar.distanceCm() < ' + val(b, 'CM', O.REL, '20'), O.REL];
+    // The RoboCore V2's sonar port (the RoboCore library); elsewhere a distanceCm() written into the sketch.
+    const distance = () => (v2() ? 'sonar.distanceCm()' : 'distanceCm()');
+    f.rc_sonar_pins = () => '';
+    f.rc_distance = () => [distance(), O.POSTFIX];
+    f.rc_closer = (b) => [distance() + ' < ' + val(b, 'CM', O.REL, '20'), O.REL];
     f.rc_line = () => ['line.read()', O.POSTFIX];
     f.rc_on_line = (b) => ['line.' + (b.getFieldValue('SENSOR') || 'centre') + '() > 0.5', O.REL];
     f.rc_line_sensor = (b) => ['line.' + (b.getFieldValue('SENSOR') || 'centre') + '() * 100', O.MULT];
@@ -867,7 +886,7 @@
       return 'motors.drive(' + m[0] * s + ', ' + m[1] * s + ');\n';
     };
     f.rc_stop = () => 'motors.stop();\n';
-    f.rc_print_distance = () => 'Serial.print("distance_cm=");\nSerial.println(sonar.distanceCm(), 1);\n';
+    f.rc_print_distance = () => 'Serial.print("distance_cm=");\nSerial.println(' + distance() + ', 1);\n';
     f.rc_print_line = () => 'Serial.print("line=");\nSerial.println(line.read(), 2);\n';
     f.rc_print_text = (b) => 'Serial.println("' + cstr(b.getFieldValue('TEXT')) + '");\n';
     f.rc_tone = (b) => {
@@ -1021,7 +1040,7 @@
     const usesImu = usesRobot || imuBlocks;
     const usesServos = has('rc_servo_set', 'rc_servo_angle');
     const edges = tops.filter((t) => t.type === 'rc_when');
-    const usesLib = usesMot || usesSonar || usesLine || usesImu || usesServos || edges.length > 0 ||
+    const usesLib = usesMot || (usesSonar && v2) || usesLine || usesImu || usesServos || edges.length > 0 ||
       has('rc_led_brightness', 'rc_melody', 'rc_battery', 'rc_timer', 'rc_reset_timer', 'rc_when_user', 'rc_when_timer', 'rc_stop_program') ||
       (v2 && has('rc_rgb', 'rc_beep', 'rc_beep_start', 'rc_sound_stop', 'rc_user_pressed'));
     const usesBtnPin = has('rc_wait_button') || (!v2 && has('rc_user_pressed'));
@@ -1065,7 +1084,24 @@
     if (!v2 && has('rc_led')) l.push('#ifndef LED_BUILTIN', '#define LED_BUILTIN ' + toInt(CTX.led), '#endif');
     const glob = [];
     if (usesMot) glob.push('RoboCoreMotors motors;');
-    if (usesSonar) glob.push('Sonar sonar;');
+    if (usesSonar && v2) glob.push('Sonar sonar;');
+    // Other boards: an HC-SR04 on the pins of the "distance sensor" block, read with plain Arduino code.
+    const sonarPins = blocks.find((b) => b.type === 'rc_sonar_pins');
+    const [trig, echo] = sonarPins ? [sonarPins.getFieldValue('TRIG'), sonarPins.getFieldValue('ECHO')] : sonarDefaults();
+    const sonarFns = [];
+    if (usesSonar && !v2) {
+      glob.push('// The distance sensor (HC-SR04)' + (sonarPins ? '' : ': add the "distance sensor" block to choose its pins') + '.',
+        'const int SONAR_TRIG = ' + pinCode(trig) + ';', 'const int SONAR_ECHO = ' + pinCode(echo) + ';');
+      sonarFns.push(['// The distance to the nearest obstacle in cm (400 when nothing answers): a 10 µs pulse on TRIG, then how\n' +
+        '// long the echo takes to come back on ECHO, 58 µs for each centimetre there and back.\nfloat distanceCm()',
+      'digitalWrite(SONAR_TRIG, LOW);\ndelayMicroseconds(2);\ndigitalWrite(SONAR_TRIG, HIGH);\ndelayMicroseconds(10);\n' +
+        'digitalWrite(SONAR_TRIG, LOW);\nunsigned long us = pulseIn(SONAR_ECHO, HIGH, 25000);\nreturn us == 0 ? 400 : us / 58.0;\n']);
+      if (has('rc_when_closer')) {
+        glob.push('bool sonarWasClose = false;');
+        sonarFns.push(['// True once each time something comes closer than cm, so a "when" script runs once.\nbool justCloserThan(float cm)',
+          'bool now = distanceCm() < cm;\nbool rose = now && !sonarWasClose;\nsonarWasClose = now;\nreturn rose;\n']);
+      }
+    }
     if (usesLine) glob.push('LineSensor line;');
     if (usesImu) glob.push('IMU imu;');
     if (usesRobot) glob.push('RoboCoreDrive robot(motors, imu);');
@@ -1078,6 +1114,7 @@
     if (l.length > 3) l.push('');
     if (glob.length) l.push(...glob, '');
     const lines = (code) => (code ? code.replace(/\n$/, '').split('\n') : []);
+    for (const [sig, code] of sonarFns) l.push(sig + ' {', ...lines(code).map((x) => '  ' + x), '}', '');
     if (fns.length) {
       // Declared first, so they can call each other in any order.
       if (fns.length > 1) l.push(...fns.map(([sig]) => sig + ';'), '');
@@ -1091,7 +1128,8 @@
     for (const p of inPins) if (!outPins.includes(p)) setup.push('pinMode(' + p + ', INPUT);');
     if (usesBtnPin) setup.push(v2 ? 'pinMode(USER_BUTTON, INPUT);' : 'pinMode(USER_BUTTON, INPUT_PULLUP);');
     if (usesMot) setup.push('motors.begin();');
-    if (usesSonar) setup.push('sonar.begin();');
+    if (usesSonar && v2) setup.push('sonar.begin();');
+    if (usesSonar && !v2) setup.push('pinMode(SONAR_TRIG, OUTPUT);', 'pinMode(SONAR_ECHO, INPUT);');
     if (usesLine) setup.push('line.begin();');
     // Last: it measures the gyro while the robot is still (0.3 s).
     if (imuBlocks) setup.push('imu.begin();');
@@ -1105,7 +1143,7 @@
   function whenCond(t, edge) {
     switch (t.type) {
       case 'rc_when_user': return 'RoboCore::userJustPressed()';
-      case 'rc_when_closer': return 'sonar.justCloserThan(' + (cpp.valueToCode(t, 'CM', O.NONE) || '20') + ')';
+      case 'rc_when_closer': return (CTX.board === 'v2' ? 'sonar.' : '') + 'justCloserThan(' + (cpp.valueToCode(t, 'CM', O.NONE) || '20') + ')';
       case 'rc_when_line': return t.getFieldValue('STATE') === 'lost' ? 'line.justLost()' : 'line.justFound()';
       case 'rc_when_tilt': return 'imu.' + ({ shaken: 'justShaken', flat: 'justFlat' }[t.getFieldValue('STATE')] || 'justTilted') + '()';
       case 'rc_when_timer': return 'RoboCore::timerPassed(' + (cpp.valueToCode(t, 'SECS', O.NONE) || '10') + ')';

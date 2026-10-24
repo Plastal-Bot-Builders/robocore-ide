@@ -104,6 +104,7 @@ class SimBoard extends ChangeNotifier implements BoardIO {
     _lineBuf = '';
     _inQ = '';
     readsSerial = false;
+    readsDistance = false;
     _skipped.clear();
     _toneTimer?.cancel();
   }
@@ -253,8 +254,12 @@ class SimBoard extends ChangeNotifier implements BoardIO {
     _changed();
   }
 
+  /// The sketch has read the distance sensor (the preview card then shows it on boards without a sonar port).
+  bool readsDistance = false;
+
   @override
   num distance() {
+    readsDistance = true;
     final h = held[SimSensor.sonar];
     if (h != null) return _dist = h;
     final fwd = (motorSpeeds[0] + motorSpeeds[1]) / 2;

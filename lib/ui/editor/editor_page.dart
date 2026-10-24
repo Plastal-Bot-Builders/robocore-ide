@@ -753,6 +753,7 @@ class _LiveBoardState extends State<LiveBoard> {
                     _reading(c, 'Servo 1', sim.servoAngle == null ? '—' : '${sim.servoAngle}°'),
                     for (final k in SimSensor.values) ..._sensor(c, sim, k),
                   ],
+                  if (!v2 && sim.readsDistance) ..._sensor(c, sim, SimSensor.sonar),
                   if (io.isNotEmpty || !v2)
                     Padding(
                       padding: EdgeInsets.only(top: v2 ? 4 : 0),
