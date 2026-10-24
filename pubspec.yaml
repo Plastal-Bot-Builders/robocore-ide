@@ -12,6 +12,7 @@ dependencies:
   flutter_svg: ^2.0.10
   http: ^1.2.2
   shared_preferences: ^2.3.2
+  webview_flutter: ^4.14.1
 
 dev_dependencies:
   flutter_test:
@@ -22,6 +23,26 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    # The Blockly and Monaco page for the macOS app's WebView (lib/ui/editor/web_editors_native.dart); the web
+    # app serves it from web/ itself.
+    - path: web/robocore_editors.html
+      platforms: [macos]
+    - path: web/robocore_editors.js
+      platforms: [macos]
+    - path: web/vendor/blockly/
+      platforms: [macos]
+    - path: web/vendor/blockly/media/
+      platforms: [macos]
+    - path: web/vendor/blockly/msg/
+      platforms: [macos]
+    - path: web/vendor/monaco/vs/
+      platforms: [macos]
+    - path: web/vendor/monaco/vs/assets/
+      platforms: [macos]
+    - path: web/vendor/monaco/vs/basic-languages/
+      platforms: [macos]
+    - path: web/vendor/monaco/vs/editor/
+      platforms: [macos]
   fonts:
     - family: Barlow
       fonts:

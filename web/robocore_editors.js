@@ -1628,4 +1628,32 @@
       return code;
     },
   };
+
+  // ======================================================================= The desktop app
+
+  // The macOS app shows this page in a WebView (lib/ui/editor/web_editors_native.dart), which cannot hand the page
+  // Dart functions the way the web app does through the iframe. It calls rcNative and the other rcEditor methods
+  // with runJavaScript, and the page answers on the RoboCoreHost channel with JSON arrays: [event, ...args].
+  if (window.RoboCoreHost) {
+    const send = (...m) => window.RoboCoreHost.postMessage(JSON.stringify(m));
+    const failed = (e) => send('error', String(e && e.stack || e));
+    window.rcEditor.setIdeKeys((action) => send('key', action));
+    window.rcNative = {
+      mountBlocks(optionsJson, json, tidy) {
+        blocksApi.mount(optionsJson, json, tidy,
+          (j, code, count) => send('change', j, code, count),
+          (scale) => send('zoom', scale),
+          (j) => send('select', j),
+          (canUndo, canRedo) => send('history', canUndo, canRedo)).then(() => send('mounted'), failed);
+      },
+      mountCode(optionsJson, explain) {
+        codeApi.mount(optionsJson,
+          (key, text) => send('change', key, text),
+          (line, column) => send('cursor', line, column),
+          explain ? (line) => send('explain', line) : null).then(() => send('mounted'), failed);
+      },
+    };
+    window.addEventListener('error', (e) => failed(e.error || e.message));
+    send('loaded');
+  }
 })();

@@ -1,13 +1,15 @@
 # Blockly and Monaco (proof of concept)
 
 The web app's editors are now **Google Blockly** (Blocks) and **Monaco** (C++), set up as in the design's
-behaviour spec (*Handoff: Blockly* and *Handoff: Monaco*). The native apps keep the Flutter editors for now.
+behaviour spec (*Handoff: Blockly* and *Handoff: Monaco*). The macOS app shows the same page in a WebView; the other
+native apps keep the Flutter editors for now.
 
 ## How it fits together
 
 ```
 EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_editors_web.dart (web)
-                   │  iframe                        lib/ui/editor/web_editors_stub.dart (native: not used)
+                   │  iframe (web) or WebView        lib/ui/editor/web_editors_native.dart (macOS; other native
+                   │                                 apps: kWebEditors is false, BlocksView / CodeView)
                    ▼
            web/robocore_editors.html#blocks | #code
                    │  window.rcEditor
@@ -18,6 +20,10 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
 
 - Each editor runs in its own page inside an iframe, so its scripts, styles and keyboard shortcuts stay apart from
   Flutter's (Flutter's debug loader, its key handling and Monaco's AMD loader would otherwise clash).
+- macOS app: the page and web/vendor are assets for macOS only (`platforms: [macos]` in pubspec.yaml), served from a
+  small server on 127.0.0.1 (a random port) so Monaco's workers and the fonts load as on the web; the app talks to
+  the page with runJavaScript, and the page answers on the `RoboCoreHost` channel ("The desktop app" at the end of
+  robocore_editors.js). Flutter takes the clicks wherever it paints over the WebView, so menus and dialogs work.
 - **Switching Blocks ↔ C++ is instant.** Both editors stay loaded while a project is open (an `IndexedStack`; the
   hidden one is only not painted, and Flutter keeps its iframe in the page), so Blockly keeps its undo history.
   The C++ editor is created the first time its tab is shown (about half a second); after that a switch is one frame
@@ -78,6 +84,7 @@ EditorPage ──► BlocklyEditor / MonacoEditor        lib/ui/editor/web_edito
 - Monaco's prebuilt (AMD) build is deprecated upstream: bundle the ESM build with only the C++ parts later.
 - No automated check of the JS generator in CI yet: all_blocks.ino was made by hand in a browser; CI could rebuild it
   headless and compile it for the ESP32-S3.
-- Desktop / mobile apps: Blockly and Monaco need a WebView there (or the Electron route for desktop).
+- Windows, Linux, Android and iOS: Blockly and Monaco need a WebView there too (webview_flutter covers Android and
+  iOS; Windows and Linux need another package).
 - The real robot: how far *move* and *turn* go, the yaw direction and the encoder counts per wheel turn (292.5
   assumed) need checking once the RoboCore V2 boards arrive.
