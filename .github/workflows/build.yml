@@ -198,10 +198,13 @@ jobs:
           cache: true
       - run: flutter build macos --release
       - run: cd build/macos/Build/Products/Release && zip -qry "$GITHUB_WORKSPACE/robocore-ide-macos.zip" *.app
+      - run: bash tools/package_dmg.sh build/macos/Build/Products/Release/RoboCore.app robocore-ide-macos.dmg
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: robocore-ide-macos
-          path: robocore-ide-macos.zip
+          path: |
+            robocore-ide-macos.zip
+            robocore-ide-macos.dmg
 
   ios:
     name: iOS (unsigned)
