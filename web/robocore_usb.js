@@ -501,6 +501,7 @@ function byteLink(port) {
   const buf = [];
   let wake = null;
   let closed = false;
+  let got = 0;
   const reader = port.readable.getReader();
   const writer = port.writable.getWriter();
   const poke = () => {
@@ -512,7 +513,10 @@ function byteLink(port) {
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
-        if (value) for (const x of value) buf.push(x);
+        if (value) {
+          for (const x of value) buf.push(x);
+          got += value.length;
+        }
         poke();
       }
     } catch (e) {
@@ -527,6 +531,10 @@ function byteLink(port) {
     },
     drain() {
       buf.length = 0;
+    },
+    // Whether the board has sent anything since the link opened (a bootloader that lost sync, not a silent board).
+    heard() {
+      return got > 0;
     },
     async take(n, ms) {
       const end = Date.now() + ms;
@@ -575,8 +583,10 @@ async function stk(io, bytes, reply = 0, ms = 1000) {
 // Pacing matters: after a reset Optiboot flashes the LED for about 0.4 s before it reads the serial line, and bytes
 // sent meanwhile overflow its 2-byte receive buffer. Sync requests sent every 150 ms (as this did first) got one
 // answer and left a broken command behind; Optiboot then gives up, starts the old sketch, and the next command gets
-// no answer ("The board stopped answering", seen on a real Uno R3). So, like avrdude: one request, wait up to
-// 500 ms for its answer, then check sync once more on a clean line. A board that still drops out is reset again.
+// no answer ("The board stopped answering", seen on a real Uno R3). So, like avrdude: one request, and the first
+// wait covers the LED flash (600 ms); later ones are short, since a listening bootloader answers at once. Sync is
+// checked once more on a clean line. A board that answered something but lost sync is reset once more; a silent one
+// is not, so a board without a bootloader still fails within a few seconds.
 async function avrStart(port, bauds) {
   for (const baud of bauds) {
     checkCancel();
@@ -587,7 +597,7 @@ async function avrStart(port, bauds) {
     }
     const io = byteLink(port);
     try {
-      for (let reset = 0; reset < 2; reset++) {
+      for (let reset = 0; reset < 2 && (reset === 0 || io.heard()); reset++) {
         await port.setSignals({ dataTerminalReady: false, requestToSend: false });
         await sleep(250);
         await port.setSignals({ dataTerminalReady: true, requestToSend: true });
@@ -597,12 +607,12 @@ async function avrStart(port, bauds) {
           io.drain();
           await io.send([STK.SYNC, STK.EOP]);
           try {
-            const r = await io.take(2, 500);
+            const r = await io.take(2, i === 0 ? 600 : 250);
             if (r[0] !== STK.INSYNC || r[1] !== STK.OK) continue;
             await sleep(30);
             io.drain();
             await io.send([STK.SYNC, STK.EOP]);
-            const again = await io.take(2, 500);
+            const again = await io.take(2, 250);
             if (again[0] === STK.INSYNC && again[1] === STK.OK) return io;
           } catch (e) {
             /* no answer yet: the bootloader may still be starting */
