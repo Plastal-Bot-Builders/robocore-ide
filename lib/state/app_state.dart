@@ -672,7 +672,12 @@ class AppState extends ChangeNotifier {
             r.code == 'bootloader'
                 ? 'The board did not answer. Hold BOOT, tap RESET, release BOOT, then press Test connection again.'
                 : r.message);
-        showToast('The board did not answer', body: 'Hold BOOT, tap RESET, release BOOT, then test again.', error: true);
+        // BOOT and RESET are ESP32 buttons; an Uno has neither, so it gets the board-and-port advice instead.
+        showToast('The board did not answer',
+            body: kBoards[board]!.arch == 'avr'
+                ? 'Check the board in Board Setup, and close other apps using the port.'
+                : 'Hold BOOT, tap RESET, release BOOT, then test again.',
+            error: true);
       }
       notifyListeners();
       return;

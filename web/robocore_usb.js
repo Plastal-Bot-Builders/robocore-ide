@@ -571,6 +571,12 @@ async function stk(io, bytes, reply = 0, ms = 1000) {
 
 // Opens the port, resets the board into its bootloader and gets in sync. The Uno's Optiboot talks at 115200 baud;
 // older bootloaders (Duemilanove, old Nano) at 57600, so that is tried next. Resolves the link, or null.
+//
+// Pacing matters: after a reset Optiboot flashes the LED for about 0.4 s before it reads the serial line, and bytes
+// sent meanwhile overflow its 2-byte receive buffer. Sync requests sent every 150 ms (as this did first) got one
+// answer and left a broken command behind; Optiboot then gives up, starts the old sketch, and the next command gets
+// no answer ("The board stopped answering", seen on a real Uno R3). So, like avrdude: one request, wait up to
+// 500 ms for its answer, then check sync once more on a clean line. A board that still drops out is reset again.
 async function avrStart(port, bauds) {
   for (const baud of bauds) {
     checkCancel();
@@ -581,19 +587,26 @@ async function avrStart(port, bauds) {
     }
     const io = byteLink(port);
     try {
-      await port.setSignals({ dataTerminalReady: false, requestToSend: false });
-      await sleep(250);
-      await port.setSignals({ dataTerminalReady: true, requestToSend: true });
-      await sleep(50);
-      for (let i = 0; i < 8; i++) {
-        checkCancel();
-        io.drain();
-        await io.send([STK.SYNC, STK.EOP]);
-        try {
-          const r = await io.take(2, 150);
-          if (r[0] === STK.INSYNC && r[1] === STK.OK) return io;
-        } catch (e) {
-          /* not yet: the bootloader may still be starting */
+      for (let reset = 0; reset < 2; reset++) {
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+        await sleep(250);
+        await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+        await sleep(50);
+        for (let i = 0; i < 4; i++) {
+          checkCancel();
+          io.drain();
+          await io.send([STK.SYNC, STK.EOP]);
+          try {
+            const r = await io.take(2, 500);
+            if (r[0] !== STK.INSYNC || r[1] !== STK.OK) continue;
+            await sleep(30);
+            io.drain();
+            await io.send([STK.SYNC, STK.EOP]);
+            const again = await io.take(2, 500);
+            if (again[0] === STK.INSYNC && again[1] === STK.OK) return io;
+          } catch (e) {
+            /* no answer yet: the bootloader may still be starting */
+          }
         }
       }
     } catch (e) {
