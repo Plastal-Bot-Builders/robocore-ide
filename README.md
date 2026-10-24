@@ -24,6 +24,7 @@ flutter pub get
 flutter run -d chrome      # web
 flutter run -d macos       # or windows, linux, or an Android / iOS device
 flutter test               # compiles and runs every example sketch
+bash tools/package_rpm.sh  # builds an installable .rpm for Fedora / RPM Linux
 ```
 
 The platform folders (`android/ ios/ macos/ windows/ linux/`) are committed: they hold the app name (RoboCore),
@@ -41,7 +42,7 @@ Every push to `main` runs `.github/workflows/build.yml`. It analyzes and tests t
 | Web | Published to GitHub Pages (Settings → Pages → Source: **GitHub Actions**) |
 | Android | `app-release.apk` (download it from the workflow run's artifacts) |
 | Windows | `robocore-ide-windows` folder with `RoboCore.exe` (artifact) |
-| Linux | `robocore-ide-linux-x64.tar.gz`: run `bundle/robocore` (artifact) |
+| Linux | `robocore-ide-linux-x64.rpm` (Fedora / RPM) and `robocore-ide-linux-x64.tar.gz` (portable bundle) in the `robocore-ide-linux` artifact |
 | macOS | `robocore-ide-macos.zip` with `RoboCore.app` (artifact). It isn't notarized: the first time, right-click it and choose **Open** |
 | iOS | Unsigned `Runner.app` (artifact). Store or TestFlight builds need an Apple developer account and signing. |
 

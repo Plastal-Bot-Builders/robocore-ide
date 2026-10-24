@@ -3,9 +3,9 @@ name: Firmware and compile server
 on:
   push:
     branches: [main]
-    paths: ['firmware/**', 'server/**', 'tools/**', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
+    paths: ['firmware/**', 'server/**', 'tools/gen_*.py', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
   pull_request:
-    paths: ['firmware/**', 'server/**', 'tools/**', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
+    paths: ['firmware/**', 'server/**', 'tools/gen_*.py', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
   workflow_dispatch:
 
 permissions:
