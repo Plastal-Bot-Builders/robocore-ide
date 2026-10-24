@@ -242,6 +242,39 @@ class AppState extends ChangeNotifier {
   /// The socket of the board in use, as messages name it: USB-C on the RoboCore V2, USB on the others.
   String get usbName => kBoards[boardId]!.usb;
 
+  /// Which of our boards is on USB, from its USB ids (in [usbLabel], e.g. "Arduino Uno (2341:0043)"): 'uno' (an
+  /// Arduino Uno), 'v2' (Espressif's own USB, the RoboCore V2's ESP32-S3) or 'esp32' (a CP210x bridge: an ESP32
+  /// DevKit or NodeMCU). Null when nothing is connected or the ids don't say (a CH340 clone can be either).
+  String? get usbBoardKind {
+    if (!usbOpen) return null;
+    final m = RegExp(r'\(([0-9A-F]{4}):([0-9A-F]{4})\)').firstMatch(usbLabel ?? '');
+    if (m == null) return null;
+    final vid = int.parse(m[1]!, radix: 16), pid = int.parse(m[2]!, radix: 16);
+    if ((vid == 0x2341 || vid == 0x2a03) && const [0x0001, 0x0043, 0x0243].contains(pid)) return 'uno';
+    if (vid == 0x303a) return 'v2';
+    if (vid == 0x10c4) return 'esp32';
+    return null;
+  }
+
+  /// The board new projects and examples start on: the one plugged in when the app can tell, else the default.
+  String get newProjectBoard {
+    final k = usbBoardKind;
+    return k == 'uno' || k == 'v2' ? k! : board;
+  }
+
+  /// Why [p] can't be uploaded to the board on USB: it is set to another kind of board (the sketch would be built
+  /// for the wrong chip). Null when they match, or when the app can't tell.
+  String? usbBoardMismatch(Project p) {
+    final k = usbBoardKind;
+    if (k == null) return null;
+    final b = kBoards[p.board]!;
+    final same = k == 'esp32' ? b.arch == 'esp32' && b.id != 'v2' : k == b.id;
+    if (same) return null;
+    final onUsb = k == 'esp32' ? 'an ESP32 board' : kBoards[k]!.name;
+    final pick = k == 'esp32' ? '${kBoards['devkit']!.name} or ${kBoards['nodemcu']!.name}' : kBoards[k]!.name;
+    return 'The board on USB is $onUsb, but “${p.name}” is set to ${b.name}. Pick $pick in the board menu, then press Upload again.';
+  }
+
   String get portLabel => onUsb
       ? (usbOpen ? '$usbName · ${usbLabel ?? 'board'}' : '$usbName (not connected)')
       : 'Preview board (simulator)';
@@ -465,7 +498,7 @@ class AppState extends ChangeNotifier {
   void openExample(String id) {
     final ex = exampleById(id);
     final name = _freeName(ex.proj);
-    final p = projectFrom(ex, name: name, board: board);
+    final p = projectFrom(ex, name: name, board: newProjectBoard);
     p.autosave = settings.autosave;
     projects.add(p);
     persist(now: true);
@@ -1113,6 +1146,17 @@ class AppState extends ChangeNotifier {
     final p = cur;
     if (p == null || busy != null) return;
     if (onUsb) {
+      // Caught before building: a sketch for another chip can't go on this board.
+      final wrong = usbBoardMismatch(p);
+      if (wrong != null) {
+        output.clear();
+        outLine(wrong, 'err');
+        panelTab = 'output';
+        panelOpen = true;
+        showToast('This project is for another board', body: wrong, error: true);
+        notifyListeners();
+        return;
+      }
       if (!p.autosave) saveNow(p);
       await _buildOnServer(p, flash: true);
       return;

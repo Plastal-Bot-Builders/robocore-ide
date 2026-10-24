@@ -158,7 +158,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
       return;
     }
     Navigator.of(context).pop();
-    s.createProject(name: _name.text, mode: mode, boardId: board ?? s.board);
+    s.createProject(name: _name.text, mode: mode, boardId: board ?? s.newProjectBoard);
   }
 
   @override
@@ -193,7 +193,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
         const SizedBox(height: 16),
         const FieldLabel('Board'),
         RcSelect<String>(
-          value: board ?? s.board,
+          value: board ?? s.newProjectBoard,
           height: 36,
           width: double.infinity,
           items: _boardItems,

@@ -309,6 +309,7 @@ class _EditorPageState extends State<EditorPage> {
         'board': p.board,
         'pins': pinOptions(p.board),
         'tonePins': pinOptions(p.board, tone: true),
+        'analogPins': pinOptions(p.board, analog: true),
         'userPin': RoboCoreV2Pins.userButton,
         'led': kBoards[p.board]!.led,
         'theme': c.dark ? 'navy' : 'paper',

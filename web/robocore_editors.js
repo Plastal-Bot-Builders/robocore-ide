@@ -15,7 +15,7 @@
 
   const INK = '#1B2A41', CREAM = '#F7F1E3', PAPER = '#FFFCF5', YELLOW = '#F2B01E';
   // Board context from the app: project name, board id and the pins the pin blocks offer.
-  const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], userPin: 42, led: 2, theme: 'paper' };
+  const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], analogPins: [], userPin: 42, led: 2, theme: 'paper' };
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -354,12 +354,16 @@
     return values.map((v) => (Array.isArray(v) ? v : [v, v]));
   }
 
-  // Pins depend on the board, so these menus are built when they open; on the RoboCore V2 they read IO37 …
-  // The current value always stays in the list so saved projects load whatever the board.
+  // Pins depend on the board, so these menus are built when they open; on the RoboCore V2 they read IO37 …,
+  // on an Uno pins 14 to 19 read A0 to A5. The current value always stays in the list so saved projects load
+  // whatever the board. [list]: pins, tonePins or analogPins (CTX, from the app).
   const SAVED_PINS = new Set();
-  function pinMenu(tone) {
+  const isUnoAnalog = (n) => CTX.board === 'uno' && n >= 14 && n <= 19;
+  const pinLabel = (p) => (CTX.board === 'v2' ? 'IO' + p : isUnoAnalog(+p) ? 'A' + (p - 14) : p);
+  function pinMenu(list) {
     return function () {
-      const opts = (tone ? CTX.tonePins : CTX.pins).map((p) => [CTX.board === 'v2' ? 'IO' + p : p, p]);
+      const pins = CTX[list] && CTX[list].length ? CTX[list] : CTX.pins;
+      const opts = pins.map((p) => [pinLabel(p), p]);
       const v = this && typeof this.getValue === 'function' ? this.getValue() : null;
       for (const x of [v, ...SAVED_PINS]) if (x && !opts.some((o) => o[1] === x)) opts.push([x, x]);
       return opts;
@@ -567,21 +571,21 @@
         this.setTooltip('Runs the “when I receive” scripts for this message, then carries on: on_message1();');
       },
     };
-    const readPin = (type, label, tooltip) => {
+    const readPin = (type, label, tooltip, list) => {
       Blockly.Blocks[type] = {
         init() {
-          this.appendDummyInput().appendField(label).appendField(new Blockly.FieldDropdown(pinMenu(false)), 'PIN');
+          this.appendDummyInput().appendField(label).appendField(new Blockly.FieldDropdown(pinMenu(list)), 'PIN');
           this.setOutput(true, 'Number');
           this.setStyle('rc_pins');
           this.setTooltip(tooltip);
         },
       };
     };
-    readPin('rc_read_pin', 'read pin', 'HIGH (1) or LOW (0): digitalRead(pin)');
-    readPin('rc_read_analog', 'read analog pin', '0 to 4095 on the RoboCore V2: analogRead(pin)');
+    readPin('rc_read_pin', 'read pin', 'HIGH (1) or LOW (0): digitalRead(pin)', 'pins');
+    readPin('rc_read_analog', 'read analog pin', '0 to 4095 on the RoboCore V2 (0 to 1023 on an Uno): analogRead(pin)', 'analogPins');
     Blockly.Blocks.rc_pin = {
       init() {
-        this.appendDummyInput().appendField('set pin').appendField(new Blockly.FieldDropdown(pinMenu(false)), 'PIN')
+        this.appendDummyInput().appendField('set pin').appendField(new Blockly.FieldDropdown(pinMenu('pins')), 'PIN')
           .appendField('to').appendField(new Blockly.FieldDropdown(dropdown(['HIGH', 'LOW'])), 'STATE');
         this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_pins');
         this.setTooltip('digitalWrite(pin, HIGH);');
@@ -590,7 +594,7 @@
     // From the first block set: a tone on a chosen pin.
     Blockly.Blocks.rc_tone = {
       init() {
-        this.appendDummyInput().appendField('tone pin').appendField(new Blockly.FieldDropdown(pinMenu(true)), 'PIN')
+        this.appendDummyInput().appendField('tone pin').appendField(new Blockly.FieldDropdown(pinMenu('tonePins')), 'PIN')
           .appendField(new Blockly.FieldDropdown(dropdown(Object.keys(NOTES))), 'NOTE')
           .appendField('for').appendField(new Blockly.FieldNumber(0.5, 0), 'SECS').appendField('s');
         this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_light');
@@ -717,6 +721,11 @@
 
   const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   const toInt = (v) => Math.trunc(toNum(v));
+  // A pin in the C++: its number, or A0 … A5 for an Uno's analog pins (14 to 19).
+  const pinCode = (v) => {
+    const n = toInt(v);
+    return isUnoAnalog(n) ? 'A' + (n - 14) : String(n);
+  };
   const cstr = (s) => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const fmt = (n) => (Number.isInteger(n) ? String(n) : String(+n.toFixed(6)));
   const isLiteral = (code) => /^-?\d+(\.\d+)?$/.test(code);
@@ -845,9 +854,9 @@
       return [x + ' >= ' + val(b, 'LO', O.REL, '0') + ' && ' + x + ' <= ' + val(b, 'HI', O.REL, '0'), O.AND];
     };
     // Pins & Serial
-    f.rc_pin = (b) => 'digitalWrite(' + toInt(b.getFieldValue('PIN')) + ', ' + (b.getFieldValue('STATE') === 'LOW' ? 'LOW' : 'HIGH') + ');\n';
-    f.rc_read_pin = (b) => ['digitalRead(' + toInt(b.getFieldValue('PIN')) + ')', O.POSTFIX];
-    f.rc_read_analog = (b) => ['analogRead(' + toInt(b.getFieldValue('PIN')) + ')', O.POSTFIX];
+    f.rc_pin = (b) => 'digitalWrite(' + pinCode(b.getFieldValue('PIN')) + ', ' + (b.getFieldValue('STATE') === 'LOW' ? 'LOW' : 'HIGH') + ');\n';
+    f.rc_read_pin = (b) => ['digitalRead(' + pinCode(b.getFieldValue('PIN')) + ')', O.POSTFIX];
+    f.rc_read_analog = (b) => ['analogRead(' + pinCode(b.getFieldValue('PIN')) + ')', O.POSTFIX];
     f.rc_serial_begin = (b) => 'Serial.begin(' + (b.getFieldValue('BAUD') === '9600' ? 9600 : 115200) + ');\n';
     f.rc_print = (b) => 'Serial.println(' + val(b, 'VALUE', O.NONE, '""') + ');\n';
     f.rc_serial_read_line = () => ["Serial.readStringUntil('\\n')", O.POSTFIX];
@@ -863,7 +872,7 @@
     f.rc_print_text = (b) => 'Serial.println("' + cstr(b.getFieldValue('TEXT')) + '");\n';
     f.rc_tone = (b) => {
       const d = Math.max(0, Math.round(toNum(b.getFieldValue('SECS')) * 1000)), note = b.getFieldValue('NOTE');
-      return 'tone(' + toInt(b.getFieldValue('PIN')) + ', ' + (NOTES[note] || 262) + ', ' + d + ');  // ' + note + '\ndelay(' + d + ');\n';
+      return 'tone(' + pinCode(b.getFieldValue('PIN')) + ', ' + (NOTES[note] || 262) + ', ' + d + ');  // ' + note + '\ndelay(' + d + ');\n';
     };
 
     // Blockly's own blocks in C++.
@@ -999,9 +1008,9 @@
     }
     const outPins = [], inPins = [];
     for (const b of blocks) {
-      if (b.type === 'rc_pin') add(outPins, String(toInt(b.getFieldValue('PIN'))));
-      if (b.type === 'rc_read_pin') add(inPins, String(toInt(b.getFieldValue('PIN'))));
-      if (b.type === 'rc_tone') add(outPins, String(toInt(b.getFieldValue('PIN'))));
+      if (b.type === 'rc_pin') add(outPins, pinCode(b.getFieldValue('PIN')));
+      if (b.type === 'rc_read_pin') add(inPins, pinCode(b.getFieldValue('PIN')));
+      if (b.type === 'rc_tone') add(outPins, pinCode(b.getFieldValue('PIN')));
     }
 
     const usesRobot = has('rc_move', 'rc_turn', 'rc_start_moving', 'rc_steer', 'rc_stop_moving', 'rc_move_speed', 'rc_wheel_size', 'rc_distance_moved');
@@ -1175,6 +1184,7 @@
     if (o.board) CTX.board = o.board;
     if (o.pins) CTX.pins = o.pins;
     if (o.tonePins) CTX.tonePins = o.tonePins;
+    if (o.analogPins) CTX.analogPins = o.analogPins;
     if (o.userPin != null) CTX.userPin = o.userPin;
     if (o.led != null) CTX.led = o.led;
   }

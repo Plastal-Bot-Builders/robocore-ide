@@ -132,6 +132,13 @@ void main() {
       expect(blockDefaults('tone', 'uno')['pin'], '8');
     });
 
+    test('an Uno offers pins 2 to 13 and A0 to A5 (14 to 19), not the USB serial pins', () {
+      expect(pinOptions('uno'), [for (var p = 2; p <= 19; p++) '$p']);
+      expect(pinOptions('uno', analog: true), ['14', '15', '16', '17', '18', '19']);
+      expect(pinOptions('devkit'), allOf(contains('25'), isNot(contains('6')), isNot(contains('12'))));
+      expect(pinOptions('nodemcu', analog: true), ['32', '33', '34', '35', '36', '39']);
+    });
+
     test('the USER button block reads IO42 without the internal pull-up', () {
       final code = genBlocks('B', [], [{'t': 'button'}, {'t': 'led', 'state': 'HIGH'}], board: 'v2');
       expect(code, contains('#define USER_BUTTON 42'));
