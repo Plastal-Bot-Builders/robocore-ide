@@ -17,6 +17,7 @@ import '../hw/download.dart';
 import '../hw/usb_link.dart';
 import 'cog.dart';
 import 'models.dart';
+import 'project_folder.dart';
 import 'sim_board.dart';
 
 enum Screen { home, projects, examples, libraries, board, serial, settings, editor }
@@ -163,6 +164,29 @@ class AppState extends ChangeNotifier {
   /// Set in the macOS app: shows a toast as a system notification instead, and answers false when the
   /// system won't (the user turned them off), so the toast shows in the window after all.
   Future<bool> Function(String title, String? body, bool error)? systemToast;
+
+  /// The macOS app's projects folder, once the user chose one: the projects are files there (project_folder.dart),
+  /// and only the settings are saved here. Null: the projects are saved with the settings, as in the web app.
+  ProjectFolder? folder;
+
+  /// Set in the macOS app: asks the user for a projects folder (null when they cancel).
+  Future<ProjectFolder?> Function()? chooseFolder;
+
+  /// The projects folder, when it was chosen before but can't be opened now (moved, renamed, or on a drive that
+  /// isn't there). The projects then live here until it is chosen again.
+  String? missingFolder;
+  String? _savedFolder;
+  bool _folderAsked = false;
+
+  /// The Mac app asks once whether to keep the projects as files (see the Shell).
+  bool get shouldAskFolder => chooseFolder != null && folder == null && missingFolder == null && !_folderAsked;
+
+  void folderAsked() {
+    _folderAsked = true;
+    try {
+      _prefs?.setBool('rc-folder-asked', true);
+    } catch (_) {}
+  }
   int logVersion = 0;
 
   // ---- USB board ----
@@ -292,11 +316,13 @@ class AppState extends ChangeNotifier {
     try {
       _prefs = await SharedPreferences.getInstance();
       raw = _prefs!.getString(_storeKey);
+      _folderAsked = _prefs!.getBool('rc-folder-asked') ?? false;
     } catch (_) {
       raw = null;
     }
     if (raw != null) _restoreSaved(raw);
-    if (projects.isEmpty) _seed();
+    await _openFolder(raw);
+    if (projects.isEmpty && missingFolder == null) _seed();
     if (onUsb) {
       serialPush('Looking for the board on $usbName…', 'sys');
       unawaited(_autoReconnect());
@@ -344,6 +370,7 @@ class AppState extends ChangeNotifier {
     partition = field(() => o['partition'] as String?) ?? partition;
     settings = field(() => Settings.fromJson(((o['settings'] as Map?) ?? const {}).cast<String, dynamic>())) ?? settings;
     libs = field(() => {...libs, ...((o['libs'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', v == true))}) ?? libs;
+    _savedFolder = field(() => o['folder'] as String?);
     sideCollapsed = field(() => _prefs?.getBool('rc-side')) ?? false;
     panelOpen = field(() => _prefs?.getBool('rc-panel')) ?? true;
 
@@ -367,6 +394,110 @@ class AppState extends ChangeNotifier {
       loadNotice = '$n saved project${n == 1 ? '' : 's'} could not be opened and ${n == 1 ? 'was' : 'were'} set aside. '
           'Your other projects are fine.';
     }
+  }
+
+  /// The projects come from the projects folder when there is one. Projects saved here (before the folder was chosen,
+  /// or while it was missing) move into it; a copy of what was saved is kept aside first.
+  Future<void> _openFolder(String? raw) async {
+    final f = folder;
+    if (f == null) {
+      if (_savedFolder != null) {
+        missingFolder = _savedFolder;
+        loadNotice ??= 'Your projects folder ($missingFolder) can’t be opened. If you moved or renamed it, choose it '
+            'again in Settings → Projects folder. Until then, new projects are kept in the app.';
+      }
+      return;
+    }
+    final here = projects;
+    try {
+      projects = await f.readAll(defaultBoard: board);
+    } catch (_) {
+      projects = here;
+      folder = null;
+      missingFolder = f.path;
+      loadNotice ??= 'Your projects folder ($missingFolder) could not be read. Choose it again in Settings → Projects folder.';
+      return;
+    }
+    if (here.isNotEmpty) {
+      if (raw != null) _keepAside('$_storeKey-before-folder', raw);
+      _addProjects(here);
+      persist(now: true);
+    }
+  }
+
+  /// Adds [more] (from the app, or a folder) to the projects, except ones already there: each keeps a name and a
+  /// main file no other project has.
+  void _addProjects(List<Project> more) {
+    for (final p in more) {
+      if (projects.any((x) => x.id == p.id)) continue;
+      if (projects.any((x) => x.name.toLowerCase() == p.name.toLowerCase())) p.name = _freeName(p.name);
+      _uniqueMain(p);
+      projects.add(p);
+    }
+  }
+
+  /// Gives [p] a main file whose name no other project's has (case aside): in a projects folder each project is a
+  /// sketch folder named after it (copies of one example all start as Blink.ino, say).
+  void _uniqueMain(Project p) {
+    String base(Project x) => sketchFolderName(x.files.first.name).toLowerCase();
+    bool taken(String b) => projects.any((x) => !identical(x, p) && base(x) == b.toLowerCase());
+    if (!taken(base(p))) return;
+    final b = fileBase(p.name);
+    var name = b;
+    for (var n = 2; taken(name); n++) {
+      name = '$b$n';
+    }
+    p.files.first.name = '$name.ino';
+  }
+
+  /// Settings → Projects folder: from now on the projects are files in the folder the user picks. The app's
+  /// projects go there too, and sketches already in that folder join them. False when the user cancels.
+  Future<bool> chooseProjectsFolder() async {
+    final f = await chooseFolder?.call();
+    if (f == null) return false;
+    final mine = projects;
+    try {
+      projects = await f.readAll(defaultBoard: board);
+    } catch (_) {
+      projects = mine;
+      showToast('That folder can’t be used', body: 'RoboCore could not read it. Choose another one.', error: true);
+      return false;
+    }
+    folder = f;
+    missingFolder = null;
+    _addProjects(mine);
+    persist(now: true);
+    showToast('Projects are now files', body: 'They are in ${f.path}, one folder each.');
+    notifyListeners();
+    return true;
+  }
+
+  /// File → Open Sketch… (macOS): a copy of an Arduino sketch as a new code project.
+  void importSketch(String name, Map<String, String> files) {
+    final main = files.keys.where((n) => n.toLowerCase().endsWith('.ino')).toList()
+      ..sort((a, b) => (b.toLowerCase() == '${name.toLowerCase()}.ino' ? 1 : 0) - (a.toLowerCase() == '${name.toLowerCase()}.ino' ? 1 : 0));
+    if (main.isEmpty) return showToast('There is no .ino file there', error: true);
+    final nm = name.replaceAll(RegExp(r'[^A-Za-z0-9 ]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final p = Project(
+      id: uid(),
+      name: _freeName(nm.isEmpty ? 'Sketch' : nm),
+      board: board,
+      mode: 'code',
+      setup: [],
+      loop: [],
+      files: [
+        ProjectFile(main.first, files[main.first]!),
+        for (final n in files.keys.where((n) => n != main.first).toList()..sort()) ProjectFile(n, files[n]!),
+      ],
+      codeEdited: true,
+      autosave: settings.autosave,
+      updated: DateTime.now().millisecondsSinceEpoch,
+    );
+    _uniqueMain(p);
+    projects.add(p);
+    persist(now: true);
+    openProject(p.id);
+    showToast('Opened ${main.first}', body: folder != null ? 'A copy is in your projects folder.' : 'A copy is in Projects.');
   }
 
   void _keepAside(String key, String value) {
@@ -404,8 +535,17 @@ class AppState extends ChangeNotifier {
   void persist({bool now = false}) {
     _persistTimer?.cancel();
     void w() {
+      final j = toJson();
+      final f = folder;
+      if (f != null) {
+        j['projects'] = []; // they are files in the folder
+        j['folder'] = f.path;
+        f.write(projects);
+      } else if (missingFolder != null) {
+        j['folder'] = missingFolder;
+      }
       try {
-        _prefs?.setString(_storeKey, jsonEncode(toJson()));
+        _prefs?.setString(_storeKey, jsonEncode(j));
       } catch (_) {}
     }
 
@@ -500,6 +640,7 @@ class AppState extends ChangeNotifier {
     final name = _freeName(ex.proj);
     final p = projectFrom(ex, name: name, board: newProjectBoard);
     p.autosave = settings.autosave;
+    _uniqueMain(p);
     projects.add(p);
     persist(now: true);
     showToast('Copied to your projects', body: '“${ex.name}” is in Projects as $name.');
@@ -541,6 +682,7 @@ class AppState extends ChangeNotifier {
       ..id = uid()
       ..name = _freeName('${p.name} copy')
       ..updated = DateTime.now().millisecondsSinceEpoch;
+    _uniqueMain(d);
     projects.add(d);
     persist(now: true);
     showToast('Project duplicated', body: '“${d.name}” is in Projects.');
@@ -551,6 +693,13 @@ class AppState extends ChangeNotifier {
   /// the sketch has more than one tab. Native apps copy the main file to the clipboard instead.
   Future<void> downloadProject(Project p) async {
     p.syncCode();
+    final f = this.folder; // (the zip's folder name below is also called folder)
+    if (f != null) {
+      // The sketch is already a folder of files: show it.
+      persist(now: true);
+      await f.reveal(p);
+      return;
+    }
     final main = p.files.first.name;
     final folder = main.replaceAll(RegExp(r'\.ino$'), '');
     final one = p.files.length == 1;
@@ -583,6 +732,7 @@ class AppState extends ChangeNotifier {
     final p = projectFrom(ex, name: nm, board: boardId, mode: mode);
     p.files.first.name = '${fileBase(nm)}.ino';
     p.autosave = settings.autosave;
+    _uniqueMain(p);
     projects.add(p);
     persist(now: true);
     openProject(p.id);
@@ -606,6 +756,7 @@ class AppState extends ChangeNotifier {
     final name = p.name;
     final open = p.id == pid;
     projects.remove(p);
+    unawaited(folder?.remove(p)); // its folder goes to the Trash
     persist(now: true);
     showToast('Deleted $name');
     if (open) {
@@ -1679,6 +1830,12 @@ class AppState extends ChangeNotifier {
   /// Settings → Reset all data (ST-12): this device's projects, profile and settings go, and Welcome shows.
   Future<void> resetAll() async {
     sim.stop();
+    // The project files stay in the projects folder; the app just stops using it.
+    final f = folder;
+    folder = null;
+    missingFolder = null;
+    _savedFolder = null;
+    await f?.forget();
     if (usbOpen) await disconnectUsb(quiet: true);
     try {
       await _prefs?.remove(_storeKey);

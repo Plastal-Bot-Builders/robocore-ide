@@ -117,6 +117,25 @@ class SettingsPage extends StatelessWidget {
           hint: 'Open files, Output and the Serial Monitor. Nothing is sent when this is off.'),
       const _CogStatusRow(),
     ]);
+    // The Mac app: where the projects are kept (Settings → Projects folder).
+    final f = s.folder;
+    final projectsFolder = s.chooseFolder == null
+        ? null
+        : card('Projects folder', [
+            row(
+              f != null ? 'Projects are files' : 'Projects are kept in the app',
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                if (f != null) ...[Btn('Show in Finder', icon: 'open', onTap: () => f.reveal()), const SizedBox(width: 8)],
+                Btn(f != null ? 'Change…' : 'Choose folder…', icon: 'folder', onTap: () => s.chooseProjectsFolder()),
+              ]),
+              hint: f != null
+                  ? '${f.path}: one sketch folder for each project, which the Arduino IDE can open too.'
+                  : s.missingFolder != null
+                      ? '${s.missingFolder} can’t be opened. Choose it again, or another folder.'
+                      : 'Choose a folder (Documents is a good place) to keep each project as a folder of .ino files you '
+                          'can see in Finder, back up and open in the Arduino IDE.',
+            ),
+          ]);
     final general = card('General', [
       row('Language', RcSelect<String>(value: st.lang, width: 130, label: 'Language', items: const [('English', 'English')], onChanged: (_) {})),
       row('Auto-save projects', RcSwitch(value: st.autosave, label: 'Auto-save projects', onChanged: (v) => s.updateSettings((x) => x.autosave = v)),
@@ -137,13 +156,13 @@ class SettingsPage extends StatelessWidget {
             ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: column([profile, cog])),
                 const SizedBox(width: 20),
-                Expanded(child: column([appearance, editor, board, general])),
+                Expanded(child: column([appearance, editor, board, if (projectsFolder != null) projectsFolder, general])),
               ])
             : Align(
                 alignment: Alignment.topLeft,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: column([profile, appearance, editor, board, cog, general]),
+                  child: column([profile, appearance, editor, board, if (projectsFolder != null) projectsFolder, cog, general]),
                 ),
               ),
       ),
@@ -164,7 +183,10 @@ class SettingsPage extends StatelessWidget {
 
         return DialogFrame(
           title: 'Reset all data?',
-          subtitle: 'Deletes this device’s projects, profile and settings, then starts again at the welcome screen. You can’t undo it.',
+          subtitle: s.folder != null
+              ? 'Deletes your profile and settings, then starts again at the welcome screen. Your project files stay in '
+                  '${s.folder!.path}; RoboCore just stops using that folder.'
+              : 'Deletes this device’s projects, profile and settings, then starts again at the welcome screen. You can’t undo it.',
           onSubmit: reset,
           actions: [
             Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),

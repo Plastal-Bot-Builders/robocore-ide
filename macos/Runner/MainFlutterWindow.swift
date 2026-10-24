@@ -22,6 +22,7 @@ class MainFlutterWindow: NSWindow {
     MenuBar.shared.attach(to: messenger)
     Notifications.shared.attach(to: messenger)
     SerialPorts.shared.attach(to: messenger)
+    Sketchbook.shared.attach(to: messenger)
 
     super.awakeFromNib()
   }

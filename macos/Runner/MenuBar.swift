@@ -68,10 +68,12 @@ final class MenuBar: NSObject, NSMenuItemValidation {
   private func fileMenu() -> NSMenu {
     let m = NSMenu(title: "File")
     m.addItem(command("New Project…", "newProject", key: "n"))
-    m.addItem(command("Open Project…", "openProject", key: "o"))
+    m.addItem(command("Open Sketch…", "openSketch", key: "o"))
+    m.addItem(command("Projects…", "openProject", key: "o", [.command, .shift]))
     m.addItem(command("Examples", "examples"))
     m.addItem(.separator())
     m.addItem(command("Save", "save", key: "s"))
+    m.addItem(command("Show in Finder", "reveal", key: "r", [.command, .option]))
     m.addItem(command("Rename Project…", "rename"))
     m.addItem(command("Duplicate Project", "duplicate"))
     m.addItem(command("Project Settings…", "projectSettings"))

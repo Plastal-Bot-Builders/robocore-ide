@@ -31,6 +31,7 @@
 		52C0DE042EAB100000C0FFEE /* MenuBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C0DE032EAB100000C0FFEE /* MenuBar.swift */; };
 		52C0DE062EAB100000C0FFEE /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C0DE052EAB100000C0FFEE /* Notifications.swift */; };
 		52C0DE082EAB100000C0FFEE /* SerialPorts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C0DE072EAB100000C0FFEE /* SerialPorts.swift */; };
+		52C0DE0A2EAB100000C0FFEE /* Sketchbook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C0DE092EAB100000C0FFEE /* Sketchbook.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 /* End PBXBuildFile section */
 
@@ -79,6 +80,7 @@
 		52C0DE032EAB100000C0FFEE /* MenuBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBar.swift; sourceTree = "<group>"; };
 		52C0DE052EAB100000C0FFEE /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		52C0DE072EAB100000C0FFEE /* SerialPorts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialPorts.swift; sourceTree = "<group>"; };
+		52C0DE092EAB100000C0FFEE /* Sketchbook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sketchbook.swift; sourceTree = "<group>"; };
 		33CEB47222A05771004F2AC0 /* Flutter-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Flutter-Debug.xcconfig"; sourceTree = "<group>"; };
 		33CEB47422A05771004F2AC0 /* Flutter-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Flutter-Release.xcconfig"; sourceTree = "<group>"; };
 		33CEB47722A0578A004F2AC0 /* Flutter-Generated.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Flutter-Generated.xcconfig"; path = "ephemeral/Flutter-Generated.xcconfig"; sourceTree = "<group>"; };
@@ -180,6 +182,7 @@
 				52C0DE032EAB100000C0FFEE /* MenuBar.swift */,
 				52C0DE052EAB100000C0FFEE /* Notifications.swift */,
 				52C0DE072EAB100000C0FFEE /* SerialPorts.swift */,
+				52C0DE092EAB100000C0FFEE /* Sketchbook.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -372,6 +375,7 @@
 				52C0DE042EAB100000C0FFEE /* MenuBar.swift in Sources */,
 				52C0DE062EAB100000C0FFEE /* Notifications.swift in Sources */,
 				52C0DE082EAB100000C0FFEE /* SerialPorts.swift in Sources */,
+				52C0DE0A2EAB100000C0FFEE /* Sketchbook.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

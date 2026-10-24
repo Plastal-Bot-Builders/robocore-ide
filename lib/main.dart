@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'hw/sketchbook.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'ui/app_scope.dart';
@@ -10,6 +11,11 @@ import 'ui/shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final state = AppState();
+  if (projectsFolderSupported) {
+    // The Mac app keeps the projects as files in a folder the user picks (Settings → Projects folder).
+    state.chooseFolder = chooseProjectsFolder;
+    state.folder = await restoreProjectsFolder();
+  }
   await state.load();
   // The Mac app's messages go to Notification Centre.
   if (isMacApp) state.systemToast = showMacNotification;

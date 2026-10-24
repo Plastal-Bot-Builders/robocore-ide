@@ -12,6 +12,7 @@ import 'app_scope.dart';
 import 'dialogs.dart';
 import 'editor/editor_page.dart';
 import 'editor/web_editors.dart' show setEditorShortcutHandler;
+import '../hw/sketchbook.dart' show pickSketch;
 import 'mac_app.dart';
 import 'pages/board_page.dart';
 import 'pages/examples_page.dart';
@@ -38,6 +39,29 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   final _scaffold = GlobalKey<ScaffoldState>();
+  var _askingFolder = false;
+
+  /// The Mac app, once: keep the projects as files in a folder? (Later: Settings → Projects folder.)
+  Future<void> _askFolder(AppState s) async {
+    s.folderAsked();
+    final n = s.projects.length;
+    final choose = await showDialog<bool>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) => DialogFrame(
+        title: 'Keep your projects as files?',
+        subtitle: 'RoboCore can keep each project as a folder of .ino files, like the Arduino IDE, in a folder you '
+            'choose (Documents is a good place). You can see them in Finder, back them up and open them in the Arduino '
+            'IDE. Your $n project${n == 1 ? '' : 's'} move${n == 1 ? 's' : ''} there too.',
+        onSubmit: () => Navigator.of(dctx).pop(true),
+        actions: [
+          Btn('Not now', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop(false)),
+          Btn('Choose folder…', icon: 'folder', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop(true)),
+        ],
+      ),
+    );
+    if (choose == true) await s.chooseProjectsFolder();
+  }
 
   @override
   void didChangeDependencies() {
@@ -76,6 +100,12 @@ class _ShellState extends State<Shell> {
         showNewProjectDialog(context);
       case 'openProject':
         s.go(Screen.projects);
+      case 'openSketch':
+        pickSketch().then((r) {
+          if (r != null) s.importSketch(r.$1, r.$2);
+        });
+      case 'reveal':
+        s.folder?.reveal(s.view == Screen.editor ? p : null);
       case 'examples':
         s.go(Screen.examples);
       case 'save':
@@ -123,8 +153,9 @@ class _ShellState extends State<Shell> {
     final editor = p != null && s.view == Screen.editor;
     final blocks = editor && p.mode == 'blocks';
     updateMenuBar(enabled: {
-      'about', 'settings', 'newProject', 'openProject', 'examples', 'libraries', 'board', 'serial', 'shortcuts', //
-      'sidebar',
+      'about', 'settings', 'newProject', 'openProject', 'openSketch', 'examples', 'libraries', 'board', 'serial', //
+      'shortcuts', 'sidebar',
+      if (s.folder != null) 'reveal',
       if (p != null) ...['rename', 'duplicate', 'projectSettings'],
       if (editor) ...['save', 'verify', 'upload', 'cog', 'console', 'modeBlocks', 'modeCode', 'undo', 'redo'],
       if (editor) ...['zoomIn', 'zoomOut', 'zoomReset'],
@@ -154,6 +185,10 @@ class _ShellState extends State<Shell> {
     // First start on this device: ask who is using it before anything else.
     if (s.needsProfile) return const WelcomePage();
     _updateMenuBar(s);
+    if (s.shouldAskFolder && !_askingFolder) {
+      _askingFolder = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _askFolder(s));
+    }
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => _save(s),

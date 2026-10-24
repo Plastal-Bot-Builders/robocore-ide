@@ -86,6 +86,12 @@ built-in preview check. The macOS app uploads over USB too: the same USB helper 
 serial ports (`lib/hw/usb_link_native.dart`, `web/robocore_serial_shim.js`, `macos/Runner/SerialPorts.swift`), with the
 app's own port chooser. The other native apps (Windows, Linux, Android, iOS) use the preview board for now.
 
+The macOS app can keep the projects as files: Settings → Projects folder (it also asks once). Each project is then a
+sketch folder named after its main .ino, as the Arduino IDE expects, with a hidden `.robocore.json` for the blocks and
+the board (`lib/state/project_folder.dart`, `lib/hw/sketchbook_native.dart`, `macos/Runner/Sketchbook.swift`).
+Arduino sketches already in that folder show up as code projects, File → Open Sketch… copies one in, and a deleted
+project's folder goes to the Trash.
+
 `docs/robocore-v2-support.md` has the full status and the test checklist for the real board.
 
 ## Checks
