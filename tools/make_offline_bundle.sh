@@ -8,9 +8,10 @@
 # Usage:
 #   bash tools/make_offline_bundle.sh arm64|x86_64 [out]     (out: build/offline-<arch>)
 #
-# It downloads about 2.5 GB (the ESP32 package brings every chip's tools; the extra ones are then removed). Set
-# SEED=~/Library/Arduino15 to start from an Arduino install's downloads instead (cloned, never changed). On an
-# Apple-silicon Mac the Intel bundle is made with the Intel arduino-cli under Rosetta.
+# It downloads about 2.5 GB (the ESP32 package brings every chip's tools; the extra ones are then removed), kept in
+# build/arduino-downloads so a run that was cut off carries on where it stopped. Set SEED=~/Library/Arduino15 to
+# start from an Arduino install's downloads instead (cloned, never changed). On an Apple-silicon Mac the Intel
+# bundle is made with the Intel arduino-cli under Rosetta.
 set -euo pipefail
 
 ARCH=${1:?usage: make_offline_bundle.sh arm64|x86_64 [out]}
@@ -35,27 +36,40 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 echo "== arduino-cli $CLI_VERSION ($ARCH)"
 f="arduino-cli_${CLI_VERSION}_${CLI_ASSET}.tar.gz"
-curl -fsSL -o "$WORK/$f" "https://downloads.arduino.cc/arduino-cli/$f"
-curl -fsSL -o "$WORK/sums.txt" "https://downloads.arduino.cc/arduino-cli/${CLI_VERSION}-checksums.txt"
+DL=${DOWNLOADS:-$ROOT/build/arduino-downloads}
+mkdir -p "$DL"
+fetch() { curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -C - -o "$2" "$1"; } # resumes a cut-off download
+if [ ! -f "$DL/$f" ]; then
+  fetch "https://downloads.arduino.cc/arduino-cli/$f" "$DL/$f.part"
+  mv "$DL/$f.part" "$DL/$f"
+fi
+fetch "https://downloads.arduino.cc/arduino-cli/${CLI_VERSION}-checksums.txt" "$WORK/sums.txt"
+cp "$DL/$f" "$WORK/$f"
 (cd "$WORK" && grep " $f\$" sums.txt | shasum -a 256 -c -)
 tar -xzf "$WORK/$f" -C "$WORK" arduino-cli
 CLI=("${RUN[@]+"${RUN[@]}"}" "$WORK/arduino-cli")
 
 export ARDUINO_DIRECTORIES_DATA="$WORK/Arduino15"
 export ARDUINO_DIRECTORIES_USER="$WORK/user"
-export ARDUINO_DIRECTORIES_DOWNLOADS="$WORK/downloads"
+export ARDUINO_DIRECTORIES_DOWNLOADS="$DL"
 export ARDUINO_BUILD_CACHE_PATH="$WORK/cache"
 export ARDUINO_BOARD_MANAGER_ADDITIONAL_URLS=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+export ARDUINO_NETWORK_CONNECTION_TIMEOUT=600s # a slow line stalls for minutes
 mkdir -p "$ARDUINO_DIRECTORIES_DATA" "$ARDUINO_DIRECTORIES_DOWNLOADS"
 if [ -n "${SEED:-}" ] && [ -d "$SEED/staging" ]; then
   echo "== reusing downloads from $SEED"
-  cp -cR "$SEED/staging/." "$ARDUINO_DIRECTORIES_DOWNLOADS/" # APFS clones: no copy, no extra space
+  cp -cRn "$SEED/staging/." "$ARDUINO_DIRECTORIES_DOWNLOADS/" # APFS clones: no copy, no extra space
   [ -f "$SEED/library_index.json" ] && cp -c "$SEED/library_index.json"* "$ARDUINO_DIRECTORIES_DATA/"
 fi
 
 echo "== board packages"
 "${CLI[@]}" core update-index
-"${CLI[@]}" core install "arduino:avr@$AVR_VERSION" "esp32:esp32@$ESP32_VERSION"
+# A slow line can cut a download off: try again (what was downloaded stays).
+for try in 1 2 3; do
+  "${CLI[@]}" core install "arduino:avr@$AVR_VERSION" "esp32:esp32@$ESP32_VERSION" && break
+  [ $try = 3 ] && exit 1
+  echo "== download failed, trying again"
+done
 echo "== libraries"
 [ -f "$ARDUINO_DIRECTORIES_DATA/library_index.json" ] || "${CLI[@]}" lib update-index
 "${CLI[@]}" lib install "${LIBS[@]}"
