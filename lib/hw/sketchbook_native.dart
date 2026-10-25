@@ -24,6 +24,11 @@ Future<ProjectFolder?> restoreProjectsFolder() async {
   }
 }
 
+/// The projects folder at [path] (saved in the settings), when it is there: found by its path when the bookmark
+/// can't find it.
+ProjectFolder? projectsFolderAt(String path) =>
+    projectsFolderSupported && Directory(path).existsSync() ? FolderStore(path) : null;
+
 /// Asks the user where to keep the projects; null when they cancel.
 Future<ProjectFolder?> chooseProjectsFolder() async {
   if (!projectsFolderSupported) return null;

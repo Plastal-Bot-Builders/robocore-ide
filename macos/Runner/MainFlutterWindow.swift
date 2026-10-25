@@ -3,6 +3,7 @@ import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
+    MainFlutterWindow.moveSettingsOutOfSandbox()
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
     // Small enough for macOS's half- and quarter-screen tiling (Window > Move & Resize) on a 13-inch
@@ -25,5 +26,15 @@ class MainFlutterWindow: NSWindow {
     Sketchbook.shared.attach(to: messenger)
 
     super.awakeFromNib()
+  }
+
+  /// Until October 2026 the app ran in Apple's sandbox, which kept its settings (profile, the projects folder, the
+  /// boards allowed on USB) in its container. Copied once to where they are now, before Flutter reads them.
+  private static func moveSettingsOutOfSandbox() {
+    let defaults = UserDefaults.standard
+    guard defaults.object(forKey: "flutter.robocore-ide-v1") == nil, let id = Bundle.main.bundleIdentifier else { return }
+    let old = "\(NSHomeDirectory())/Library/Containers/\(id)/Data/Library/Preferences/\(id).plist"
+    guard let saved = NSDictionary(contentsOfFile: old) as? [String: Any] else { return }
+    for (key, value) in saved { defaults.set(value, forKey: key) }
   }
 }

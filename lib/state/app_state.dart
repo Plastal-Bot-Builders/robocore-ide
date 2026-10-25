@@ -97,6 +97,11 @@ class AppState extends ChangeNotifier {
 
   /// The compile server client (arduino-cli in a container, see server/).
   final CompileClient compiler;
+
+  /// The macOS app compiles on this Mac (arduino-cli inside the app) for the boards it can; the compile server
+  /// builds the others, and everything in the web app.
+  LocalBuilder? local;
+  bool _buildsHere(Project p) => local?.canBuild(p.board) ?? false;
   SharedPreferences? _prefs;
   Timer? _persistTimer;
   Timer? _saveTimer;
@@ -171,6 +176,9 @@ class AppState extends ChangeNotifier {
 
   /// Set in the macOS app: asks the user for a projects folder (null when they cancel).
   Future<ProjectFolder?> Function()? chooseFolder;
+
+  /// Set in the macOS app: the projects folder at a saved path, if it is there.
+  ProjectFolder? Function(String path)? folderAt;
 
   /// The projects folder, when it was chosen before but can't be opened now (moved, renamed, or on a drive that
   /// isn't there). The projects then live here until it is chosen again.
@@ -399,6 +407,7 @@ class AppState extends ChangeNotifier {
   /// The projects come from the projects folder when there is one. Projects saved here (before the folder was chosen,
   /// or while it was missing) move into it; a copy of what was saved is kept aside first.
   Future<void> _openFolder(String? raw) async {
+    if (folder == null && _savedFolder != null) folder = folderAt?.call(_savedFolder!);
     final f = folder;
     if (f == null) {
       if (_savedFolder != null) {
@@ -1238,7 +1247,7 @@ class AppState extends ChangeNotifier {
   Future<CompileResult?> verify({bool fromUpload = false}) async {
     final p = cur;
     if (p == null || busy != null) return null;
-    if (!fromUpload && hasServer) {
+    if (!fromUpload && (hasServer || _buildsHere(p))) {
       await _buildOnServer(p, flash: false);
       return null;
     }
@@ -1362,7 +1371,8 @@ class AppState extends ChangeNotifier {
     verified = null;
     panelOpen = true;
     panelTab = 'output';
-    if (!hasServer) {
+    final here = _buildsHere(p);
+    if (!here && !hasServer) {
       outLine('Uploading to a real board needs the compile server. Add its address in Settings → Compile server '
           '(server/README.md shows how to run one).', 'err');
       setStatus('No compile server', 'err');
@@ -1385,19 +1395,25 @@ class AppState extends ChangeNotifier {
     busy = flash ? 'upload' : 'verify';
     final gen = ++_buildGen;
     final sw = Stopwatch()..start();
-    outLine('Compiling ${p.files.first.name} for ${b.full} on the compile server…', 'info');
+    outLine('Compiling ${p.files.first.name} for ${b.full} ${here ? 'on this Mac' : 'on the compile server'}…', 'info');
     setStatus('Compiling…', 'busy');
     notifyListeners();
-    final r = await compiler.compile(
-      serverUrl: settings.compileServer,
-      board: p.board,
-      files: [for (final f in p.files) SourceFile(f.name, f.content)],
-    );
+    final files = [for (final f in p.files) SourceFile(f.name, f.content)];
+    final r = here
+        ? await local!.compile(
+            board: p.board,
+            files: files,
+            onLog: (line) {
+              if (gen != _buildGen) return;
+              outLine(line);
+              notifyListeners();
+            })
+        : await compiler.compile(serverUrl: settings.compileServer, board: p.board, files: files);
     if (gen != _buildGen) return;
     if (r.error != null) {
       busy = null;
       outLine(r.error!, 'err');
-      setStatus(r.retry ? 'Server not reachable' : 'Build failed', 'err');
+      setStatus(r.retry && !here ? 'Server not reachable' : 'Build failed', 'err');
       notifyListeners();
       return;
     }

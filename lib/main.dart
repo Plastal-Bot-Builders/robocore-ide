@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'hw/local_compiler.dart';
 import 'hw/sketchbook.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
@@ -10,10 +11,12 @@ import 'ui/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final state = AppState();
+  // The Mac app compiles on this Mac when it can (arduino-cli inside the app).
+  final state = AppState()..local = localBuilder();
   if (projectsFolderSupported) {
     // The Mac app keeps the projects as files in a folder the user picks (Settings → Projects folder).
     state.chooseFolder = chooseProjectsFolder;
+    state.folderAt = projectsFolderAt;
     state.folder = await restoreProjectsFolder();
   }
   await state.load();

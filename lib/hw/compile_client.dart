@@ -73,6 +73,17 @@ class ServerBuild {
   List<Problem> get errors => [for (final p in problems) if (p.severity == 'error') p];
 }
 
+/// Compiling on this computer instead of on the compile server: the macOS app, with arduino-cli inside it
+/// (lib/hw/local_compiler_native.dart), as the Arduino IDE does.
+abstract class LocalBuilder {
+  /// True when this computer can build for [board].
+  bool canBuild(String board);
+
+  /// Like [CompileClient.compile]. [onLog] gets progress lines, such as the board's tools being fetched the
+  /// first time they are needed.
+  Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog});
+}
+
 /// Cleans up what the user typed in Settings: adds https:// and drops a trailing slash.
 String normalizeServerUrl(String raw) {
   var u = raw.trim();
