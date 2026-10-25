@@ -1,10 +1,13 @@
 // The USB-C link to a real board: Serial Monitor and flashing.
 //
-// On the web this is Web Serial plus esptool-js (web/robocore_usb.js). Elsewhere (tests, and the
+// On the web this is Web Serial plus esptool-js (web/robocore_usb.js); in the Windows app, the COM port through
+// arduino-cli, avrdude and esptool (usb_link_native.dart). Elsewhere (tests, and the other
 // native apps for now) it reports itself as unsupported and the IDE keeps using the preview board.
 import 'dart:convert';
 
-import 'usb_link_stub.dart' if (dart.library.js_interop) 'usb_link_web.dart' as impl;
+import 'usb_link_stub.dart'
+    if (dart.library.js_interop) 'usb_link_web.dart'
+    if (dart.library.io) 'usb_link_native.dart' as impl;
 
 /// The answer to every call: `ok`, plus a `code` and `message` when it failed.
 class UsbResult {

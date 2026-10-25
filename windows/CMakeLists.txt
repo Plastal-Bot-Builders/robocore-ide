@@ -121,6 +121,13 @@ install(DIRECTORY
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../assets/fonts"
   DESTINATION "${INSTALL_EDITORS_DIR}/assets/assets" COMPONENT Runtime)
 
+# The RoboCore Arduino library, for compiles on this computer (lib/hw/local_build_io.dart).
+install(CODE "
+  file(REMOVE_RECURSE \"${INSTALL_BUNDLE_DATA_DIR}/firmware\")
+  " COMPONENT Runtime)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../firmware/RoboCore"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/firmware" COMPONENT Runtime)
+
 # Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release

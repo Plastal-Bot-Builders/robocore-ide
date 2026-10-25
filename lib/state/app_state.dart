@@ -14,6 +14,7 @@ import '../engine/zip.dart';
 import '../hw/cog_client.dart';
 import '../hw/compile_client.dart';
 import '../hw/download.dart';
+import '../hw/local_build.dart';
 import '../hw/usb_link.dart';
 import 'cog.dart';
 import 'models.dart';
@@ -231,6 +232,12 @@ class AppState extends ChangeNotifier {
 
   bool get onUsb => port == kPortUsb;
   bool get hasServer => settings.compileServer.trim().isNotEmpty;
+
+  /// arduino-cli on this computer (the Windows app): real compiles without a compile server.
+  final local = LocalBuilder();
+
+  /// Verify and Upload make a real C++ build: on the compile server when one is set, else on this computer.
+  bool get realBuild => hasServer || local.supported;
 
   /// Something is there to talk to: the open USB port, or the preview board when it is switched on.
   bool get linked => onUsb ? usbOpen : connected;
@@ -771,7 +778,7 @@ class AppState extends ChangeNotifier {
       showToast(UsbResult.unsupported.message, error: true);
       return;
     }
-    conn = ConnMsg('', 'Pick the board in the browser’s list: ${kBoards[boardId]!.pickAs}…');
+    conn = ConnMsg('', kIsWeb ? 'Pick the board in the browser’s list: ${kBoards[boardId]!.pickAs}…' : 'Looking for the board on USB…');
     notifyListeners();
     final r = await usb.connect(baud: baud);
     if (!r.ok) {
@@ -1039,7 +1046,7 @@ class AppState extends ChangeNotifier {
   Future<CompileResult?> verify({bool fromUpload = false}) async {
     final p = cur;
     if (p == null || busy != null) return null;
-    if (!fromUpload && hasServer) {
+    if (!fromUpload && realBuild) {
       await _buildOnServer(p, flash: false);
       return null;
     }
@@ -1152,7 +1159,7 @@ class AppState extends ChangeNotifier {
     verified = null;
     panelOpen = true;
     panelTab = 'output';
-    if (!hasServer) {
+    if (!realBuild) {
       outLine('Uploading to a real board needs the compile server. Add its address in Settings → Compile server '
           '(server/README.md shows how to run one).', 'err');
       setStatus('No compile server', 'err');
@@ -1175,14 +1182,20 @@ class AppState extends ChangeNotifier {
     busy = flash ? 'upload' : 'verify';
     final gen = ++_buildGen;
     final sw = Stopwatch()..start();
-    outLine('Compiling ${p.files.first.name} for ${b.full} on the compile server…', 'info');
+    final files = [for (final f in p.files) SourceFile(f.name, f.content)];
+    outLine('Compiling ${p.files.first.name} for ${b.full} ${hasServer ? 'on the compile server' : 'with arduino-cli on this computer'}…', 'info');
     setStatus('Compiling…', 'busy');
     notifyListeners();
-    final r = await compiler.compile(
-      serverUrl: settings.compileServer,
-      board: p.board,
-      files: [for (final f in p.files) SourceFile(f.name, f.content)],
-    );
+    final r = hasServer
+        ? await compiler.compile(serverUrl: settings.compileServer, board: p.board, files: files)
+        : await local.compile(
+            board: p.board,
+            files: files,
+            log: (line) {
+              if (gen != _buildGen) return;
+              outLine(line, 'sys');
+              notifyListeners();
+            });
     if (gen != _buildGen) return;
     if (r.error != null) {
       busy = null;
