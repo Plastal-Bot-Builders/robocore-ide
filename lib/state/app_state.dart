@@ -208,6 +208,10 @@ class AppState extends ChangeNotifier {
   /// Set when stored projects could not be read; shown once after loading.
   String? loadNotice;
 
+  /// True while [load] reads the saved state at start-up: the window shows "Opening your projects…" (the projects
+  /// folder can take a moment, or wait for macOS to ask whether RoboCore may open Documents).
+  bool loading = false;
+
   /// Bumped on every serial line, so only log views rebuild.
   final ValueNotifier<int> logTick = ValueNotifier(0);
 
@@ -340,6 +344,7 @@ class AppState extends ChangeNotifier {
       _bootBoard();
     }
     if (loadNotice != null) showToast(loadNotice!, error: true);
+    loading = false;
     notifyListeners();
   }
 

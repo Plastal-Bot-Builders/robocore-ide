@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'hw/local_compiler.dart';
 import 'hw/sketchbook.dart';
@@ -12,7 +13,11 @@ import 'ui/shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // The Mac app compiles on this Mac when it can (arduino-cli inside the app).
-  final state = AppState()..local = localBuilder();
+  final state = AppState()
+    ..local = localBuilder()
+    ..loading = true;
+  // The window first, so it never stays blank while the projects are read.
+  runApp(RoboCoreApp(state: state));
   if (projectsFolderSupported) {
     // The Mac app keeps the projects as files in a folder the user picks (Settings → Projects folder).
     state.chooseFolder = chooseProjectsFolder;
@@ -22,7 +27,6 @@ Future<void> main() async {
   await state.load();
   // The Mac app's messages go to Notification Centre.
   if (isMacApp) state.systemToast = showMacNotification;
-  runApp(RoboCoreApp(state: state));
 }
 
 final _paperTheme = buildTheme(RC.paper);
@@ -46,9 +50,29 @@ class RoboCoreApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: state.settings.theme == 'navy' ? _navyTheme : _paperTheme,
             navigatorObservers: [_framesObserver],
-            home: const Shell(),
+            home: state.loading ? const _Opening() : const Shell(),
           );
         },
+      ),
+    );
+  }
+}
+
+/// While the saved state is read at start-up.
+class _Opening extends StatelessWidget {
+  const _Opening();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return Scaffold(
+      backgroundColor: c.bg,
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SvgPicture.asset('assets/images/app_icon.svg', width: 72, height: 72),
+          const SizedBox(height: 16),
+          Text('Opening your projects…', style: tLabel(c, color: c.muted)),
+        ]),
       ),
     );
   }

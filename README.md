@@ -92,6 +92,15 @@ the board (`lib/state/project_folder.dart`, `lib/hw/sketchbook_native.dart`, `ma
 Arduino sketches already in that folder show up as code projects, File → Open Sketch… copies one in, and a deleted
 project's folder goes to the Trash.
 
+The macOS app works offline, for schools and hubs without steady internet: it compiles on the Mac itself, as the
+Arduino IDE does, with arduino-cli and the board tools inside the app (`lib/hw/local_compiler_native.dart`). There is
+one DMG for each kind of Mac (Apple silicon, Intel), each with an offline bundle made by
+`tools/make_offline_bundle.sh`: arduino-cli, the Arduino Uno's tools, the ESP32 package trimmed to the ESP32-S3
+(RoboCore V2) and the classic ESP32 (DevKit, NodeMCU), and the libraries the IDE offers. A board's tools are unpacked
+into `~/Library/Application Support/RoboCore` (never the Arduino IDE's folder) the first time it is built. Only Cog needs
+the internet. The app runs without Apple's App Sandbox, as the Arduino IDE does, because a sandboxed app may not run
+the compilers it carries. On Apple silicon the Uno's compiler (Arduino builds it for Intel only) needs Rosetta.
+
 `docs/robocore-v2-support.md` has the full status and the test checklist for the real board.
 
 ## Checks

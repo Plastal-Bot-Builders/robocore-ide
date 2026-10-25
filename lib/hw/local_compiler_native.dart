@@ -1,10 +1,13 @@
-// Compiling on this Mac, as the Arduino IDE does: arduino-cli inside RoboCore.app (Contents/MacOS/arduino-cli),
-// and each board's tools in RoboCore's own Arduino15 folder (~/Library/Application Support/RoboCore), apart from
-// the Arduino IDE's, fetched once the first time that board is built.
-// After that it needs no internet and no compile server. The steps and the output it returns are those of the
-// compile server (server/src/compile.js and parse.js), so the IDE treats both the same.
+// Compiling on this Mac, as the Arduino IDE does, with no internet and no compile server: arduino-cli inside
+// RoboCore.app (Contents/MacOS/arduino-cli) and, from the DMG, the board tools and libraries for this kind of Mac
+// (Contents/Resources/Offline, made by tools/make_offline_bundle.sh). A board's tools are unpacked into RoboCore's own
+// Arduino15 folder (~/Library/Application Support/RoboCore, never the Arduino IDE's) the first time it is built. A
+// build without that folder (a developer's) fetches the Uno's tools from the internet instead, once.
+// The steps and the output it returns are those of the compile server (server/src/compile.js, boards.js, parse.js),
+// so the IDE treats both the same.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -12,28 +15,59 @@ import 'package:flutter/foundation.dart';
 import '../engine/compiler.dart' show SourceFile;
 import 'compile_client.dart';
 
-/// What this Mac can build: the board's FQBN, its arduino-cli platform, and how much it takes once fetched.
+/// What this Mac can build (server/src/boards.js): the FQBN, the offline pack with its tools, and for the ESP32s
+/// where each part of the program goes in flash.
 const _boards = {
-  'uno': (fqbn: 'arduino:avr:uno', core: 'arduino:avr', name: 'Arduino Uno', size: 'about 240 MB'),
+  'uno': (fqbn: 'arduino:avr:uno', pack: 'uno', core: 'arduino:avr', name: 'Arduino Uno', chip: '', bootloader: 0, flash: ''),
+  'v2': (
+    fqbn: 'esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=enabled,CPUFreq=240',
+    pack: 'esp32', core: 'esp32:esp32', name: 'RoboCore V2', chip: 'esp32s3', bootloader: 0x0, flash: '8MB',
+  ),
+  'devkit': (
+    fqbn: 'esp32:esp32:esp32:FlashSize=4M,PartitionScheme=default',
+    pack: 'esp32', core: 'esp32:esp32', name: 'ESP32 DevKit', chip: 'esp32', bootloader: 0x1000, flash: '4MB',
+  ),
+  'nodemcu': (
+    fqbn: 'esp32:esp32:nodemcu-32s', pack: 'esp32', core: 'esp32:esp32', name: 'NodeMCU-32S', chip: 'esp32', bootloader: 0x1000, flash: '4MB',
+  ),
 };
 
 /// The arduino-cli in the app, or null when this build has none.
 LocalBuilder? localBuilder() {
   if (defaultTargetPlatform != TargetPlatform.macOS) return null;
-  final cli = File('${File(Platform.resolvedExecutable).parent.path}/arduino-cli');
-  return cli.existsSync() ? _ArduinoCli(cli.path) : null;
+  final macos = File(Platform.resolvedExecutable).parent.path;
+  final cli = File('$macos/arduino-cli');
+  if (!cli.existsSync()) return null;
+  final offline = Directory('${Directory(macos).parent.path}/Resources/Offline');
+  Map<String, dynamic>? manifest;
+  try {
+    manifest = (jsonDecode(File('${offline.path}/manifest.json').readAsStringSync()) as Map).cast<String, dynamic>();
+  } catch (_) {}
+  return _ArduinoCli(cli.path, offline.path, manifest);
 }
 
 class _ArduinoCli implements LocalBuilder {
-  _ArduinoCli(this.cli);
-  final String cli;
+  _ArduinoCli(this.cli, this.offline, this.manifest);
+  final String cli, offline;
+
+  /// The offline bundle's manifest.json ({arch, packs: {name: {file, version, boards}}}), or null.
+  final Map<String, dynamic>? manifest;
   final _ready = <String>{};
 
+  Map<String, dynamic> _pack(String name) => ((manifest?['packs'] as Map?)?[name] as Map?)?.cast<String, dynamic>() ?? const {};
+
+  /// A board's tools come with the app, or (a developer's build) the Uno's can be fetched.
   @override
-  bool canBuild(String board) => _boards.containsKey(board);
+  bool canBuild(String board) {
+    final b = _boards[board];
+    if (b == null) return false;
+    return manifest == null ? board == 'uno' : _pack(b.pack).isNotEmpty;
+  }
 
   static final _home = Platform.environment['HOME'] ?? '';
-  static final _data = '$_home/Library/Application Support/RoboCore';
+  static final _support = '$_home/Library/Application Support/RoboCore';
+  static final _data = '$_support/Arduino15';
+  static final _caches = '$_home/Library/Caches/RoboCore';
 
   /// Only what arduino-cli needs, with RoboCore's own folders, so an installed Arduino IDE is never touched.
   Map<String, String> get _env => {
@@ -41,40 +75,89 @@ class _ArduinoCli implements LocalBuilder {
         'TMPDIR': Directory.systemTemp.path,
         'PATH': '/usr/bin:/bin',
         'LANG': 'C.UTF-8',
-        'ARDUINO_DIRECTORIES_DATA': '$_data/Arduino15',
-        'ARDUINO_DIRECTORIES_DOWNLOADS': '$_data/Arduino15/staging',
-        'ARDUINO_DIRECTORIES_USER': '$_data/Arduino',
-        'ARDUINO_BUILD_CACHE_PATH': '$_home/Library/Caches/RoboCore/arduino',
+        'ARDUINO_DIRECTORIES_DATA': _data,
+        'ARDUINO_DIRECTORIES_DOWNLOADS': '$_data/staging',
+        'ARDUINO_DIRECTORIES_USER': '$_support/Arduino',
+        'ARDUINO_BUILD_CACHE_PATH': '$_caches/arduino',
       };
 
   Future<ProcessResult> _run(List<String> args, {String? cwd}) =>
       Process.run(cli, args, environment: _env, includeParentEnvironment: false, workingDirectory: cwd);
 
-  /// Runs arduino-cli and hands each line it prints to [onLog].
+  /// Runs arduino-cli and hands what it prints to [onLog]: download progress only at each tenth.
   Future<int> _stream(List<String> args, void Function(String line)? onLog) async {
     final p = await Process.start(cli, args, environment: _env, includeParentEnvironment: false);
+    final shown = <String, int>{};
     void lines(Stream<List<int>> s) => s.transform(utf8.decoder).transform(const LineSplitter()).listen((l) {
           final t = l.split('\r').last.trim();
-          if (t.isNotEmpty) onLog?.call(t);
+          if (t.isEmpty) return;
+          final m = RegExp(r'^(\S+)\s+[\d.]+ \w+ / [\d.]+ \w+\s+([\d.]+)%').firstMatch(t);
+          if (m != null) {
+            final tenth = double.parse(m[2]!) ~/ 10;
+            if ((shown[m[1]!] ?? -1) >= tenth) return;
+            shown[m[1]!] = tenth;
+          }
+          onLog?.call(t);
         });
     lines(p.stdout);
     lines(p.stderr);
     return p.exitCode;
   }
 
-  /// The board's platform, fetched the first time (the only step that needs the internet). An error, or null.
-  Future<String?> _ensure(String core, String name, String size, void Function(String line)? onLog) async {
-    if (_ready.contains(core)) return null;
-    final list = await _run(['core', 'list', '--format', 'json']);
-    if (list.exitCode == 0 && '${list.stdout}'.contains('"$core"')) {
-      _ready.add(core);
+  /// The board's tools: unpacked from the app the first time (no internet), or in a build without them, the Uno's
+  /// fetched once. An error, or null.
+  Future<String?> _ensure(({String fqbn, String pack, String core, String name, String chip, int bootloader, String flash}) b,
+      void Function(String line)? onLog) async {
+    if (_ready.contains(b.pack)) return null;
+    if (manifest != null) {
+      for (final name in ['base', b.pack]) {
+        final err = await _unpack(name, b.name, onLog);
+        if (err != null) return err;
+      }
+      _ready.add(b.pack);
       return null;
     }
-    onLog?.call('Getting the $name tools, once ($size on this Mac). After this, compiling for it needs no internet.');
-    if (await _stream(['core', 'update-index'], onLog) != 0 || await _stream(['core', 'install', core], onLog) != 0) {
-      return 'Could not get the $name tools. Check the internet connection, then try again.';
+    final list = await _run(['core', 'list', '--format', 'json']);
+    if (list.exitCode == 0 && '${list.stdout}'.contains('"${b.core}"')) {
+      _ready.add(b.pack);
+      return null;
     }
-    _ready.add(core);
+    onLog?.call('Getting the ${b.name} tools, once (about 240 MB on this Mac). After this, compiling for it needs no internet.');
+    if (await _stream(['core', 'update-index'], onLog) != 0 || await _stream(['core', 'install', b.core], onLog) != 0) {
+      return 'Could not get the ${b.name} tools. Check the internet connection, then try again.';
+    }
+    _ready.add(b.pack);
+    return null;
+  }
+
+  /// Unpacks an offline pack into Arduino15 unless that version is there already. A pack holds whole
+  /// `packages/<vendor>` folders, so an older version is removed first.
+  Future<String?> _unpack(String name, String board, void Function(String line)? onLog) async {
+    final pack = _pack(name);
+    final file = '$offline/${pack['file']}', version = '${pack['version']}';
+    final marker = File('$_data/.robocore-$name');
+    if (await marker.exists() && (await marker.readAsString()) == version) return null;
+    if (!await File(file).exists()) return 'The ${name == 'base' ? 'compiler' : board} tools are missing from RoboCore. Install RoboCore again.';
+    if (name != 'base') onLog?.call('Setting up the $board tools on this Mac, once. No internet needed: they came with RoboCore.');
+    await Directory(_data).create(recursive: true);
+    const owned = {'base': ['packages/builtin'], 'uno': ['packages/arduino'], 'esp32': ['packages/esp32']};
+    for (final d in owned[name] ?? const <String>[]) {
+      final old = Directory('$_data/$d');
+      if (await old.exists()) await old.delete(recursive: true);
+    }
+    final r = await Process.run('/usr/bin/tar', ['-xf', file, '-C', _data]);
+    if (r.exitCode != 0) return 'Could not set up the $board tools: ${'${r.stderr}'.trim()}';
+    await marker.writeAsString(version);
+    return null;
+  }
+
+  /// An Apple-silicon bundle can't run on an Intel Mac (an Intel one runs on Apple silicon, with Rosetta).
+  String? _wrongMac() {
+    final arch = manifest?['arch'];
+    if (arch == 'arm64' && Abi.current() == Abi.macosX64) {
+      return 'This RoboCore download is for Macs with Apple silicon, and this Mac has an Intel processor. '
+          'Install the Intel version of RoboCore to compile here.';
+    }
     return null;
   }
 
@@ -82,35 +165,51 @@ class _ArduinoCli implements LocalBuilder {
   Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog}) async {
     final b = _boards[board];
     if (b == null) return ServerBuild.failed('This Mac can’t build for $board yet.');
+    final wrong = _wrongMac();
+    if (wrong != null) return ServerBuild.failed(wrong);
     final started = DateTime.now();
     try {
-      final missing = await _ensure(b.core, b.name, b.size, onLog);
-      if (missing != null) return ServerBuild.failed(missing, retry: true);
+      final missing = await _ensure(b, onLog);
+      if (missing != null) return ServerBuild.failed(missing, retry: manifest == null);
     } catch (e) {
       return ServerBuild.failed('Could not run the compiler in RoboCore: $e');
     }
 
+    // The sketch and its build stay between builds (one folder per board and sketch), so a rebuild only compiles
+    // what changed: about 10 s less for an ESP32.
     final main = files.first.name;
     final name = main.replaceAll(RegExp(r'\.ino$'), '');
-    final work = await Directory.systemTemp.createTemp('rc-');
+    final work = Directory('$_caches/build/$board-$name');
     final sketch = Directory('${work.path}/$name');
     final build = Directory('${work.path}/build');
     try {
-      await sketch.create();
-      await build.create();
-      for (final f in files) {
-        await File('${sketch.path}/${f.name}').writeAsString(f.content);
+      await sketch.create(recursive: true);
+      await build.create(recursive: true);
+      final names = [for (final f in files) f.name];
+      await for (final e in sketch.list()) {
+        if (e is File && !names.contains(e.uri.pathSegments.last)) await e.delete(); // a tab deleted since last time
       }
+      for (final f in files) {
+        final file = File('${sketch.path}/${f.name}');
+        if (!await file.exists() || await file.readAsString() != f.content) await file.writeAsString(f.content);
+      }
+      final libraries = Directory('$offline/libraries');
       final r = await _run([
-        'compile', '--fqbn', b.fqbn, '--build-path', build.path, '--warnings', 'default', '--format', 'json', sketch.path,
+        'compile', '--fqbn', b.fqbn, '--build-path', build.path, '--warnings', 'default', '--format', 'json',
+        if (await libraries.exists()) ...['--libraries', libraries.path],
+        sketch.path,
       ], cwd: work.path);
       final result = parseCliJson('${r.stdout}');
       if (result == null) {
         final said = '${r.stderr}${r.stdout}'.trim();
         return ServerBuild.failed('The compiler gave no result${said.isEmpty ? '' : ': ${said.split('\n').last}'}');
       }
-      final names = [for (final f in files) f.name];
-      String clean(Object? t) => '${t ?? ''}'.replaceAll('${sketch.path}/', '').replaceAll(sketch.path, name).replaceAll(work.path, '');
+      String clean(Object? t) => '${t ?? ''}'
+          .replaceAll('${sketch.path}/', '')
+          .replaceAll(sketch.path, name)
+          .replaceAll(work.path, '')
+          .replaceAll(_data, '<arduino>')
+          .replaceAll(offline, '<RoboCore>');
       final out = clean(result['compiler_out']), err = clean(result['compiler_err']);
       var problems = mergeProblems(
         parseStructured((result['builder_result'] as Map?)?['diagnostics'], sketch.path, names),
@@ -119,28 +218,52 @@ class _ArduinoCli implements LocalBuilder {
       final log = '$out${err.isEmpty ? '' : '\n$err'}'.trim();
       final ms = DateTime.now().difference(started).inMilliseconds;
       if (result['success'] != true) {
+        final error = clean(result['error'] ?? 'Compilation failed.');
+        if (error.contains('bad CPU type')) {
+          return ServerBuild.failed('The ${b.name} compiler is made for Intel Macs, and this Mac needs Apple’s Rosetta to '
+              'run it. Connect to the internet once, then open Terminal and type: softwareupdate --install-rosetta');
+        }
         if (!problems.any((p) => p['severity'] == 'error')) {
           problems = [
-            {'severity': 'error', 'file': main, 'line': 1, 'message': clean(result['error'] ?? 'Compilation failed.')},
+            {'severity': 'error', 'file': main, 'line': 1, 'message': error},
             ...problems,
           ];
         }
         return ServerBuild.fromJson({'ok': false, 'problems': problems, 'log': log, 'elapsedMs': ms}, mainFile: main);
       }
-      final hex = await File('${build.path}/$main.hex').readAsString();
       return ServerBuild.fromJson({
         'ok': true,
         'problems': problems,
         'sizes': parseSizes(result, out),
         'log': log,
-        'image': {'format': 'hex', 'data': hex},
+        'image': b.chip.isEmpty ? {'format': 'hex', 'data': await File('${build.path}/$main.hex').readAsString()} : await _esp32Image(b, build.path, main),
         'elapsedMs': ms,
       }, mainFile: main);
     } catch (e) {
       return ServerBuild.failed('Compiling on this Mac failed: $e');
-    } finally {
-      unawaited(work.delete(recursive: true).then<Object?>((_) => null, onError: (Object _) => null));
     }
+  }
+
+  /// The four parts of an ESP32 program and where each goes in flash (the core's merge-bin layout).
+  Future<Map<String, dynamic>> _esp32Image(
+      ({String fqbn, String pack, String core, String name, String chip, int bootloader, String flash}) b, String build, String main) async {
+    final cores = Directory('$_data/packages/esp32/hardware/esp32');
+    final version = (await cores.list().map((e) => e.path).toList()..sort()).last;
+    final parts = [
+      ('bootloader', b.bootloader, '$build/$main.bootloader.bin'),
+      ('partitions', 0x8000, '$build/$main.partitions.bin'),
+      ('boot_app0', 0xe000, '$version/tools/partitions/boot_app0.bin'),
+      ('app', 0x10000, '$build/$main.bin'),
+    ];
+    return {
+      'format': 'esp32',
+      'chip': b.chip,
+      'flashSize': b.flash,
+      'parts': [
+        for (final (name, offset, path) in parts)
+          await File(path).readAsBytes().then((d) => {'name': name, 'offset': offset, 'size': d.length, 'data': base64Encode(d)}),
+      ],
+    };
   }
 }
 
