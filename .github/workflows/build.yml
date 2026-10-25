@@ -3,6 +3,8 @@ name: Build
 on:
   push:
     branches: [main]
+    # A version tag (v1.0.0) also publishes a GitHub Release with the Windows installer (the windows job).
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -144,6 +146,8 @@ jobs:
     name: Windows
     needs: check
     runs-on: windows-latest
+    permissions:
+      contents: write # to publish the GitHub Release on a version tag
     defaults:
       run:
         shell: bash
@@ -155,10 +159,30 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter build windows --release
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          ./tools/package_windows.ps1 -NoBuild
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: robocore-ide-windows
           path: build/windows/x64/runner/Release/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: robocore-ide-windows-installer
+          path: build/windows/installer/*.exe
+      - name: Publish the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" build/windows/installer/*.exe --clobber
+          else
+            gh release create "$tag" build/windows/installer/*.exe --title "RoboCore $tag" --generate-notes
+          fi
 
   linux:
     name: Linux

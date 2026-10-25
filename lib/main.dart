@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'ui/app_scope.dart';
-import 'ui/editor/web_editors.dart' show EditorFramesObserver;
+import 'ui/editor/web_editors.dart' show EditorFramesObserver, initWebEditors;
 import 'ui/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final state = AppState();
   await state.load();
+  await initWebEditors();
   runApp(RoboCoreApp(state: state));
 }
 

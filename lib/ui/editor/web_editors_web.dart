@@ -9,6 +9,8 @@ import 'package:flutter/widgets.dart';
 
 const kWebEditors = true;
 
+Future<void> initWebEditors() async {}
+
 extension type _Frame._(JSObject _) implements JSObject {
   external set src(String value);
   external bool get isConnected;

@@ -102,6 +102,25 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
+# The Blockly and Monaco editors (the web app's page, shown in a WebView2: lib/ui/editor/web_editors_native.dart).
+set(EDITORS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../web")
+set(INSTALL_EDITORS_DIR "${INSTALL_BUNDLE_DATA_DIR}/editors")
+install(CODE "
+  file(REMOVE_RECURSE \"${INSTALL_EDITORS_DIR}\")
+  " COMPONENT Runtime)
+install(FILES
+  "${EDITORS_SOURCE_DIR}/robocore_editors.html"
+  "${EDITORS_SOURCE_DIR}/robocore_editors.js"
+  "${EDITORS_SOURCE_DIR}/robocore_editors_native.js"
+  DESTINATION "${INSTALL_EDITORS_DIR}" COMPONENT Runtime)
+install(DIRECTORY
+  "${EDITORS_SOURCE_DIR}/vendor/blockly"
+  "${EDITORS_SOURCE_DIR}/vendor/monaco"
+  DESTINATION "${INSTALL_EDITORS_DIR}/vendor" COMPONENT Runtime)
+# The page loads its fonts from assets/assets/fonts, where the web build puts them.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../assets/fonts"
+  DESTINATION "${INSTALL_EDITORS_DIR}/assets/assets" COMPONENT Runtime)
+
 # Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release

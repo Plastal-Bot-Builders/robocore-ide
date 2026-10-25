@@ -3,6 +3,8 @@ import 'package:flutter/widgets.dart';
 
 const kWebEditors = false;
 
+Future<void> initWebEditors() async {}
+
 void setEditorFramesInteractive(bool on) {}
 
 void coverEditorFrames(bool on) {}
