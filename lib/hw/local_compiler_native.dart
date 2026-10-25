@@ -114,6 +114,10 @@ class _ArduinoCli implements LocalBuilder {
         final err = await _unpack(name, b.name, onLog);
         if (err != null) return err;
       }
+      // Without a library list arduino-cli tries to download one at every build, which fails or stalls offline. The
+      // libraries come with RoboCore, so an empty list will do.
+      final index = File('$_data/library_index.json');
+      if (!await index.exists()) await index.writeAsString('{"libraries":[]}');
       _ready.add(b.pack);
       return null;
     }
@@ -130,11 +134,13 @@ class _ArduinoCli implements LocalBuilder {
     return null;
   }
 
-  /// Unpacks an offline pack into Arduino15 unless that version is there already. A pack holds whole
-  /// `packages/<vendor>` folders, so an older version is removed first.
+  /// Unpacks an offline pack into Arduino15 unless that version, for this kind of Mac, is there already. A pack
+  /// holds whole `packages/<vendor>` folders, so an older version is removed first.
   Future<String?> _unpack(String name, String board, void Function(String line)? onLog) async {
     final pack = _pack(name);
-    final file = '$offline/${pack['file']}', version = '${pack['version']}';
+    final file = '$offline/${pack['file']}';
+    // The kind of Mac too: tools unpacked by the other download (Apple silicon or Intel) are replaced.
+    final version = '${pack['version']} ${manifest?['arch']}';
     final marker = File('$_data/.robocore-$name');
     if (await marker.exists() && (await marker.readAsString()) == version) return null;
     if (!await File(file).exists()) return 'The ${name == 'base' ? 'compiler' : board} tools are missing from RoboCore. Install RoboCore again.';
