@@ -8,6 +8,7 @@ import '../app_scope.dart';
 import '../cog/cog_panel.dart' show CogMark;
 import '../dialogs.dart' show DialogFrame, RadioDot;
 import '../widgets/common.dart';
+import '../widgets/ui_scale.dart';
 import 'home_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -85,6 +86,20 @@ class SettingsPage extends StatelessWidget {
             ? Column(children: [themes[0], const SizedBox(height: 12), themes[1]])
             : Row(children: [Expanded(child: themes[0]), const SizedBox(width: 12), Expanded(child: themes[1])]),
       ),
+      // The web app has the browser's own zoom (⌘ + and ⌘ −) on top of this.
+      row(
+          'Display size',
+          RcSelect<double>(
+            value: st.uiScale,
+            width: 150,
+            label: 'Display size',
+            items: [
+              (0.0, 'Auto (${(autoUiScale(context) * 100).round()} %)'),
+              for (final v in kUiScales) (v, '${(v * 100).round()} %'),
+            ],
+            onChanged: (v) => s.updateSettings((x) => x.uiScale = v),
+          ),
+          hint: 'How big everything is. Auto fits the screen: bigger on a large display.'),
     ]);
     final editor = card('Editor', [
       row(

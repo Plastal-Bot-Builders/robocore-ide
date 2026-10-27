@@ -28,6 +28,7 @@ import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/menu.dart';
 import 'widgets/popover.dart';
+import 'widgets/ui_scale.dart';
 
 const kPhone = 760.0;
 
@@ -142,6 +143,9 @@ class _ShellState extends State<Shell> {
         s.setMode('code');
       case 'shortcuts':
         showShortcutsDialog(context);
+      // In the editor they zoom the blocks or the code (EditorPage); anywhere else, the whole app.
+      case 'zoomIn' || 'zoomOut' || 'zoomReset' when s.view != Screen.editor || p == null:
+        s.updateSettings((st) => st.uiScale = id == 'zoomReset' ? 0 : stepUiScale(UiScale.of(context), id == 'zoomIn' ? 1 : -1));
       default:
         editorMenuCommand?.call(id);
     }
@@ -158,7 +162,7 @@ class _ShellState extends State<Shell> {
       if (s.folder != null) 'reveal',
       if (p != null) ...['rename', 'duplicate', 'projectSettings'],
       if (editor) ...['save', 'verify', 'upload', 'cog', 'console', 'modeBlocks', 'modeCode', 'undo', 'redo'],
-      if (editor) ...['zoomIn', 'zoomOut', 'zoomReset'],
+      'zoomIn', 'zoomOut', 'zoomReset',
       if (blocks) 'cppPane',
       if (editor && !blocks) ...['comment', 'indent', 'outdent', 'find', 'goToLine'],
       if (s.canStop) 'stop',

@@ -11,6 +11,7 @@ import 'ui/app_scope.dart';
 import 'ui/editor/web_editors.dart' show EditorFramesObserver, initWebEditors;
 import 'ui/mac_app.dart';
 import 'ui/shell.dart';
+import 'ui/widgets/ui_scale.dart';
 import 'ui/splash.dart';
 import 'ui/widgets/logo_intro.dart';
 
@@ -171,6 +172,8 @@ class RoboCoreApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: state.settings.theme == 'navy' ? _navyTheme : _paperTheme,
             navigatorObservers: [_framesObserver],
+            // The display size (Settings → Appearance): dialogs, menus and tooltips grow with the rest.
+            builder: (context, child) => UiScale(setting: state.settings.uiScale, child: child!),
             // The launch animation covers the start-up, so the app opens straight on Home (or Welcome).
             home: const Shell(),
           );

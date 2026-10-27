@@ -153,6 +153,9 @@ Project projectFrom(Example ex, {String? name, String board = 'v2', String? mode
 
 class Settings {
   String theme;
+
+  /// The size of the whole interface (lib/ui/widgets/ui_scale.dart): 0 = Auto (from the screen), or 0.9 to 1.5.
+  double uiScale;
   int fontSize;
   bool autocomplete, wrap, autosave;
   String lang;
@@ -196,6 +199,7 @@ class Settings {
 
   Settings({
     this.theme = 'paper',
+    this.uiScale = 0,
     this.fontSize = 13,
     this.autocomplete = true,
     this.wrap = false,
@@ -215,6 +219,7 @@ class Settings {
   });
   Map<String, dynamic> toJson() => {
         'theme': theme,
+        'uiScale': uiScale,
         'fontSize': fontSize,
         'autocomplete': autocomplete,
         'wrap': wrap,
@@ -234,6 +239,7 @@ class Settings {
       };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
         theme: j['theme'] as String? ?? 'paper',
+        uiScale: ((j['uiScale'] as num?)?.toDouble() ?? 0).clamp(0, 2),
         fontSize: (j['fontSize'] as num?)?.toInt() ?? 13,
         autocomplete: j['autocomplete'] as bool? ?? true,
         wrap: j['wrap'] as bool? ?? false,

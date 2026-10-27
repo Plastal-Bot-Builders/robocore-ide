@@ -167,6 +167,8 @@
     }
     Blockly.blockRendering.register('robocore', RcRenderer);
     const css = document.createElement('style');
+    // The toolbox grows with the desktop apps' display size (--rc-zoom, set by setZoom).
+    const z = (px) => `calc(${px}px * var(--rc-zoom, 1))`;
     css.textContent = [
       '.robocore-renderer .blocklyText { fill: ' + CREAM + '; }',
       '.robocore-renderer .rcNavyText > .blocklyText, .robocore-renderer .rcNavyText > g > .blocklyText { fill: ' + INK + '; }',
@@ -202,16 +204,18 @@
       // On the yellow Events blocks the dropdown chevron is navy, like their labels.
       '.robocore-renderer .rcNavyText > .blocklyDropdownField > image { filter: brightness(0.15); }',
       // The toolbox (the design's Block Category rows): 160 px wide, 34 px rows, 22 px colour chips.
-      '.blocklyToolbox { width: 160px; box-sizing: border-box; padding: 12px 8px !important; border-right: 1px solid rgba(27,42,65,.10); }',
-      '.blocklyToolboxCategoryContainer { margin: 0 0 2px; }',
-      '.blocklyToolboxCategory { position: relative; height: 34px; line-height: 34px; margin: 0; padding: 0 8px 0 10px !important;' +
+      '.blocklyToolbox { width: ' + z(160) + '; box-sizing: border-box; padding: ' + z(12) + ' ' + z(8) + ' !important;' +
+        ' border-right: 1px solid rgba(27,42,65,.10); }',
+      '.blocklyToolboxCategoryContainer { margin: 0 0 ' + z(2) + '; }',
+      '.blocklyToolboxCategory { position: relative; height: ' + z(34) + '; line-height: ' + z(34) + '; margin: 0;' +
+        ' padding: 0 ' + z(8) + ' 0 ' + z(10) + ' !important;' +
         ' border-radius: 6px; border-left: none !important; cursor: pointer; }',
-      '.blocklyTreeRowContentContainer { display: flex; align-items: center; gap: 8px; height: 34px; }',
-      '.blocklyToolboxCategoryLabel { font: 500 13px/16px Barlow, sans-serif; color: #5B6573; white-space: nowrap; }',
+      '.blocklyTreeRowContentContainer { display: flex; align-items: center; gap: ' + z(8) + '; height: ' + z(34) + '; }',
+      '.blocklyToolboxCategoryLabel { font: 500 ' + z(13) + '/' + z(16) + ' Barlow, sans-serif; color: #5B6573; white-space: nowrap; }',
       '.blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(27,42,65,.05); }',
       '.blocklyToolboxSelected { background: #FCE9BF !important; }',
       '.blocklyToolboxSelected .blocklyToolboxCategoryLabel { color: ' + INK + ' !important; font-weight: 600; }',
-      '.blocklyToolboxSelected::before { content: ""; position: absolute; left: 0; top: 8px; width: 3px; height: 18px;' +
+      '.blocklyToolboxSelected::before { content: ""; position: absolute; left: 0; top: ' + z(8) + '; width: 3px; height: ' + z(18) + ';' +
         ' border-radius: 0 2px 2px 0; background: ' + YELLOW + '; }',
       '.robocore-navy-theme .blocklyToolboxCategoryLabel { color: rgba(247,241,227,.78); }',
       '.robocore-navy-theme .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(247,241,227,.06); }',
@@ -261,8 +265,8 @@
         ' .blocklyKeyboardNavigation.robocore-renderer .rcInkBlock > .blocklyPath.blocklyActiveFocus { stroke: ' + YELLOW + '; }',
       '.robocore-renderer .blocklyHighlightedConnectionPath { filter: drop-shadow(0 0 1px ' + INK + '); }',
       // A round chip in the category's colour with its icon (the design's toolbox).
-      '.rcCatIcon { display: inline-block; flex: none; width: 22px; height: 22px; border-radius: 50%;' +
-        ' background-repeat: no-repeat; background-position: center; background-size: 14px 14px; }',
+      '.rcCatIcon { display: inline-block; flex: none; width: ' + z(22) + '; height: ' + z(22) + '; border-radius: 50%;' +
+        ' background-repeat: no-repeat; background-position: center; background-size: ' + z(14) + ' ' + z(14) + '; }',
       ...CATS.map(([k, , c, icon]) => `.rcCat_${k} { background-color: ${c}; background-image: url("${svgUri(ICONS[icon], k === 'events' ? INK : CREAM, 24, 2.6)}"); }`),
       // On the navy toolbox the navy Pins & Serial chip takes the dark theme's lighter blue.
       '.robocore-navy-theme .rcCat_pins { background-color: ' + PINS_NAVY + '; }',
@@ -1173,9 +1177,21 @@
 
   let ws = null, onBlocksChange = null, onZoom = null, onSelect = null, onHistory = null, loading = false, timer = 0, lastScale = 0, lastSelection = '', lastHistory = '';
   const START_SCALE = 1;
+  // The desktop apps' display size (Settings → Appearance; their WebViews are not scaled with the rest of the app, so
+  // the page grows its own content: the blocks, the toolbox and the code). The web app's frames scale with the page.
+  let ZOOM = 1;
+  function setZoom(value) {
+    const next = Number(value) > 0 ? Number(value) : 1;
+    if (next === ZOOM) return;
+    const before = ZOOM;
+    ZOOM = next;
+    document.documentElement.style.setProperty('--rc-zoom', String(ZOOM));
+    if (ws) { ws.setScale(ws.scale * ZOOM / before); Blockly.svgResize(ws); }
+  }
 
+  // Relative to the display size, so 1 is still "the starting size".
   function reportZoom() {
-    if (ws && onZoom && ws.scale !== lastScale) { lastScale = ws.scale; onZoom(ws.scale); }
+    if (ws && onZoom && ws.scale !== lastScale) { lastScale = ws.scale; onZoom(ws.scale / ZOOM); }
   }
 
   // Whether Undo and Redo have anything to do, so the app can grey its buttons out (BK-09).
@@ -1204,7 +1220,7 @@
   }
 
   function zoomBy(dir) { if (ws) ws.zoomCenter(dir); }
-  function resetZoom() { if (ws) { ws.setScale(START_SCALE); ws.scrollCenter(); } }
+  function resetZoom() { if (ws) { ws.setScale(START_SCALE * ZOOM); ws.scrollCenter(); } }
 
   // Blocks a student placed: not on start / forever, or the number fields inside other blocks.
   const countBlocks = (w) => w.getAllBlocks(false).filter((b) => !b.isShadow() && b.type !== 'rc_on_start' && b.type !== 'rc_forever').length;
@@ -1235,6 +1251,7 @@
     if (o.analogPins) CTX.analogPins = o.analogPins;
     if (o.userPin != null) CTX.userPin = o.userPin;
     if (o.led != null) CTX.led = o.led;
+    if (o.zoom != null) setZoom(o.zoom);
   }
 
   function loadWorkspace(json, tidy) {
@@ -1278,7 +1295,7 @@
         media: 'vendor/blockly/media/',
         grid: { spacing: 24, length: 1, colour: 'rgba(27,42,65,.4)', snap: true },
         // Ctrl/⌘ + wheel and trackpad pinch zoom; the plain wheel scrolls (move.wheel).
-        zoom: { controls: true, wheel: true, pinch: true, startScale: START_SCALE, minScale: 0.4, maxScale: 2.5, scaleSpeed: 1.15 },
+        zoom: { controls: true, wheel: true, pinch: true, startScale: START_SCALE * ZOOM, minScale: 0.4, maxScale: 3.75, scaleSpeed: 1.15 },
         move: { scrollbars: true, drag: true, wheel: true },
         trashcan: true,
         maxTrashcanContents: 32,
@@ -1486,9 +1503,15 @@
     };
   }
 
+  let codeFont = 13;
   function codeOptions(o) {
     const opts = {};
-    if (o.fontSize) opts.fontSize = o.fontSize;
+    if (o.fontSize) codeFont = o.fontSize;
+    if (o.zoom != null) setZoom(o.zoom);
+    if (o.fontSize || o.zoom != null) {
+      opts.fontSize = codeFont * ZOOM;
+      opts.lineHeight = Math.round(20 * ZOOM);
+    }
     if (o.wrap != null) opts.wordWrap = o.wrap ? 'on' : 'off';
     if (o.autocomplete != null) opts.quickSuggestions = o.autocomplete;
     if (o.words) words = o.words;

@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../hw/page_server.dart';
+import '../widgets/ui_scale.dart';
 import 'web_editors_windows.dart';
 
 var _windows = false;
@@ -23,7 +24,12 @@ Future<void> initWebEditors() async {
 
 // On macOS, Flutter takes the clicks wherever it paints over a WebView (menus, dialogs, the Cog panel) and
 // a drag that starts in Flutter stays there, so the editors need none of the web app's iframe guards.
-void setEditorFramesInteractive(bool on) {}
+
+/// True while a split handle is held (SplitHandle calls this with false on press, true on release): the editors
+/// then keep a steady size (_Steady).
+final _resizing = ValueNotifier(false);
+
+void setEditorFramesInteractive(bool on) => _resizing.value = !on;
 
 void coverEditorFrames(bool on) {}
 
@@ -77,7 +83,7 @@ class _Page {
   /// The WebView, under the page's background until the editor is up (while it loads, a WebView is
   /// blank, and black in dark mode).
   Widget view({required bool ready, required Object? theme}) => Stack(fit: StackFit.expand, children: [
-        _webView,
+        _Steady(child: _webView),
         if (!ready) ColoredBox(color: theme == 'navy' ? const Color(0xFF17253A) : const Color(0xFFFFFCF5)),
       ]);
 
@@ -117,6 +123,49 @@ class _Page {
     }));
   }
 }
+
+/// Where the WebView sits in the app (the same widgets throughout, so the page is never rebuilt):
+/// - Unscaled by the display size (UiScale): a scaled WebView would be blurry, so it is drawn at the screen's own
+///   size and the page grows its content instead (the zoom option).
+/// - Steady while a split handle is held: a WebView that grows shows black where WebKit hasn't drawn yet, a strip
+///   that widens the faster the handle is dragged. So meanwhile it is as big as the window, clipped to its box, and a
+///   growing pane uncovers page that is already drawn; on release it takes its box's size again.
+class _Steady extends StatelessWidget {
+  const _Steady({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final window = MediaQuery.sizeOf(context);
+    final s = UiScale.of(context);
+    return ValueListenableBuilder<bool>(
+      valueListenable: _resizing,
+      child: child,
+      builder: (context, resizing, child) => LayoutBuilder(builder: (context, box) {
+        final w = resizing && window.width > box.maxWidth ? window.width : box.maxWidth;
+        final h = resizing && window.height > box.maxHeight ? window.height : box.maxHeight;
+        return ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: w,
+            maxWidth: w,
+            minHeight: h,
+            maxHeight: h,
+            child: Transform.scale(
+              scale: 1 / s,
+              alignment: Alignment.topLeft,
+              child: OverflowBox(
+                  alignment: Alignment.topLeft, minWidth: w * s, maxWidth: w * s, minHeight: h * s, maxHeight: h * s, child: child),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+/// The options the page gets: the editor's own, and the display size it draws its content at (see _Steady).
+String _withZoom(BuildContext context, Map<String, Object?> options) => jsonEncode({...options, 'zoom': UiScale.of(context)});
 
 /// Google Blockly with the RoboCore blocks. [onChange] gets the workspace (Blockly JSON), the C++
 /// and the number of blocks after every change.
@@ -158,8 +207,21 @@ class BlocklyEditorState extends State<BlocklyEditor> {
   var _ready = false; // mounted in the page; calls before that are dropped, as in the web app
   String? _json; // the latest workspace, so a reloaded page comes back as it was
   var _count = 0;
-  late String _options = jsonEncode(widget.options);
+  late String _options = _withZoom(context, widget.options);
   late final _page = _Page('blocks', _loaded, _event);
+
+  void _sendOptions() {
+    final o = _withZoom(context, widget.options);
+    if (o == _options) return;
+    _options = o;
+    _call('setOptions', [o]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sendOptions(); // the display size
+  }
 
   void _setReady(bool on) {
     if (mounted && on != _ready) setState(() => _ready = on);
@@ -194,11 +256,7 @@ class BlocklyEditorState extends State<BlocklyEditor> {
   @override
   void didUpdateWidget(BlocklyEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final o = jsonEncode(widget.options);
-    if (o != _options) {
-      _options = o;
-      _call('setOptions', [o]);
-    }
+    _sendOptions();
     if (widget.projectId != oldWidget.projectId) {
       _json = null;
       _call('load', [widget.json, widget.tidy]);
@@ -254,8 +312,21 @@ class MonacoEditorState extends State<MonacoEditor> {
   var _ready = false;
   String? _key, _text, _problems;
   bool? _readOnly;
-  late String _options = jsonEncode(widget.options);
+  late String _options = _withZoom(context, widget.options);
   late final _page = _Page('code', _loaded, _event);
+
+  void _sendOptions() {
+    final o = _withZoom(context, widget.options);
+    if (o == _options) return;
+    _options = o;
+    _call('setOptions', [o]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sendOptions(); // the display size
+  }
 
   void _setReady(bool on) {
     if (mounted && on != _ready) setState(() => _ready = on);
@@ -307,11 +378,7 @@ class MonacoEditorState extends State<MonacoEditor> {
   @override
   void didUpdateWidget(MonacoEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final o = jsonEncode(widget.options);
-    if (o != _options) {
-      _options = o;
-      _call('setOptions', [o]);
-    }
+    _sendOptions();
     _sync();
   }
 
