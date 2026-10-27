@@ -223,10 +223,14 @@ class ArduinoCli {
 
   List<String> get _common => ['--additional-urls', kEsp32Index];
 
-  Future<ProcessResult> run(List<String> args, {String? workingDirectory}) =>
-      Process.run(exe, [...args, ..._common], workingDirectory: workingDirectory, stdoutEncoding: utf8, stderrEncoding: utf8);
+  /// Added to this computer's environment. Otherwise arduino-cli asks downloads.arduino.cc once a day whether there is
+  /// a newer arduino-cli (the Mac app turns it off the same way, in local_compiler_native.dart).
+  static const _env = {'ARDUINO_UPDATER_ENABLE_NOTIFICATION': 'false'};
 
-  Future<Process> start(List<String> args) => Process.start(exe, [...args, ..._common]);
+  Future<ProcessResult> run(List<String> args, {String? workingDirectory}) => Process.run(exe, [...args, ..._common],
+      workingDirectory: workingDirectory, environment: _env, stdoutEncoding: utf8, stderrEncoding: utf8);
+
+  Future<Process> start(List<String> args) => Process.start(exe, [...args, ..._common], environment: _env);
 
   /// Runs arduino-cli, passing each output line to [log]. Throws [CliError] with [failure] when it fails.
   Future<void> stream(List<String> args, LogFn log, {String? failure}) async {
