@@ -130,6 +130,8 @@ class _Page {
 /// - Steady while a split handle is held: a WebView that grows shows black where WebKit hasn't drawn yet, a strip
 ///   that widens the faster the handle is dragged. So meanwhile it is as big as the window, clipped to its box, and a
 ///   growing pane uncovers page that is already drawn; on release it takes its box's size again.
+/// - A point bigger than its box, rounded up: WebKit leaves a pane's last fraction of a point unpainted, black in
+///   dark mode, which showed as a dark line along the bottom of the editors. The extra is clipped away.
 class _Steady extends StatelessWidget {
   const _Steady({required this.child});
   final Widget child;
@@ -144,6 +146,7 @@ class _Steady extends StatelessWidget {
       builder: (context, resizing, child) => LayoutBuilder(builder: (context, box) {
         final w = resizing && window.width > box.maxWidth ? window.width : box.maxWidth;
         final h = resizing && window.height > box.maxHeight ? window.height : box.maxHeight;
+        final fw = (w * s).ceilToDouble() + 1, fh = (h * s).ceilToDouble() + 1; // the WebView, in its own points
         return ClipRect(
           child: OverflowBox(
             alignment: Alignment.topLeft,
@@ -154,8 +157,7 @@ class _Steady extends StatelessWidget {
             child: Transform.scale(
               scale: 1 / s,
               alignment: Alignment.topLeft,
-              child: OverflowBox(
-                  alignment: Alignment.topLeft, minWidth: w * s, maxWidth: w * s, minHeight: h * s, maxHeight: h * s, child: child),
+              child: OverflowBox(alignment: Alignment.topLeft, minWidth: fw, maxWidth: fw, minHeight: fh, maxHeight: fh, child: child),
             ),
           ),
         );
