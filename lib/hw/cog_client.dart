@@ -64,12 +64,14 @@ class CogClient {
     return 'Cog answered with HTTP $status.';
   }
 
-  http.Request _post(String base, String path, Map<String, Object?> body) => http.Request('POST', Uri.parse('$base/cog/$path'))
+  /// [key]: the school key the server asks for (COG_KEYS), sent in X-Cog-Key.
+  http.Request _post(String base, String path, Map<String, Object?> body, String key) => http.Request('POST', Uri.parse('$base/cog/$path'))
     ..headers['Content-Type'] = 'application/json'
+    ..headers.addAll({if (key.isNotEmpty) 'X-Cog-Key': key})
     ..body = jsonEncode(body);
 
   /// Streams Cog's reply. Always ends with a [CogDone] or a [CogProblem].
-  Stream<CogEvent> chat(String server, Map<String, Object?> body) async* {
+  Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = ''}) async* {
     final base = normalizeServerUrl(server);
     if (base.isEmpty) {
       yield const CogProblem(kCogNoServer, offline: true);
@@ -77,7 +79,7 @@ class CogClient {
     }
     http.StreamedResponse res;
     try {
-      res = await _http.send(_post(base, 'chat', body)).timeout(const Duration(seconds: 90));
+      res = await _http.send(_post(base, 'chat', body, key)).timeout(const Duration(seconds: 90));
     } catch (_) {
       yield const CogProblem(kCogOffline, offline: true);
       return;
@@ -113,13 +115,13 @@ class CogClient {
     if (!finished) yield const CogProblem('Cog stopped before finishing. Try again.');
   }
 
-  Future<Map<String, dynamic>> _json(String server, String path, Map<String, Object?> body) async {
+  Future<Map<String, dynamic>> _json(String server, String path, Map<String, Object?> body, String key) async {
     final base = normalizeServerUrl(server);
     if (base.isEmpty) throw const CogFailure(kCogNoServer, offline: true);
     http.StreamedResponse res;
     String text;
     try {
-      res = await _http.send(_post(base, path, body)).timeout(const Duration(seconds: 120));
+      res = await _http.send(_post(base, path, body, key)).timeout(const Duration(seconds: 120));
       text = await res.stream.bytesToString();
     } catch (_) {
       throw const CogFailure(kCogOffline, offline: true);
@@ -128,8 +130,9 @@ class CogClient {
     return (jsonDecode(text) as Map).cast<String, dynamic>();
   }
 
-  /// Whether the server has Cog set up: (ready, message). ready is null when the server can't be reached.
-  Future<(bool?, String)> status(String server) async {
+  /// Whether the server has Cog set up and takes [key]: (ready, message). ready is null when the server can't be
+  /// reached.
+  Future<(bool?, String)> status(String server, {String key = ''}) async {
     final base = normalizeServerUrl(server);
     if (base.isEmpty) return (null, kCogNoServer);
     try {
@@ -138,19 +141,23 @@ class CogClient {
       final cog = j is Map ? j['cog'] : null;
       if (cog is! Map) return (false, 'This server has no Cog yet. Update the RoboCore server.');
       if (cog['ready'] != true) return (false, 'Cog is not set up on this server yet: it needs an Anthropic API key (ANTHROPIC_API_KEY).');
+      if (cog['keys'] == true) {
+        final k = await _http.get(Uri.parse('$base/cog/key'), headers: {if (key.isNotEmpty) 'X-Cog-Key': key}).timeout(const Duration(seconds: 30));
+        if (k.statusCode != 200) return (false, _error(utf8.decode(k.bodyBytes), k.statusCode));
+      }
       return (true, 'Answers come from ${cog['model']} through this server.');
     } catch (_) {
       return (null, kCogOffline);
     }
   }
 
-  Future<CogFix> fix(String server, Map<String, Object?> body) async {
-    final j = await _json(server, 'fix', body);
+  Future<CogFix> fix(String server, Map<String, Object?> body, {String key = ''}) async {
+    final j = await _json(server, 'fix', body, key);
     return CogFix(explanation: '${j['explanation']}', file: '${j['file']}', newContent: '${j['newContent']}');
   }
 
-  Future<CogCheck> check(String server, Map<String, Object?> body) async {
-    final j = await _json(server, 'check', body);
+  Future<CogCheck> check(String server, Map<String, Object?> body, {String key = ''}) async {
+    final j = await _json(server, 'check', body, key);
     return CogCheck(
       question: '${j['question']}',
       options: [for (final o in j['options'] as List) '$o'],

@@ -19,5 +19,9 @@ services:
       # Cog: paste the Anthropic API key in Render's dashboard when it asks (it is never stored in this repo).
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Cog answers only requests with one of these school keys (comma-separated), so nobody else spends the credit.
+      # Make one per school, and give it to the teacher, who types it in Settings → Cog.
+      - key: COG_KEYS
+        sync: false
       - key: COG_MODEL
         value: claude-opus-5-5

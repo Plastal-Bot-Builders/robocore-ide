@@ -308,6 +308,7 @@ class RcInput extends StatelessWidget {
     this.autofocus = false,
     this.error = false,
     this.trailing,
+    this.obscure = false,
   });
   final TextEditingController? controller;
   final String? hint, icon;
@@ -315,6 +316,9 @@ class RcInput extends StatelessWidget {
   final ValueChanged<String>? onChanged, onSubmitted;
   final FocusNode? focusNode;
   final bool autofocus, error;
+
+  /// Dots instead of the text (a key or PIN).
+  final bool obscure;
 
   /// A button inside the field, on the right (Cog's send).
   final Widget? trailing;
@@ -333,6 +337,7 @@ class RcInput extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         autofocus: autofocus,
+        obscureText: obscure,
         onChanged: onChanged,
         onSubmitted: onSubmitted,
         cursorColor: c.ink,

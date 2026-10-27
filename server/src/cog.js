@@ -5,8 +5,12 @@
 //   POST /cog/fix    {explanation, file, newContent}: the smallest change that fixes the problem
 //   POST /cog/check  {question, options, answer, explanation, concept}: one question after a fix
 //
-// Needs ANTHROPIC_API_KEY. COG_MODEL picks the model (default claude-opus-5-5); COG_EFFORT and
-// COG_FIX_EFFORT set how hard it thinks for chat / for fixes (low, medium, high).
+// Needs ANTHROPIC_API_KEY, and COG_KEYS: the schools' keys, one of which each request carries in X-Cog-Key, so nobody
+// else can spend the API credit (COG_OPEN=1 instead lets anyone in, for a server on your own computer). COG_MODEL picks
+// the model (default claude-opus-5-5); COG_EFFORT and COG_FIX_EFFORT set how hard it thinks for chat / for fixes (low,
+// medium, high).
+//   GET /cog/key     200 when the X-Cog-Key header is a school key (the IDE's Test Cog)
+import { createHash, timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { RequestError } from './compile.js';
 
@@ -27,6 +31,8 @@ export function cogConfig(env = process.env) {
     fixEffort: env.COG_FIX_EFFORT || 'medium',
     ratePerMin: Number(env.COG_RATE_PER_MIN || 12),
     baseURL: env.ANTHROPIC_BASE_URL || undefined,
+    keys: String(env.COG_KEYS || '').split(',').map((k) => k.trim()).filter(Boolean),
+    open: env.COG_OPEN === '1',
   };
 }
 
@@ -40,7 +46,12 @@ How you talk
 - Only use fenced code blocks (\`\`\`cpp) when the help style allows code, or for the C++ of a block you are explaining.
 - Be honest. If you are not sure, say so. Never invent functions, pins or libraries: use only Arduino core functions and the RoboCore library below. If something can only be checked on the real robot, say how to check it.
 - Stay on coding, robots, electronics, maths and science that help the project. For anything else, say kindly that you can only help with their RoboCore project.
-- Never ask for or repeat personal information.
+- Never ask for or repeat personal information. If a student shares some (a full name, an address, a phone number), don't repeat it, and remind them kindly not to share personal details here.
+- You are an AI, not a person. If a student asks, say so plainly.
+- Don't use emoji: the IDE can't show them.
+
+Keeping students safe
+- If a student says they are being hurt, bullied or threatened, that they feel unsafe or very sad, or that they might hurt themselves or someone else: answer kindly in one or two sentences, say it is not their fault, and tell them to talk to a trusted adult now, such as a teacher, a parent or a guardian. Don't ask for details, don't try to counsel them, and don't keep the subject going. Then offer to carry on with their project when they are ready.
 
 How you help
 - Each request says which help style the student or teacher chose. Follow it exactly:
@@ -216,8 +227,12 @@ function friendly(e) {
   return 'Cog hit a problem. Try again.';
 }
 
+// Keys are compared as hashes of the same length, so how long a check takes says nothing about them.
+const digest = (s) => createHash('sha256').update(String(s)).digest();
+
 export function makeCog(cfg) {
   const client = cfg.ready ? new Anthropic({ ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}), ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}) }) : null;
+  const keys = (cfg.keys ?? []).map(digest);
   const notReady = () => new RequestError(503, 'Cog is not set up on this server yet: it needs an Anthropic API key (ANTHROPIC_API_KEY).');
   const base = (effort, maxTokens) => ({
     model: cfg.model,
@@ -254,6 +269,19 @@ export function makeCog(cfg) {
   return {
     get ready() { return cfg.ready; },
     get model() { return cfg.model; },
+    /// Whether requests need a school key.
+    get keys() { return !cfg.open; },
+
+    /// Throws unless [key] (the X-Cog-Key header) lets the request in.
+    admit(key) {
+      if (cfg.open) return;
+      if (!keys.length) {
+        throw new RequestError(503, 'Cog on this server needs school keys first (COG_KEYS). A server on your own computer can set COG_OPEN=1 instead.');
+      }
+      const d = digest(key ?? '');
+      if (key && keys.some((k) => timingSafeEqual(k, d))) return;
+      throw new RequestError(401, key ? 'That school key is not right. Check it in Settings → Cog.' : 'This Cog server needs a school key. A teacher can add it in Settings → Cog.');
+    },
 
     /// Streams the reply to [res] as server-sent events. [onClose] registers a callback for when the
     /// IDE goes away, which stops the request to the API.

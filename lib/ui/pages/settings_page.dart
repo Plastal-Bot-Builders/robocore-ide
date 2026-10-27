@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../state/app_state.dart';
 import '../../state/cog.dart';
+import '../../state/models.dart' show Settings;
 import '../../theme.dart';
 import '../app_scope.dart';
 import '../cog/cog_panel.dart' show CogMark;
@@ -101,7 +102,22 @@ class SettingsPage extends StatelessWidget {
       row('Word wrap', RcSwitch(value: st.wrap, label: 'Word wrap', onChanged: (v) => s.updateSettings((x) => x.wrap = v))),
     ]);
     final board = card('Real board and upload', [const _CompileServerRow()]);
+    // With a teacher PIN, turning Cog on or off and what it may read ask for it too.
+    Future<void> locked(void Function(Settings x) change) async {
+      if (await _unlock(context, s)) s.updateSettings(change);
+    }
+
     final cog = card('Cog — learning partner', [
+      row(
+          'Cog',
+          RcSwitch(
+              value: st.cogOn,
+              label: 'Cog',
+              onChanged: (v) => locked((x) {
+                    x.cogOn = v;
+                    if (!v) s.cog.close();
+                  })),
+          hint: 'An AI helper (Claude, made by Anthropic) that answers through the RoboCore server.'),
       const _CogStyleRow(),
       row(
           'Explanation level',
@@ -113,8 +129,9 @@ class SettingsPage extends StatelessWidget {
             onChanged: (v) => s.updateSettings((x) => x.cogLevel = v),
           ),
           hint: 'How much Cog assumes you already know.'),
-      row('Let Cog read this project', RcSwitch(value: st.cogRead, label: 'Let Cog read this project', onChanged: (v) => s.updateSettings((x) => x.cogRead = v)),
-          hint: 'Open files, Output and the Serial Monitor. Nothing is sent when this is off.'),
+      row('Let Cog read this project', RcSwitch(value: st.cogRead, label: 'Let Cog read this project', onChanged: (v) => locked((x) => x.cogRead = v)),
+          hint: 'Sends the project’s files and problems, and the last lines of Output and the Serial Monitor, with each '
+              'question. When off, Cog gets only what you type.'),
       const _CogStatusRow(),
     ]);
     // The Mac app: where the projects are kept (Settings → Projects folder).
@@ -208,6 +225,9 @@ class _CompileServerRow extends StatefulWidget {
 class _CompileServerRowState extends State<_CompileServerRow> {
   final _ctl = TextEditingController();
   bool _testing = false;
+
+  /// With a teacher PIN the address can't be edited until the PIN is typed (Cog's data goes there).
+  bool _unlocked = false;
   (bool, String)? _result;
 
   @override
@@ -230,7 +250,7 @@ class _CompileServerRowState extends State<_CompileServerRow> {
   }
 
   Future<void> _test() async {
-    _save();
+    if (_unlocked || AppScope.read(context).settings.cogPin.isEmpty) _save();
     setState(() {
       _testing = true;
       _result = null;
@@ -246,6 +266,8 @@ class _CompileServerRowState extends State<_CompileServerRow> {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
+    final s = AppScope.of(context);
+    final locked = s.settings.cogPin.isNotEmpty && !_unlocked;
     final r = _result;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -264,18 +286,26 @@ class _CompileServerRowState extends State<_CompileServerRow> {
         const SizedBox(height: 10),
         Row(children: [
           Expanded(
-            child: Focus(
-              onFocusChange: (has) {
-                if (!has) _save();
-              },
-              child: RcInput(
-                controller: _ctl,
-                hint: 'https://robocore-compile.example.com',
-                height: 36,
-                onSubmitted: (_) => _save(),
-              ),
-            ),
+            child: locked
+                ? _LockedField(s.settings.compileServer.isEmpty ? 'Not set' : s.settings.compileServer)
+                : Focus(
+                    onFocusChange: (has) {
+                      if (!has) _save();
+                    },
+                    child: RcInput(
+                      controller: _ctl,
+                      hint: 'https://robocore-compile.example.com',
+                      height: 36,
+                      onSubmitted: (_) => _save(),
+                    ),
+                  ),
           ),
+          if (locked) ...[
+            const SizedBox(width: 8),
+            Btn('Change…', height: 36, onTap: () async {
+              if (await _unlock(context, s)) setState(() => _unlocked = true);
+            }),
+          ],
           const SizedBox(width: 8),
           Btn(_testing ? 'Testing…' : 'Test', icon: 'plug', busy: _testing, height: 36, onTap: _testing ? null : _test),
         ]),
@@ -372,67 +402,68 @@ class _ProfileRowState extends State<_ProfileRow> {
   }
 }
 
+/// The teacher PIN dialog: the PIN, or ([create]) a new one typed twice. null = cancelled.
+Future<String?> _pin(BuildContext context, {required String title, required String body, bool create = false}) {
+  final a = TextEditingController(), b = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      final c = RC.of(context);
+      String? error;
+      return StatefulBuilder(builder: (context, set) {
+        void done() {
+          final pin = a.text.trim();
+          if (pin.length < 4) return set(() => error = 'Use at least 4 digits.');
+          if (create && pin != b.text.trim()) return set(() => error = 'The two PINs are different.');
+          Navigator.pop(context, pin);
+        }
+
+        Widget field(TextEditingController t, String hint, {bool autofocus = false}) => TextField(
+              controller: t,
+              autofocus: autofocus,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              onSubmitted: (_) => done(),
+              style: tBody(c, size: 14),
+              decoration: InputDecoration(hintText: hint, isDense: true, border: const OutlineInputBorder()),
+            );
+        return AlertDialog(
+          backgroundColor: c.raised,
+          title: Text(title.toUpperCase(), style: tH2(c)),
+          content: SizedBox(
+            width: 360,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(body, style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),
+              const SizedBox(height: 14),
+              field(a, 'Teacher PIN', autofocus: true),
+              if (create) ...[const SizedBox(height: 8), field(b, 'The same PIN again')],
+              if (error != null) ...[const SizedBox(height: 8), Text(error!, style: tCaption(c, color: c.err, w: FontWeight.w600))],
+            ]),
+          ),
+          actions: [
+            Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.pop(context)),
+            Btn(create ? 'Set PIN' : 'OK', kind: BtnKind.primary, onTap: done),
+          ],
+        );
+      });
+    },
+  );
+}
+
+/// Asks for the PIN when one is set. true = go ahead.
+Future<bool> _unlock(BuildContext context, AppState s) async {
+  if (s.settings.cogPin.isEmpty) return true;
+  final pin = await _pin(context, title: 'Teacher PIN', body: 'A teacher locked Cog’s settings and the server address. Type the PIN to change them.');
+  if (pin == null) return false;
+  if (cogPinHash(pin) == s.settings.cogPin) return true;
+  s.showToast('That PIN is not right', body: 'Try again, or ask the teacher who set it.', error: true);
+  return false;
+}
+
 /// Settings → Cog: how much Cog shows. "Write code for me" and, once a teacher PIN is set, any change
 /// of style need the PIN.
 class _CogStyleRow extends StatelessWidget {
   const _CogStyleRow();
-
-  Future<String?> _pin(BuildContext context, {required String title, required String body, bool create = false}) {
-    final a = TextEditingController(), b = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) {
-        final c = RC.of(context);
-        String? error;
-        return StatefulBuilder(builder: (context, set) {
-          void done() {
-            final pin = a.text.trim();
-            if (pin.length < 4) return set(() => error = 'Use at least 4 digits.');
-            if (create && pin != b.text.trim()) return set(() => error = 'The two PINs are different.');
-            Navigator.pop(context, pin);
-          }
-
-          Widget field(TextEditingController t, String hint, {bool autofocus = false}) => TextField(
-                controller: t,
-                autofocus: autofocus,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                onSubmitted: (_) => done(),
-                style: tBody(c, size: 14),
-                decoration: InputDecoration(hintText: hint, isDense: true, border: const OutlineInputBorder()),
-              );
-          return AlertDialog(
-            backgroundColor: c.raised,
-            title: Text(title.toUpperCase(), style: tH2(c)),
-            content: SizedBox(
-              width: 360,
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text(body, style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),
-                const SizedBox(height: 14),
-                field(a, 'Teacher PIN', autofocus: true),
-                if (create) ...[const SizedBox(height: 8), field(b, 'The same PIN again')],
-                if (error != null) ...[const SizedBox(height: 8), Text(error!, style: tCaption(c, color: c.err, w: FontWeight.w600))],
-              ]),
-            ),
-            actions: [
-              Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.pop(context)),
-              Btn(create ? 'Set PIN' : 'OK', kind: BtnKind.primary, onTap: done),
-            ],
-          );
-        });
-      },
-    );
-  }
-
-  /// Asks for the PIN when one is set. true = go ahead.
-  Future<bool> _unlock(BuildContext context, AppState s) async {
-    if (s.settings.cogPin.isEmpty) return true;
-    final pin = await _pin(context, title: 'Teacher PIN', body: 'A teacher locked Cog’s help style. Type the PIN to change it.');
-    if (pin == null) return false;
-    if (cogPinHash(pin) == s.settings.cogPin) return true;
-    s.showToast('That PIN is not right', body: 'Try again, or ask the teacher who set it.', error: true);
-    return false;
-  }
 
   Future<void> _pick(BuildContext context, AppState s, String style) async {
     if (s.settings.cogStyle == style) return;
@@ -502,13 +533,19 @@ class _CogStyleRow extends StatelessWidget {
         Row(children: [
           Expanded(
             child: Text(
-              st.cogPin.isEmpty ? 'Teachers can lock this for a class with a PIN.' : 'Locked with a teacher PIN: changing the help style asks for it.',
+              st.cogPin.isEmpty
+                  ? 'Teachers can lock Cog’s settings for a class with a PIN.'
+                  : 'Locked with a teacher PIN: changing Cog’s settings or the server address asks for it.',
               style: tCaption(c),
             ),
           ),
           if (st.cogPin.isEmpty)
             Btn('Set a teacher PIN', kind: BtnKind.plain, onTap: () async {
-              final pin = await _pin(context, create: true, title: 'Teacher PIN', body: 'With a PIN, students can’t change Cog’s help style or turn on “Write code for me”.');
+              final pin = await _pin(context,
+                  create: true,
+                  title: 'Teacher PIN',
+                  body: 'With a PIN, students can’t turn Cog on or off, change what it reads, its help style, the server '
+                      'address or the school key, or turn on “Write code for me”.');
               if (pin != null) s.updateSettings((x) => x.cogPin = cogPinHash(pin));
             })
           else
@@ -535,11 +572,35 @@ class _CogStatusRow extends StatefulWidget {
 class _CogStatusRowState extends State<_CogStatusRow> {
   (bool?, String)? _status;
   bool _busy = false;
+  final _key = TextEditingController();
+
+  /// With a teacher PIN the key can't be changed until the PIN is typed.
+  bool _unlocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _key.text = AppScope.read(context).settings.cogKey;
+  }
+
+  @override
+  void dispose() {
+    _key.dispose();
+    super.dispose();
+  }
+
+  void _saveKey() {
+    if (!mounted) return;
+    final s = AppScope.read(context);
+    final k = _key.text.trim();
+    if (k != s.settings.cogKey && (_unlocked || s.settings.cogPin.isEmpty)) s.updateSettings((x) => x.cogKey = k);
+  }
 
   Future<void> _test() async {
+    _saveKey();
     final s = AppScope.read(context);
     setState(() => _busy = true);
-    final r = await s.cog.client.status(s.settings.compileServer);
+    final r = await s.cog.client.status(s.settings.compileServer, key: s.settings.cogKey);
     if (mounted) {
       setState(() {
         _status = r;
@@ -551,6 +612,8 @@ class _CogStatusRowState extends State<_CogStatusRow> {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
+    final s = AppScope.of(context);
+    final locked = s.settings.cogPin.isNotEmpty && !_unlocked;
     final st = _status;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -565,6 +628,30 @@ class _CogStatusRowState extends State<_CogStatusRow> {
           ),
           const SizedBox(width: 16),
           Btn(_busy ? 'Testing…' : 'Test Cog', kind: BtnKind.outline, busy: _busy, onTap: _busy ? null : _test),
+        ]),
+        const SizedBox(height: 12),
+        Text('School key', style: tLabel(c, w: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text('The server only answers schools with a key, so nobody else can use its Anthropic credit. Ask whoever runs it.',
+            style: tCaption(c)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: locked
+                ? _LockedField(s.settings.cogKey.isEmpty ? 'Not set' : '••••••••')
+                : Focus(
+                    onFocusChange: (has) {
+                      if (!has) _saveKey();
+                    },
+                    child: RcInput(controller: _key, hint: 'School key', height: 36, obscure: true, onSubmitted: (_) => _saveKey()),
+                  ),
+          ),
+          if (locked) ...[
+            const SizedBox(width: 8),
+            Btn('Change…', height: 36, onTap: () async {
+              if (await _unlock(context, s)) setState(() => _unlocked = true);
+            }),
+          ],
         ]),
         if (st != null) ...[
           const SizedBox(height: 10),
@@ -585,6 +672,24 @@ class _CogStatusRowState extends State<_CogStatusRow> {
           ),
         ],
       ]),
+    );
+  }
+}
+
+/// A setting a teacher PIN locks: shown, not editable, until "Change…" and the PIN.
+class _LockedField extends StatelessWidget {
+  const _LockedField(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(color: c.sunk, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(6)),
+      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: tBody(c, size: 13, color: c.muted)),
     );
   }
 }
