@@ -20,11 +20,10 @@ class ProjectCard extends StatelessWidget {
     final c = RC.of(context);
     return Hover(
       onTap: () => s.openProject(p.id),
-      // The edge is drawn over the clipped content: under it, the preview's fill covered the line at the corners.
-      builder: (context, h) => Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(10)),
-        foregroundDecoration: BoxDecoration(border: Border.all(color: h ? c.faint : c.line), borderRadius: BorderRadius.circular(10)),
+      builder: (context, h) => EdgedBox(
+        radius: 10,
+        edge: h ? c.faint : c.line,
+        color: c.surface,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
           SizedBox(height: 112, child: Thumb(blocks: p.mode == 'blocks')),
           Container(

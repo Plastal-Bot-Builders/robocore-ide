@@ -246,20 +246,33 @@ class RcCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    // The edge stays under the content: the editors' WebViews sit in an RcCard, and on the Mac anything Flutter draws
-    // over a WebView takes its clicks (a border drawn on top covered the whole card, and the editors stopped
-    // answering). Cards with a preview filled to their edges draw their edge on top themselves (ProjectCard).
-    return Container(
-      padding: padding,
-      clipBehavior: clip ? Clip.antiAlias : Clip.none,
-      decoration: BoxDecoration(
-        color: color ?? c.surface,
-        border: Border.all(color: c.line),
-        borderRadius: BorderRadius.circular(radius),
-      ),
-      child: child,
-    );
+    return EdgedBox(radius: radius, edge: c.line, color: color ?? c.surface, padding: padding, clip: clip, child: child);
   }
+}
+
+/// A rounded box with a 1 px edge that its content can't cover. The content is clipped to the inside of the edge, so a
+/// fill, a picture or an editor reaching the corners stops where the corner line starts (clipped to the outside, it
+/// covered the line round each corner). The edge itself is drawn under the content: on the Mac, anything Flutter draws
+/// over the editors' WebViews takes their clicks.
+class EdgedBox extends StatelessWidget {
+  const EdgedBox(
+      {super.key, required this.child, required this.radius, required this.edge, this.color, this.padding = EdgeInsets.zero, this.clip = true});
+  final Widget child;
+  final double radius;
+  final Color edge;
+  final Color? color;
+  final EdgeInsets padding;
+  final bool clip;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(color: color, border: Border.all(color: edge), borderRadius: BorderRadius.circular(radius)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius - 1),
+          clipBehavior: clip ? Clip.antiAlias : Clip.none,
+          child: Padding(padding: padding, child: child),
+        ),
+      );
 }
 
 class RcSwitch extends StatelessWidget {

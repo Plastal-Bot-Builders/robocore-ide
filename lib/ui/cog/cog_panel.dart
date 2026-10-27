@@ -615,10 +615,10 @@ class _Suggestion extends StatelessWidget {
     final before = item.before ?? p?.files.where((x) => x.name == f.file).firstOrNull?.content ?? '';
     final rows = cogDiff(before, f.newContent);
     final firstLine = rows.where((r) => r.$1 == '+').firstOrNull?.$2;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(8)),
-      foregroundDecoration: BoxDecoration(border: Border.all(color: c.ink), borderRadius: BorderRadius.circular(8)),
+    return EdgedBox(
+      radius: 8,
+      edge: c.ink,
+      color: c.raised,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
