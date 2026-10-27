@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../data/catalog.dart';
 import '../../engine/compiler.dart' show Problem;
+import '../../hw/compile_client.dart' show normalizeServerUrl;
 import '../../state/app_state.dart';
 import '../../state/cog.dart';
 import '../../theme.dart';
@@ -34,6 +35,7 @@ class CogButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
+    if (!s.settings.cogOn) return const SizedBox.shrink();
     final on = s.cog.open;
     return Hover(
       onTap: s.cog.toggle,
@@ -70,6 +72,7 @@ class CogExplainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
+    if (!s.settings.cogOn) return const SizedBox.shrink();
     if (onBar) {
       return Hover(
         onTap: () => s.cog.explainError(problem),
@@ -173,13 +176,15 @@ class _CogPanelState extends State<CogPanel> {
       ]),
     );
 
+    final notice = !s.settings.cogNoticeSeen;
     final body = ListView(
       controller: _scroll,
       padding: const EdgeInsets.all(14),
       children: [
+        if (notice) ...[_Notice(s: s), const SizedBox(height: 12)],
         _Chips(s: s),
         const SizedBox(height: 12),
-        if (cog.items.isEmpty) _Welcome(blocks: p?.mode == 'blocks'),
+        if (cog.items.isEmpty && !notice) _Welcome(blocks: p?.mode == 'blocks'),
         for (final it in cog.items) ...[_Item(item: it), const SizedBox(height: 12)],
         if (p != null && (p.learned.isNotEmpty || cog.items.isNotEmpty)) _Concepts(learned: p.learned, next: cog.nextConcept),
       ],
@@ -205,10 +210,10 @@ class _CogPanelState extends State<CogPanel> {
           trailing: IconBtn('send', onTap: cog.busy ? null : () => _send(cog), tip: 'Send to Cog', size: 30, iconSize: 16),
         ),
         const SizedBox(height: 6),
+        // Says that Cog is an AI and what it sees (Anthropic's rules for apps that young people use).
         Text(
-          s.settings.cogRead
-              ? 'Cog reads your project, output and serial monitor. It can be wrong: check before you upload.'
-              : 'Cog can’t see your project (Settings → Cog). It can be wrong: check before you upload.',
+          '${s.settings.cogRead ? 'Cog is an AI (Claude, made by Anthropic) and reads your project, output and serial monitor.' : 'Cog is an AI (Claude, made by Anthropic) and can’t see your project (Settings → Cog).'}'
+          ' It can be wrong: check before you upload. Don’t type your name or other personal details.',
           style: tCaption(c, color: c.faint),
         ),
       ]),
@@ -314,6 +319,55 @@ class _PromptChip extends StatelessWidget {
           child: Text(label, style: tCaption(c, color: onTap == null ? c.faint : c.ink, w: FontWeight.w600)),
         ),
       ),
+    );
+  }
+}
+
+/// Before the first question on this device: what Cog is, what goes where, and what not to type.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final host = Uri.tryParse(normalizeServerUrl(s.settings.compileServer))?.host ?? '';
+    final server = host.isEmpty ? 'the RoboCore server' : 'the RoboCore server ($host)';
+    final lines = [
+      'Cog is an AI: Claude, made by Anthropic. It is not a person, and it can be wrong.',
+      s.settings.cogRead
+          ? 'Your questions, Cog’s answers and your project (its files, problems and the last lines of Output and the '
+              'Serial Monitor) go to $server and on to Anthropic, a company in the United States, which writes the answer.'
+          : 'Your questions and Cog’s answers go to $server and on to Anthropic, a company in the United States, which '
+              'writes the answer. Your project stays on this device unless “Let Cog read this project” is turned on.',
+      'The RoboCore server doesn’t keep them. Anthropic handles them under its own terms.',
+      'Don’t type your name, where you live, or other personal details.',
+    ];
+    return RcCard(
+      padding: const EdgeInsets.all(14),
+      color: c.raised,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const CogMark(size: 24),
+          const SizedBox(width: 10),
+          Expanded(child: Text('BEFORE YOU ASK COG', style: tH2(c))),
+        ]),
+        const SizedBox(height: 10),
+        for (final l in lines)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(padding: const EdgeInsets.only(top: 7), child: Dot(color: c.ink, size: 5)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(l, style: tBody(c, size: 13, height: 19 / 13))),
+            ]),
+          ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Btn('OK, I understand', kind: BtnKind.primary, onTap: s.cog.noticeSeen),
+        ),
+      ]),
     );
   }
 }

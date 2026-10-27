@@ -34,6 +34,9 @@ if [ -n "$OFFLINE" ]; then
   mkdir -p "$A/Contents/Resources/Offline"
   ditto "$OFFLINE" "$A/Contents/Resources/Offline"
   rm "$A/Contents/Resources/Offline/arduino-cli"
+  # The GPL asks for its text and the way to the source code to come with the programs: on the disk image too.
+  [ -f "$OFFLINE/licenses/THIRD-PARTY-NOTICES.txt" ] || { echo "error: $OFFLINE has no licenses (make it again)" >&2; exit 1; }
+  ditto "$OFFLINE/licenses" "$STAGE/Licences"
 fi
 
 sign() {

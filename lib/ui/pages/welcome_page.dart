@@ -1,5 +1,6 @@
-// First start on a device: asks who is using the app, so the IDE greets them by name.
-// The name stays on this device (with the projects); it can be changed in Settings → Profile.
+// First start on a device: asks who is using the app, so the IDE greets them by name. The name is optional (a first
+// name or nickname is plenty: children's data is kept to a minimum); it stays on this device, with the projects, and
+// can be changed in Settings → Profile.
 import 'package:flutter/material.dart';
 
 import '../../theme.dart';
@@ -43,7 +44,7 @@ class _WelcomePageState extends State<WelcomePage> {
     return Scaffold(
       backgroundColor: kBrand,
       body: Stack(children: [
-        Positioned.fill(child: Image.asset('assets/images/contours.png', fit: BoxFit.cover)),
+        Positioned.fill(child: Image.asset('assets/images/contours.png', fit: BoxFit.cover, excludeFromSemantics: true)),
         Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -66,10 +67,10 @@ class _WelcomePageState extends State<WelcomePage> {
                 Text('Build, code and upload sketches to your robot. First, who is using RoboCore on this computer?',
                     style: tBody(c, size: 14, color: c.muted, height: 20 / 14)),
                 const SizedBox(height: 22),
-                const FieldLabel('Your name'),
+                const FieldLabel('First name or nickname (optional)'),
                 RcInput(
                   controller: _name,
-                  hint: 'Thandi Mokoena',
+                  hint: 'Thandi',
                   height: 38,
                   fontSize: 14,
                   autofocus: true,

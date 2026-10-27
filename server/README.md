@@ -63,7 +63,8 @@ Other errors return `{ "error": "message" }` with HTTP 400 (bad request), 403 (s
 
 ### `GET /health`, `GET /boards`
 
-Health shows the arduino-cli and core versions, the queue, and `cog: {ready, model}`. Boards lists ids, names and FQBNs.
+Health shows the arduino-cli and core versions, the queue, and `cog: {ready, model, keys}` (`keys`: whether Cog asks for
+a school key). Boards lists ids, names and FQBNs.
 
 ### Cog: `POST /cog/chat`, `/cog/fix`, `/cog/check`
 
@@ -81,6 +82,16 @@ asked to do. Requests use adaptive thinking with the effort below, prompt cachin
 model if the first one declines it. Without `ANTHROPIC_API_KEY`, `/health` says `cog.ready: false` and the Cog routes
 answer 503; compiling keeps working.
 
+Every Cog request needs a **school key** in the `X-Cog-Key` header, one of `COG_KEYS`, so that nobody who finds the
+server's address can spend its Anthropic credit. Make one key per school (a long random string, e.g.
+`openssl rand -hex 16`) and give it to the teacher, who types it in the IDE (Settings → Cog → School key, locked by the
+teacher PIN). A wrong or missing key gets 401; `GET /cog/key` answers 200 for a good key (the IDE's Test Cog). Without
+`COG_KEYS` the Cog routes answer 503, unless `COG_OPEN=1` (only for a server on your own computer). To shut a school
+out, remove its key and restart.
+
+Cog's instructions (`src/cog.js`) tell it to say it is an AI when asked, never to ask for or repeat personal details,
+and to point a student who mentions harm or distress to a trusted adult without asking for details.
+
 ## Settings (environment variables)
 
 | Variable | Default | |
@@ -95,6 +106,8 @@ answer 503; compiling keeps working.
 | `COG_MODEL` | `claude-opus-5-5` | The model Cog uses. See `docs/cog.md` for cost |
 | `COG_EFFORT` / `COG_FIX_EFFORT` | `low` / `medium` | How much the model thinks for chat / for suggested fixes |
 | `COG_RATE_PER_MIN` | 12 | Cog requests per client per minute |
+| `COG_KEYS` | (none) | The schools' keys, comma-separated. Cog answers only requests that carry one |
+| `COG_OPEN` | (off) | `1` lets Cog answer without a key: only for a server on your own computer |
 
 ## Run it
 
@@ -106,7 +119,7 @@ node server/test/smoke.mjs http://localhost:8080      # compiles every example f
 ```
 
 Without Docker (arduino-cli and the cores installed locally): `cd server && npm ci && npm start`
-(add `ANTHROPIC_API_KEY=…` in front of `npm start` for Cog). `npm test` runs the unit tests with a fake arduino-cli and a
+(add `ANTHROPIC_API_KEY=… COG_OPEN=1` in front of `npm start` for Cog). `npm test` runs the unit tests with a fake arduino-cli and a
 fake Anthropic API.
 
 ## Put it online

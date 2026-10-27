@@ -25,7 +25,7 @@ class AccountButton extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
+          Text(s.user.isEmpty ? 'No name set' : s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 2),
           Text(s.school.isEmpty ? 'This device' : '${s.school} · this device', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
         ]),
@@ -43,9 +43,11 @@ class AccountButton extends StatelessWidget {
           height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: h || open ? kNavyHover : kNavy, shape: BoxShape.circle),
-          child: Text(s.initials,
-              style: const TextStyle(
-                  fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
+          child: s.initials.isEmpty
+              ? const RcIcon('user', size: 16, color: kBrand)
+              : Text(s.initials,
+                  style: const TextStyle(
+                      fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
         ),
       ),
     );
@@ -82,6 +84,8 @@ class _ShortcutsDialog extends StatelessWidget {
           ('Suggestions', 'Ctrl+Space'),
           ('Quick fix, Explain with Cog', '$m+.'),
           ('Undo / redo', '$m+Z / $m+Shift+Z'),
+          // Monaco's Toggle Tab Key Moves Focus; until then Tab types a tab in the code.
+          ('Let Tab leave the editor (or type tabs again)', m == 'Cmd' ? 'Ctrl+Shift+M' : 'Ctrl+M'),
         ]
       ),
       (
@@ -94,6 +98,14 @@ class _ShortcutsDialog extends StatelessWidget {
           ('Move between blocks', 'Arrow keys'),
           ('Edit the field', 'Enter'),
           ('Open the toolbox', 'T'),
+        ]
+      ),
+      (
+        'Moving around',
+        [
+          ('Next / previous button or field', 'Tab / Shift+Tab'),
+          ('Press the button', 'Enter or Space'),
+          ('Move in a menu', 'Arrow keys'),
         ]
       ),
       ('Menus and dialogs', [('Close', 'Esc')]),
@@ -139,12 +151,15 @@ class _AboutDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    const lines = [
+    final lines = [
       'Blocks editor: Google Blockly (Apache 2.0)',
       'Code editor: Monaco (MIT)',
-      'Uploads: esptool-js (Apache 2.0) over Web Serial',
-      'Compiling: arduino-cli and the esp32 core, on the compile server',
-      'Ask Cog: Claude by Anthropic, through the compile server',
+      'Uploads: esptool-js (Apache 2.0)',
+      AppScope.read(context).local != null
+          ? 'Compiling: arduino-cli (GPL 3.0) with the Arduino AVR and ESP32 tools, on this Mac'
+          : 'Compiling: arduino-cli and the board tools, on the compile server',
+      'Ask Cog: Claude, an AI made by Anthropic, through the RoboCore server',
+      'Fonts: Barlow, JetBrains Mono, Noto (SIL OFL 1.1). Icons: Lucide (ISC)',
     ];
     return DialogFrame(
       title: 'About RoboCore IDE',
@@ -169,7 +184,15 @@ class _AboutDialog extends StatelessWidget {
         const SizedBox(height: 6),
         Text('Designed in Zambia by Plastal-Bot Builders.', style: tBody(c, size: 13, height: 18 / 13)),
       ]),
-      actions: [Btn('Done', kind: BtnKind.primary, onTap: () => Navigator.of(context).pop())],
+      actions: [
+        Btn('Licences', onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'RoboCore IDE',
+              applicationVersion: kAppVersion,
+              applicationIcon: const Padding(padding: EdgeInsets.all(8), child: AppIconTile(size: 48)),
+            )),
+        Btn('Done', kind: BtnKind.primary, onTap: () => Navigator.of(context).pop()),
+      ],
     );
   }
 }

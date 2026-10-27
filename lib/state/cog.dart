@@ -86,11 +86,33 @@ class CogController {
 
   String get styleLabel => kCogStyles[app.settings.cogStyle] ?? 'Hints first';
   String get _server => app.settings.compileServer;
+  String get _key => app.settings.cogKey;
 
   void toggle() {
+    if (!open && _off()) return;
     open = !open;
     app.changed();
   }
+
+  /// Turned off in Settings (a teacher can lock it with the PIN): Cog stays closed.
+  bool _off() {
+    if (app.settings.cogOn) return false;
+    app.showToast('Cog is turned off', body: 'It can be turned on in Settings → Cog.', info: true);
+    return true;
+  }
+
+  /// Nothing goes to Cog until this device was told what is sent and where: the panel opens on that notice
+  /// (CogPanel), and the student asks again after reading it.
+  bool _blocked() {
+    if (_off()) return true;
+    if (app.settings.cogNoticeSeen) return false;
+    open = true;
+    app.changed();
+    return true;
+  }
+
+  /// "OK" on the notice.
+  void noticeSeen() => app.updateSettings((x) => x.cogNoticeSeen = true);
 
   void close() {
     open = false;
@@ -168,7 +190,7 @@ class CogController {
   /// Sends one turn and streams the reply into a new item of kind [into].
   /// [you]: shown as the student's bubble; [said]: what is sent when nothing is shown.
   Future<void> _send(String task, {String? you, String? said, int hint = 1, CogKind into = CogKind.cog, String? overline}) {
-    if (busy) return Future.value();
+    if (busy || _blocked()) return Future.value();
     open = true;
     if (you != null) items.add(CogItem(CogKind.you, text: you));
     _remember('user', you ?? said ?? '');
@@ -190,7 +212,7 @@ class CogController {
       done.complete();
     }
 
-    _sub = client.chat(_server, _body(task, hint: hint)).listen((e) {
+    _sub = client.chat(_server, _body(task, hint: hint), key: _key).listen((e) {
       switch (e) {
         case CogText(:final text):
           reply.text += text;
@@ -214,7 +236,7 @@ class CogController {
 
   /// "Explain" on a problem (Problems, Output, or Explain with Cog in the code): starts the hint ladder.
   Future<void> explainError(Problem p) {
-    if (busy) return Future.value();
+    if (busy || _blocked()) return Future.value();
     newChat(notify: false);
     problem = p;
     return _send('explain_error', you: 'Explain this error');
@@ -230,7 +252,7 @@ class CogController {
   bool get canShowFix => problem != null && !fixShown && (app.settings.cogStyle != 'hints' || hints >= 2);
 
   Future<void> showFix() async {
-    if (busy) return;
+    if (busy || _blocked()) return;
     fixShown = true;
     final item = CogItem(CogKind.fix, streaming: true);
     items.add(item);
@@ -241,12 +263,12 @@ class CogController {
         ? 'Show me the fix.'
         : 'Show me the fix for: ${problem!.file}:${problem!.line} ${problem!.msg}';
     try {
-      final f = await client.fix(_server, _body('chat', extra: ask));
+      final f = await client.fix(_server, _body('chat', extra: ask), key: _key);
       item.before = app.cur?.files.where((x) => x.name == f.file).firstOrNull?.content;
       item.fix = f;
       item.streaming = false;
-      _remember('user', ask);
-      _remember('assistant', 'Suggested fix for ${f.file}: ${f.explanation}');
+      // Cog didn't say this in a reply, so it goes in as a note from the IDE, not as Cog's words.
+      _remember('user', '$ask\n\n[RoboCore IDE: Cog suggested a change to ${f.file}: ${f.explanation}]');
     } on CogFailure catch (e) {
       items.remove(item);
       fixShown = false;
@@ -273,13 +295,13 @@ class CogController {
   }
 
   Future<void> _quickCheck() async {
-    if (busy) return;
+    if (busy || _blocked()) return;
     final item = CogItem(CogKind.check, streaming: true);
     items.add(item);
     busy = true;
     app.changed();
     try {
-      item.check = await client.check(_server, _body('chat', extra: 'I applied the fix.'));
+      item.check = await client.check(_server, _body('chat', extra: 'I applied the fix.'), key: _key);
       item.streaming = false;
     } on CogFailure {
       items.remove(item); // the question is a bonus: no notice when it can't be made

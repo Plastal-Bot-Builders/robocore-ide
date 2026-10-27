@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsBinding;
 
 import 'hw/local_compiler.dart';
 import 'hw/sketchbook.dart';
+import 'licences.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'ui/app_scope.dart';
@@ -12,8 +15,12 @@ import 'ui/splash.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // In a browser Flutter builds its tree for screen readers only after a hidden "Enable accessibility" button is
+  // found and pressed; build it from the start instead.
+  if (kIsWeb) SemanticsBinding.instance.ensureSemantics();
   // The desktop apps compile on this computer when they can (arduino-cli).
   final state = AppState()..local = localBuilder();
+  registerLicences(state.local);
   // The window opens on the launch animation straight away; projects and settings load behind it.
   Future<void> load() async {
     if (projectsFolderSupported) {

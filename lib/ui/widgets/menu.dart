@@ -1,6 +1,6 @@
 // Drop-down menus: the rows (RcMenu) and a button that opens one under itself (MenuButton).
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show KeyDownEvent, LogicalKeyboardKey;
+import 'package:flutter/services.dart' show KeyDownEvent, KeyEvent, KeyRepeatEvent, LogicalKeyboardKey;
 
 import '../../theme.dart';
 import 'common.dart';
@@ -22,7 +22,8 @@ class MenuEntry {
   final bool divider;
 }
 
-/// A menu's rows. Picking one closes the menu ([onDone]) and then runs it; Esc closes it (G-15).
+/// A menu's rows. Picking one closes the menu ([onDone]) and then runs it; Esc closes it (G-15). The arrow keys move
+/// between the rows, and the keyboard focus goes back where it was when the menu closes from the keyboard.
 class RcMenu extends StatefulWidget {
   const RcMenu({super.key, required this.entries, required this.onDone, this.width = 200, this.header});
   final List<MenuEntry> entries;
@@ -37,6 +38,7 @@ class RcMenu extends StatefulWidget {
 class _RcMenuState extends State<RcMenu> {
   // Asked for outright: autofocus would do nothing while an editor still holds the focus.
   final _focus = FocusNode(debugLabel: 'Menu');
+  final _back = FocusManager.instance.primaryFocus;
 
   @override
   void initState() {
@@ -44,6 +46,36 @@ class _RcMenuState extends State<RcMenu> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+  }
+
+  // Before the menu goes (and before a picked row runs, as it may open a dialog that takes the focus).
+  void _done() {
+    if (_back?.context?.mounted ?? false) _back!.requestFocus();
+    widget.onDone();
+  }
+
+  KeyEventResult _key(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final k = e.logicalKey;
+    if (k == LogicalKeyboardKey.escape && e is KeyDownEvent) {
+      _done();
+      return KeyEventResult.handled;
+    }
+    final down = k == LogicalKeyboardKey.arrowDown, up = k == LogicalKeyboardKey.arrowUp;
+    final ends = k == LogicalKeyboardKey.home || k == LogicalKeyboardKey.end;
+    if (!down && !up && !ends) return KeyEventResult.ignored;
+    final rows = _focus.traversalDescendants.toList();
+    if (rows.isEmpty) return KeyEventResult.handled;
+    final i = rows.indexWhere((n) => n.hasPrimaryFocus);
+    final next = k == LogicalKeyboardKey.home
+        ? 0
+        : k == LogicalKeyboardKey.end
+            ? rows.length - 1
+            : down
+                ? (i + 1) % rows.length
+                : (i <= 0 ? rows.length - 1 : i - 1);
+    rows[next].requestFocus();
+    return KeyEventResult.handled;
   }
 
   @override
@@ -63,7 +95,7 @@ class _RcMenuState extends State<RcMenu> {
           onTap: e.onTap == null
               ? null
               : () {
-                  widget.onDone();
+                  _done();
                   e.onTap!();
                 },
           builder: (context, h) => Container(
@@ -81,13 +113,7 @@ class _RcMenuState extends State<RcMenu> {
 
     return Focus(
       focusNode: _focus,
-      onKeyEvent: (node, e) {
-        if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape) {
-          widget.onDone();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
+      onKeyEvent: _key,
       child: Container(
         width: widget.width,
         decoration: BoxDecoration(

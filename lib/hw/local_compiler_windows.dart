@@ -14,6 +14,14 @@ class WindowsBuilder implements LocalBuilder {
   @override
   bool canBuild(String board) => _cli.supported && kFqbn.containsKey(board);
 
+  /// Each build's copy of the sketch is a temporary folder, deleted when the build ends: nothing is left to forget.
+  @override
+  Future<void> forgetBuilds() async {}
+
+  /// The Windows app brings no compiler notices of its own yet: About → Licences lists the app's packages.
+  @override
+  Future<String?> licences() async => null;
+
   @override
   Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog}) async {
     final log = onLog ?? (String _) {};

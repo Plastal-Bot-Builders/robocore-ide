@@ -93,10 +93,10 @@ class HomePage extends StatelessWidget {
           Positioned(
             left: 0,
             top: 0,
-            child: Image.asset('assets/images/contours.png', width: 1168, height: 264, fit: BoxFit.fill),
+            child: Image.asset('assets/images/contours.png', width: 1168, height: 264, fit: BoxFit.fill, excludeFromSemantics: true),
           ),
           if (width >= 980)
-            Positioned(right: 60, top: 6, child: Image.asset('assets/images/robot.webp', width: 340, filterQuality: FilterQuality.medium)),
+            Positioned(right: 60, top: 6, child: Image.asset('assets/images/robot.webp', width: 340, filterQuality: FilterQuality.medium, excludeFromSemantics: true)),
           Padding(
             padding: phone ? const EdgeInsets.fromLTRB(22, 28, 22, 28) : const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
             child: Column(
@@ -108,7 +108,7 @@ class HomePage extends StatelessWidget {
                 Text('ROBOCORE V2 · ${s.school.isEmpty ? 'CLASSROOM ROBOT' : s.school.toUpperCase()}',
                     style: const TextStyle(fontFamily: fDisplay, fontWeight: FontWeight.w600, fontSize: 12, height: 16 / 12, letterSpacing: .96, color: kNavy)),
                 const SizedBox(height: 10),
-                Text(s.needsProfile ? 'WELCOME' : 'WELCOME BACK, ${s.firstName.toUpperCase()}',
+                Text(s.firstName.isEmpty ? 'WELCOME BACK' : 'WELCOME BACK, ${s.firstName.toUpperCase()}',
                     style: TextStyle(
                         fontFamily: fDisplay, fontWeight: FontWeight.w700, fontSize: phone ? 30 : 36, height: 40 / 36, color: kNavy)),
                 const SizedBox(height: 10),

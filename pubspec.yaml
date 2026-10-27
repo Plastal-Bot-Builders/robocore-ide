@@ -24,6 +24,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    # The licences shown in About → Licences (lib/licences.dart).
+    - assets/licenses/
+    - web/vendor/blockly/LICENSE
+    - web/vendor/esptool-js/LICENSE
+    - web/vendor/monaco/LICENSE
+    - web/vendor/monaco/ThirdPartyNotices.txt
     # The Blockly and Monaco page for the macOS and Windows apps' WebView (lib/ui/editor/web_editors_native.dart);
     # the web app serves it from web/ itself.
     - path: web/robocore_editors.html
@@ -80,3 +86,16 @@ flutter:
           weight: 500
         - asset: assets/fonts/JetBrainsMono-700.ttf
           weight: 700
+    # Arrows, ✓, ⌘ and other symbols the three fonts above lack, cut down from Noto Sans Math and Noto Sans
+    # Symbols 2 (SIL OFL 1.1). Without them the web app fetches such characters from fonts.gstatic.com.
+    - family: NotoSansMath
+      fonts:
+        - asset: assets/fonts/NotoSansMath-Symbols.ttf
+    - family: NotoSansSymbols2
+      fonts:
+        - asset: assets/fonts/NotoSansSymbols2-Symbols.ttf
+    # The web engine downloads Roboto from fonts.gstatic.com at every start, as its last-resort font, unless the app
+    # has a font of that name. Barlow stands in, so no visitor's address goes to Google.
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Barlow-400.ttf

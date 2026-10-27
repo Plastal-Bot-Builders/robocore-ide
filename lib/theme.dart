@@ -5,6 +5,9 @@ const fBody = 'Barlow';
 const fDisplay = 'BarlowCondensed';
 const fMono = 'JetBrainsMono';
 
+/// For the arrows, ✓ and ⌘ that Barlow and JetBrains Mono lack (pubspec.yaml), so the web app never fetches them.
+const kSymbolFonts = ['NotoSansMath', 'NotoSansSymbols2'];
+
 const kBrand = Color(0xFFF2B01E);
 const kBrandPressed = Color(0xFFD99A0F);
 const kNavy = Color(0xFF1B2A41);
@@ -14,6 +17,12 @@ const kCream = Color(0xFFF7F1E3);
 @immutable
 class RC extends ThemeExtension<RC> {
   final Color bg, surface, raised, sunk, ink, muted, faint, line, line2;
+
+  /// The edge of a control (a field, a switch that is off, a radio): 3:1 against what is around it, which [line] is not.
+  final Color field;
+
+  /// The keyboard-focus ring: navy on paper, the box yellow on navy (WCAG 3:1 either way).
+  final Color focus;
   final Color brandSoft, brandTint, top, topInk, topLine;
   final Color ok, okSoft, err, errSoft, warn, codeBg, sel;
   final Color sCom, sStr, sKw, sNum, sFn, sPre, sPlain, sLn, curLine, disabled, textBrand;
@@ -29,6 +38,8 @@ class RC extends ThemeExtension<RC> {
     required this.faint,
     required this.line,
     required this.line2,
+    required this.field,
+    required this.focus,
     required this.brandSoft,
     required this.brandTint,
     required this.top,
@@ -62,9 +73,12 @@ class RC extends ThemeExtension<RC> {
     sunk: Color(0xFFF0EDE7),
     ink: Color(0xFF1B2A41),
     muted: Color(0xFF5B6573),
-    faint: Color(0xFF6A7380),
+    // faint, field and sLn are darker than the design's, which fell short of WCAG's contrast (4.5:1 text, 3:1 controls).
+    faint: Color(0xFF5E6774),
     line: Color(0xFFDBDBD8),
     line2: Color(0xFFE7E5E0),
+    field: Color(0xFF80868E),
+    focus: Color(0xFF1B2A41),
     brandSoft: Color(0xFFFCE9BF),
     brandTint: Color(0xFFFDF1D5),
     top: Color(0xFFF2B01E),
@@ -86,7 +100,7 @@ class RC extends ThemeExtension<RC> {
     sFn: Color(0xFF1B2A41),
     sPre: Color(0xFF8A5A00),
     sPlain: Color(0xFF364357),
-    sLn: Color(0xFFA4A8AD),
+    sLn: Color(0xFF6A7380),
     curLine: Color(0xFFFDF1D5),
     disabled: Color(0xFFA4A8AD),
     textBrand: Color(0xFF8A5A00),
@@ -100,9 +114,11 @@ class RC extends ThemeExtension<RC> {
     sunk: Color(0xFF111C30),
     ink: Color(0xFFF7F1E3),
     muted: Color(0xFFAEB5C0),
-    faint: Color(0xFF858E9B),
+    faint: Color(0xFF9AA2AD),
     line: Color(0xFF2C3C57),
     line2: Color(0xFF233249),
+    field: Color(0xFF717A8C),
+    focus: Color(0xFFF2B01E),
     brandSoft: Color(0xFF3B3220),
     brandTint: Color(0xFF2A2617),
     top: Color(0xFFF2B01E),
@@ -122,7 +138,7 @@ class RC extends ThemeExtension<RC> {
     sFn: Color(0xFF84B6FF),
     sPre: Color(0xFFF08CB2),
     sPlain: Color(0xFFC9CFD8),
-    sLn: Color(0xFF6B7486),
+    sLn: Color(0xFF8A93A0),
     curLine: Color(0xFF2A2617),
     disabled: Color(0xFF6B7486),
     textBrand: Color(0xFFE8B04B),
@@ -143,6 +159,7 @@ ThemeData buildTheme(RC c) {
     useMaterial3: true,
     brightness: c.dark ? Brightness.dark : Brightness.light,
     fontFamily: fBody,
+    fontFamilyFallback: kSymbolFonts,
     scaffoldBackgroundColor: c.bg,
     colorScheme: ColorScheme.fromSeed(
       seedColor: kBrand,

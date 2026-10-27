@@ -197,7 +197,8 @@ void main() {
       expect(s.needsProfile, isTrue);
       expect(s.user, isEmpty);
       expect(s.projects.first.name, 'Blink LED');
-      expect(s.validateProfileName('  '), isNotNull);
+      expect(s.validateProfileName('  '), isNull, reason: 'the name is optional');
+      expect(s.validateProfileName('x' * 41), isNotNull);
       s.setProfile(name: '  Thandi   Mokoena ', school: 'Grade 7B');
       expect(s.user, 'Thandi Mokoena');
       expect(s.firstName, 'Thandi');
@@ -220,6 +221,20 @@ void main() {
       s.sim.stop();
       expect(s.needsProfile, isTrue);
       expect(s.projects.single.name, 'My robot');
+    });
+
+    test('no name at all is fine: the welcome screen is done, and the avatar shows an icon', () async {
+      SharedPreferences.setMockInitialValues({});
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      s.setProfile(name: '  ');
+      expect(s.needsProfile, isFalse);
+      expect((s.user, s.firstName, s.initials), ('', '', ''));
+      final again = AppState(usbLink: FakeUsb());
+      await again.load();
+      again.sim.stop();
+      expect(again.needsProfile, isFalse, reason: 'not asked again');
     });
 
     test('one-word names give one initial', () async {

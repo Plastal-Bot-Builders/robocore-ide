@@ -178,11 +178,18 @@ class Settings {
     return v == null || v == oldDefault ? fallback : v;
   }
 
-  /// Cog: help style (hints | explain | write), whether it may read the project, and the teacher
-  /// PIN (a hash, empty = none) that guards "Write code for me" and changing the style.
+  /// Cog: help style (hints | explain | write), whether it may read the project (off until someone turns it
+  /// on), and the teacher PIN (a hash, empty = none) that guards "Write code for me" and, once set, the help
+  /// style, turning Cog on or off, reading, the server address and the school key.
   String cogStyle;
   bool cogRead;
   String cogPin;
+
+  /// Whether Cog is on; whether this device was told what Cog sends and where (shown before the first question).
+  bool cogOn, cogNoticeSeen;
+
+  /// The school key a Cog server asks for (server/src/cog.js, COG_KEYS). Empty = none.
+  String cogKey;
 
   /// How Cog pitches its explanations: beginner | intermediate | advanced (ST-03).
   String cogLevel;
@@ -199,8 +206,11 @@ class Settings {
     this.consoleHeight = defaultConsoleHeight,
     this.showCpp = false,
     this.cogStyle = 'hints',
-    this.cogRead = true,
+    this.cogRead = false,
     this.cogPin = '',
+    this.cogOn = true,
+    this.cogNoticeSeen = false,
+    this.cogKey = '',
     this.cogLevel = 'beginner',
   });
   Map<String, dynamic> toJson() => {
@@ -217,6 +227,9 @@ class Settings {
         'cogStyle': cogStyle,
         'cogRead': cogRead,
         'cogPin': cogPin,
+        'cogOn': cogOn,
+        'cogNoticeSeen': cogNoticeSeen,
+        'cogKey': cogKey,
         'cogLevel': cogLevel,
       };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
@@ -231,8 +244,13 @@ class Settings {
         consoleHeight: _paneSize(j['consoleHeight'], 232, defaultConsoleHeight),
         showCpp: j['showCpp'] as bool? ?? false,
         cogStyle: const ['hints', 'explain', 'write'].contains(j['cogStyle']) ? j['cogStyle'] as String : 'hints',
-        cogRead: j['cogRead'] as bool? ?? true,
+        // Saved before the notice existed (no cogNoticeSeen), "true" was only the old default, never a choice: reading
+        // starts off again, and the notice says how to turn it on.
+        cogRead: j.containsKey('cogNoticeSeen') && (j['cogRead'] as bool? ?? false),
         cogPin: j['cogPin'] as String? ?? '',
+        cogOn: j['cogOn'] as bool? ?? true,
+        cogNoticeSeen: j['cogNoticeSeen'] as bool? ?? false,
+        cogKey: j['cogKey'] as String? ?? '',
         cogLevel: const ['beginner', 'intermediate', 'advanced'].contains(j['cogLevel']) ? j['cogLevel'] as String : 'beginner',
       );
 }

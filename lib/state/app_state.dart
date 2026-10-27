@@ -108,7 +108,7 @@ class AppState extends ChangeNotifier {
   final _rnd = math.Random();
 
   // ---- persisted ----
-  /// The person using the app on this device. Empty until they fill in the welcome screen.
+  /// The person using the app on this device: a first name or nickname, or empty (it is optional).
   String user = '';
 
   /// Optional school or class, shown with the name.
@@ -236,31 +236,34 @@ class AppState extends ChangeNotifier {
   String get boardId => (view == Screen.editor && cur != null) ? cur!.board : board;
   Set<String> get installedLibs => {for (final e in libs.entries) if (e.value) e.key};
 
-  /// True until this device's user has told the app their name (first start).
-  bool get needsProfile => user.trim().isEmpty;
+  /// Whether the welcome screen was answered on this device. The name is optional, so this is kept apart from it.
+  bool welcomed = false;
+
+  /// True until the welcome screen was answered (first start).
+  bool get needsProfile => !welcomed;
 
   /// First name, for greetings.
   String get firstName => user.trim().split(RegExp(r'\s+')).first;
 
-  /// Up to two initials for the avatar ("Thandi Mokoena" → "TM").
+  /// Up to two initials for the avatar ("Thandi Mokoena" → "TM"); empty without a name.
   String get initials {
     final words = user.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    if (words.isEmpty) return '?';
+    if (words.isEmpty) return '';
     String first(String w) => String.fromCharCode(w.runes.first);
     final a = first(words.first);
     final b = words.length > 1 ? first(words.last) : '';
     return (a + b).toUpperCase();
   }
 
+  /// A name is optional: a first name or a nickname is enough, and nothing at all is fine too.
   String? validateProfileName(String name) {
-    final t = name.trim();
-    if (t.isEmpty) return 'Type your name.';
-    if (t.length > 40) return 'Use 40 characters or fewer.';
+    if (name.trim().length > 40) return 'Use 40 characters or fewer.';
     return null;
   }
 
   /// Saves the name (and optional school or class) for this device.
   void setProfile({required String name, String school = ''}) {
+    welcomed = true;
     user = name.trim().replaceAll(RegExp(r'\s+'), ' ');
     this.school = school.trim();
     // After Reset all data the next profile starts with the starter projects again (W-04).
@@ -371,6 +374,7 @@ class AppState extends ChangeNotifier {
     // Saves from before the welcome screen always held the sample name, so only trust a
     // name the user typed in (marked with 'profile': true); otherwise ask once.
     if (field(() => o['profile'] as bool?) == true) {
+      welcomed = true;
       user = field(() => o['user'] as String?) ?? '';
       school = field(() => o['school'] as String?) ?? '';
     }
@@ -532,7 +536,7 @@ class AppState extends ChangeNotifier {
 
   Map<String, dynamic> toJson() => {
         'v': 1,
-        'profile': !needsProfile,
+        'profile': welcomed,
         'user': user,
         'school': school,
         'board': board,
@@ -1858,12 +1862,18 @@ class AppState extends ChangeNotifier {
     _savedFolder = null;
     await f?.forget();
     if (usbOpen) await disconnectUsb(quiet: true);
+    // Everything the app keeps on this device: the saved state with the copies of damaged saves set aside beside it
+    // (_keepAside), the rc- preferences (panels, the USB ports allowed, the folder question) and the Mac's build copies.
     try {
-      await _prefs?.remove(_storeKey);
-      await _prefs?.remove('rc-side');
-      await _prefs?.remove('rc-panel');
+      final keys = _prefs?.getKeys().where((k) => k.startsWith(_storeKey) || k.startsWith('rc-')).toList() ?? const <String>[];
+      for (final k in keys) {
+        await _prefs?.remove(k);
+      }
     } catch (_) {}
+    _folderAsked = false;
+    await local?.forgetBuilds();
     final fresh = Settings();
+    welcomed = false;
     user = '';
     school = '';
     board = 'v2';

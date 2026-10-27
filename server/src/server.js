@@ -169,13 +169,13 @@ export function createServer(cfg = loadConfig()) {
         res.writeHead(204, {
           ...cors,
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, X-Cog-Key',
           'Access-Control-Max-Age': '600',
         });
         return res.end();
       }
       if (req.method === 'GET' && url.pathname === '/health') {
-        return send(res, 200, { ok: true, ...versions, running: queue.running, queued: queue.queued, cog: { ready: cog.ready, model: cog.model } }, cors);
+        return send(res, 200, { ok: true, ...versions, running: queue.running, queued: queue.queued, cog: { ready: cog.ready, model: cog.model, keys: cog.keys } }, cors);
       }
       if (req.method === 'GET' && url.pathname === '/boards') {
         return send(res, 200, { boards: Object.entries(BOARDS).map(([id, b]) => ({ id, name: b.name, fqbn: b.fqbn, arch: b.arch })), limits: LIMITS }, cors);
@@ -200,12 +200,20 @@ export function createServer(cfg = loadConfig()) {
         const result = await pending;
         return send(res, 200, result, cors);
       }
+      if (req.method === 'GET' && url.pathname === '/cog/key') {
+        const ip = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+        if (!cogLimit(ip)) return send(res, 429, { error: 'Cog needs a short break. Wait a minute and ask again.' }, { ...cors, 'Retry-After': '60' });
+        cog.admit(req.headers['x-cog-key']);
+        return send(res, 200, { ok: true }, cors);
+      }
       if (req.method === 'POST' && url.pathname.startsWith('/cog/')) {
         const kind = url.pathname.slice(5);
         if (!['chat', 'fix', 'check'].includes(kind)) return send(res, 404, { error: 'Not found.' }, cors);
         if (origin && !cors['Access-Control-Allow-Origin']) return send(res, 403, { error: 'Origin not allowed.' });
         const ip = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+        // The limit comes first, so keys can't be guessed quickly.
         if (!cogLimit(ip)) return send(res, 429, { error: 'Cog needs a short break. Wait a minute and ask again.' }, { ...cors, 'Retry-After': '60' });
+        cog.admit(req.headers['x-cog-key']);
         if (!String(req.headers['content-type'] ?? '').includes('application/json')) {
           throw new RequestError(415, 'Send JSON (Content-Type: application/json).');
         }

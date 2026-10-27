@@ -14,6 +14,8 @@
   const MODE = location.hash === '#code' ? 'code' : 'blocks';
 
   const INK = '#1B2A41', CREAM = '#F7F1E3', PAPER = '#FFFCF5', YELLOW = '#F2B01E';
+  // The Navy theme's Pins & Serial blue: 3:1 against its workspace, with cream text at 4.5:1 (WCAG).
+  const PINS_NAVY = '#4F6FA0';
   // Board context from the app: project name, board id and the pins the pin blocks offer.
   const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], analogPins: [], userPin: 42, led: 2, theme: 'paper' };
 
@@ -93,7 +95,7 @@
   function theme(navy) {
     const styles = {};
     for (const [k, , c] of CATS) {
-      const primary = navy && k === 'pins' ? '#3E5A86' : c;
+      const primary = navy && k === 'pins' ? PINS_NAVY : c;
       styles['rc_' + k] = { colourPrimary: primary, colourSecondary: darker(primary, 0.85), colourTertiary: INK };
     }
     // Blockly's own blocks take the RoboCore colours (and categories, see defineBlocks()).
@@ -119,9 +121,10 @@
         scrollbarOpacity: 0.4,
         insertionMarkerColour: navy ? CREAM : INK,
         insertionMarkerOpacity: 0.3,
-        selectedGlowColour: YELLOW,
-        cursorColour: YELLOW,
-        markerColour: YELLOW,
+        // Navy on paper (yellow there is 1.9:1, under WCAG's 3:1), the box yellow on navy.
+        selectedGlowColour: navy ? YELLOW : INK,
+        cursorColour: navy ? YELLOW : INK,
+        markerColour: navy ? YELLOW : INK,
       },
       // Blockly's size is in points: 9.75 pt = 13 px, the design's Block/Label.
       fontStyle: { family: 'Barlow, sans-serif', weight: '600', size: 9.75 },
@@ -151,6 +154,7 @@
         super.applyColour(block);
         const primary = (block.style && block.style.colourPrimary || '').toUpperCase();
         this.svgRoot.classList.toggle('rcNavyText', primary === YELLOW);
+        this.svgRoot.classList.toggle('rcInkBlock', primary === INK);
       }
     }
     class RcRenderer extends Blockly.zelos.Renderer {
@@ -241,21 +245,27 @@
       '.blocklyTrashFull .rcTrashCount { display: inline; }',
       '.rcTrashCount > rect { fill: ' + INK + '; }',
       '.rcTrashCount > text { fill: ' + CREAM + '; font: 600 11px Barlow, sans-serif; }',
-      // Selection and keyboard focus (BK-16) in the box yellow; on the yellow Events blocks in navy, or they would not show.
-      '.robocore-renderer.injectionDiv { --blockly-active-node-color: ' + YELLOW + '; --blockly-active-tree-color: ' + YELLOW + '; }',
+      // Selection and keyboard focus (BK-16): navy on paper and the box yellow on navy, where they reach 3:1 (WCAG). The
+      // yellow Events blocks keep navy (cream on navy), and the navy Pins & Serial blocks on paper take the yellow.
+      '.robocore-renderer.injectionDiv { --blockly-active-node-color: ' + INK + '; --blockly-active-tree-color: ' + INK + '; }',
+      '.robocore-renderer.robocore-navy-theme.injectionDiv, .robocore-renderer.injectionDiv .robocore-navy-theme {' +
+        ' --blockly-active-node-color: ' + YELLOW + '; --blockly-active-tree-color: ' + YELLOW + '; }',
       '.robocore-renderer .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + INK + '; stroke-width: 2.5px; }',
       '.blocklyKeyboardNavigation .robocore-renderer .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
         ' .blocklyKeyboardNavigation.robocore-renderer .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + INK + '; }',
       '.robocore-navy-theme .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { stroke: ' + CREAM + '; }',
       '.blocklyKeyboardNavigation .robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
         ' .blocklyKeyboardNavigation.robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + CREAM + '; }',
+      '.robocore-renderer .rcInkBlock.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + YELLOW + '; stroke-width: 2.5px; }',
+      '.blocklyKeyboardNavigation .robocore-renderer .rcInkBlock > .blocklyPath.blocklyActiveFocus,' +
+        ' .blocklyKeyboardNavigation.robocore-renderer .rcInkBlock > .blocklyPath.blocklyActiveFocus { stroke: ' + YELLOW + '; }',
       '.robocore-renderer .blocklyHighlightedConnectionPath { filter: drop-shadow(0 0 1px ' + INK + '); }',
       // A round chip in the category's colour with its icon (the design's toolbox).
       '.rcCatIcon { display: inline-block; flex: none; width: 22px; height: 22px; border-radius: 50%;' +
         ' background-repeat: no-repeat; background-position: center; background-size: 14px 14px; }',
       ...CATS.map(([k, , c, icon]) => `.rcCat_${k} { background-color: ${c}; background-image: url("${svgUri(ICONS[icon], k === 'events' ? INK : CREAM, 24, 2.6)}"); }`),
       // On the navy toolbox the navy Pins & Serial chip takes the dark theme's lighter blue.
-      '.robocore-navy-theme .rcCat_pins { background-color: #3E5A86; }',
+      '.robocore-navy-theme .rcCat_pins { background-color: ' + PINS_NAVY + '; }',
     ].join('\n');
     document.head.appendChild(css);
   }
@@ -315,7 +325,7 @@
       text.setAttribute('x', '24');
       const b = text.getBBox();
       svgEl('rect', { class: 'rcSwatch', x: 0, y: b.y + b.height / 2 - 7, width: 14, height: 14, rx: 4,
-        fill: navy ? '#3E5A86' : CATS.find((x) => x[0] === key)[2] }, g);
+        fill: navy ? PINS_NAVY : CATS.find((x) => x[0] === key)[2] }, g);
     }
   }
 
@@ -1347,7 +1357,7 @@
       'editorSuggestWidget.background': '#FFFFFF', 'editorSuggestWidget.border': '#1B2A4129',
       'editorSuggestWidget.selectedBackground': '#F2B01E38', 'editorHoverWidget.background': '#FFFFFF',
       'editorHoverWidget.border': '#1B2A4129', 'diffEditor.insertedTextBackground': '#F2B01E38',
-      'diffEditor.removedTextBackground': '#1B2A410F', focusBorder: YELLOW,
+      'diffEditor.removedTextBackground': '#1B2A410F',
       'editor.lineHighlightBackground': '#F2B01E1F', 'editor.selectionBackground': '#F2B01E55',
       'editorOverviewRuler.errorForeground': '#1B2A41', 'editorOverviewRuler.warningForeground': '#8A5A00',
       'editorBracketMatch.border': '#F2B01E', 'editorBracketMatch.background': '#F2B01E33',
@@ -1355,7 +1365,8 @@
     monaco.editor.defineTheme('robocore-paper', {
       base: 'vs', inherit: true, rules: rules(false),
       colors: Object.assign({}, common, {
-        'editor.background': PAPER, 'editor.foreground': INK, 'editorLineNumber.foreground': '#1B2A4166',
+        // Line numbers and the focus border at WCAG contrast (4.5:1 and 3:1).
+        'editor.background': PAPER, 'editor.foreground': INK, 'editorLineNumber.foreground': '#6A7380', focusBorder: INK,
         'editorLineNumber.activeForeground': INK, 'editorError.foreground': INK, 'editorWarning.foreground': '#8A5A00',
         'editorCursor.foreground': INK,
       }),
@@ -1363,7 +1374,7 @@
     monaco.editor.defineTheme('robocore-navy', {
       base: 'vs-dark', inherit: true, rules: rules(true),
       colors: Object.assign({}, common, {
-        'editor.background': INK, 'editor.foreground': CREAM, 'editorLineNumber.foreground': '#F7F1E366',
+        'editor.background': INK, 'editor.foreground': CREAM, 'editorLineNumber.foreground': '#8A93A0', focusBorder: YELLOW,
         'editorLineNumber.activeForeground': CREAM, 'editorError.foreground': CREAM, 'editorWarning.foreground': '#E8B04B',
         'editorCursor.foreground': CREAM, 'editorSuggestWidget.background': '#22344F', 'editorHoverWidget.background': '#22344F',
         'editorSuggestWidget.foreground': CREAM, 'editorHoverWidget.foreground': CREAM,

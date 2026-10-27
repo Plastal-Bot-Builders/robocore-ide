@@ -103,6 +103,8 @@ tar -C "$D" -cJf "$OUT/uno.tar.xz" packages/arduino
 tar -C "$D" -cJf "$OUT/esp32.tar.xz" packages/esp32
 cp -R "$ARDUINO_DIRECTORIES_USER/libraries/." "$OUT/libraries/"
 cp -R "$ROOT/firmware/RoboCore" "$OUT/libraries/RoboCore"
+# The GPL and LGPL texts and the list of what is inside, with where its source is (About → Licences, the DMG).
+bash "$ROOT/tools/offline_licences.sh" "$D" "$OUT/libraries" "$CLI_VERSION" "$OUT/licenses"
 cat > "$OUT/manifest.json" <<EOF
 {
   "arch": "$ARCH",

@@ -21,11 +21,13 @@ import 'app_state_test.dart' show FakeUsb;
 class FakeCog extends CogClient {
   FakeCog() : super(client: MockClient((_) async => http.Response('', 500)));
   final asked = <Map<String, Object?>>[];
+  final keys = <String>[];
   String reply = 'Arduino names are case-sensitive.';
 
   @override
-  Stream<CogEvent> chat(String server, Map<String, Object?> body) async* {
+  Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = ''}) async* {
     asked.add(body);
+    keys.add(key);
     for (final w in reply.split(' ')) {
       yield CogText('$w ');
     }
@@ -33,13 +35,13 @@ class FakeCog extends CogClient {
   }
 
   @override
-  Future<CogFix> fix(String server, Map<String, Object?> body) async {
+  Future<CogFix> fix(String server, Map<String, Object?> body, {String key = ''}) async {
     asked.add(body);
     return const CogFix(explanation: 'Use a capital W.', file: 'Blink.ino', newContent: 'void setup() {}\nvoid loop() { digitalWrite(LED_BUILTIN, HIGH); }\n');
   }
 
   @override
-  Future<CogCheck> check(String server, Map<String, Object?> body) async {
+  Future<CogCheck> check(String server, Map<String, Object?> body, {String key = ''}) async {
     asked.add(body);
     return const CogCheck(question: 'Which compiles?', options: ['delay(1);', 'Delay(1);'], answer: 0, explanation: 'Lower case.', concept: 'Names are case-sensitive');
   }
@@ -50,7 +52,10 @@ Future<(AppState, FakeCog)> openProject() async {
   final fake = FakeCog();
   final s = AppState(usbLink: FakeUsb(), cogClient: fake);
   await s.load();
-  s.updateSettings((x) => x.compileServer = 'http://localhost:8080');
+  s.updateSettings((x) => x
+    ..compileServer = 'http://localhost:8080'
+    ..cogRead = true
+    ..cogNoticeSeen = true);
   s.openExample(kExamples.firstWhere((e) => e.blocksFor('v2') != null).id);
   s.setMode('code');
   final p = s.cur!;
@@ -79,6 +84,17 @@ void main() {
       expect((ev.single as CogProblem).offline, isTrue);
       final none = await down.chat('', {}).toList();
       expect((none.single as CogProblem).message, kCogNoServer);
+    });
+
+    test('sends the school key, when there is one', () async {
+      final heard = <String?>[];
+      final c = CogClient(client: MockClient((req) async {
+        heard.add(req.headers['X-Cog-Key']);
+        return http.Response('{"explanation":"e","file":"a.ino","newContent":"x"}', 200);
+      }));
+      await c.fix('http://localhost:8080', {}, key: 'lusaka-1');
+      await c.fix('http://localhost:8080', {});
+      expect(heard, ['lusaka-1', null]);
     });
 
     test('passes on the server’s error message', () async {
@@ -169,13 +185,72 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final s = AppState(usbLink: FakeUsb(), cogClient: CogClient(client: MockClient((_) => Future.error(Exception('down')))));
       await s.load();
-      s.updateSettings((x) => x.compileServer = 'http://localhost:8080');
+      s.updateSettings((x) => x
+        ..compileServer = 'http://localhost:8080'
+        ..cogNoticeSeen = true);
       s.openExample(kExamples.first.id);
       await s.cog.ask('Hello?');
       expect(s.cog.items.last.kind, CogKind.notice);
       expect(s.cog.items.last.offline, isTrue);
       expect(s.cog.busy, isFalse);
     });
+  });
+
+  group('before anything goes to Cog', () {
+    test('the notice comes first: nothing is sent until it was read', () async {
+      final (s, fake) = await openProject();
+      s.updateSettings((x) => x.cogNoticeSeen = false);
+      await s.cog.ask('Hello?');
+      await s.cog.explainError(s.problems.first);
+      expect(fake.asked, isEmpty);
+      expect(s.cog.open, isTrue, reason: 'the panel opens on the notice');
+      s.cog.noticeSeen();
+      await s.cog.ask('Hello?');
+      expect(fake.asked, hasLength(1));
+    });
+
+    test('turned off, Cog neither opens nor sends', () async {
+      final (s, fake) = await openProject();
+      s.updateSettings((x) => x.cogOn = false);
+      s.cog.toggle();
+      await s.cog.ask('Hello?');
+      expect(s.cog.open, isFalse);
+      expect(fake.asked, isEmpty);
+    });
+
+    test('the school key goes with every request', () async {
+      final (s, fake) = await openProject();
+      s.updateSettings((x) => x.cogKey = 'lusaka-1');
+      await s.cog.ask('Hello?');
+      expect(fake.keys, ['lusaka-1']);
+    });
+
+    test('only Cog’s own replies go back as Cog’s words; a fix is a note from the IDE', () async {
+      final (s, fake) = await openProject();
+      s.updateSettings((x) => x.cogStyle = 'explain');
+      await s.cog.explainError(s.problems.first);
+      await s.cog.showFix();
+      await s.cog.ask('Thanks');
+      final sent = (fake.asked.last['messages'] as List).cast<Map>();
+      final cog = sent.where((m) => m['role'] == 'assistant').map((m) => '${m['content']}'.trim()).toList();
+      expect(cog, [fake.reply], reason: 'the one streamed reply, word for word');
+      expect(sent.any((m) => m['role'] == 'user' && '${m['content']}'.contains('[RoboCore IDE: Cog suggested a change to Blink.ino')), isTrue);
+    });
+  });
+
+  test('Cog reads the project only when someone turns it on', () {
+    expect(Settings().cogRead, isFalse);
+    expect(Settings.fromJson({}).cogRead, isFalse);
+    expect(Settings.fromJson({}).cogOn, isTrue);
+    expect(Settings.fromJson({}).cogNoticeSeen, isFalse);
+    final st = Settings.fromJson((Settings()
+          ..cogOn = false
+          ..cogNoticeSeen = true
+          ..cogKey = 'k')
+        .toJson());
+    expect((st.cogOn, st.cogNoticeSeen, st.cogKey), (false, true, 'k'));
+    expect(Settings.fromJson({'cogRead': true}).cogRead, isFalse, reason: 'saved by an older version: only the old default');
+    expect(Settings.fromJson({'cogRead': true, 'cogNoticeSeen': false}).cogRead, isTrue, reason: 'turned on since');
   });
 
   test('Cog settings and learned concepts are saved', () {
