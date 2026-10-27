@@ -246,12 +246,17 @@ class RcCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    // The edge is drawn over the content, so a child filled to the edges can't cover it at the rounded corners.
+    // The edge stays under the content: the editors' WebViews sit in an RcCard, and on the Mac anything Flutter draws
+    // over a WebView takes its clicks (a border drawn on top covered the whole card, and the editors stopped
+    // answering). Cards with a preview filled to their edges draw their edge on top themselves (ProjectCard).
     return Container(
       padding: padding,
       clipBehavior: clip ? Clip.antiAlias : Clip.none,
-      decoration: BoxDecoration(color: color ?? c.surface, borderRadius: BorderRadius.circular(radius)),
-      foregroundDecoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(radius)),
+      decoration: BoxDecoration(
+        color: color ?? c.surface,
+        border: Border.all(color: c.line),
+        borderRadius: BorderRadius.circular(radius),
+      ),
       child: child,
     );
   }
