@@ -11,6 +11,7 @@ const kWebEditors = true;
 
 extension type _Frame._(JSObject _) implements JSObject {
   external set src(String value);
+  external set title(String value);
   external bool get isConnected;
   external _Style get style;
   external _Win? get contentWindow;
@@ -188,6 +189,7 @@ Widget _frame(String mode, void Function(_Api api) onReady) => HtmlElementView.f
               api.setIdeKeys(((JSString action) => _ideKey?.call(action.toDart)).toJS);
               onReady(api);
             }).toJS);
+        f.title = mode == 'blocks' ? 'Blocks editor' : 'Code editor'; // what a screen reader calls the frame
         f.src = 'robocore_editors.html#$mode';
       },
     );

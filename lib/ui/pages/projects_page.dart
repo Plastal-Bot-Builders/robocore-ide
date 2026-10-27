@@ -98,7 +98,7 @@ class _NoProjects extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 24),
       child: Column(children: [
-        Opacity(opacity: c.dark ? .5 : 1, child: Image.asset('assets/images/robot.webp', width: 300, filterQuality: FilterQuality.medium)),
+        Opacity(opacity: c.dark ? .5 : 1, child: Image.asset('assets/images/robot.webp', width: 300, filterQuality: FilterQuality.medium, excludeFromSemantics: true)),
         const SizedBox(height: 14),
         Text('NO PROJECTS YET', style: tH1(c), textAlign: TextAlign.center),
         const SizedBox(height: 6),

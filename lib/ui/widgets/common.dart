@@ -25,35 +25,82 @@ class RcIcon extends StatelessWidget {
   }
 }
 
-/// Pointer-hover aware wrapper used by most clickable things.
+/// Pointer-hover aware wrapper used by most clickable things. It takes the keyboard focus too: Tab reaches it,
+/// Enter or Space presses it, and a ring shows where the focus is (WCAG 2.1.1, 2.4.7). [radius] is the ring's.
 class Hover extends StatefulWidget {
-  const Hover({super.key, required this.builder, this.onTap, this.cursor = SystemMouseCursors.click, this.tooltip});
+  const Hover({super.key, required this.builder, this.onTap, this.cursor = SystemMouseCursors.click, this.tooltip, this.radius = 6});
   final Widget Function(BuildContext context, bool hover) builder;
   final VoidCallback? onTap;
   final MouseCursor cursor;
   final String? tooltip;
+  final double radius;
 
   @override
   State<Hover> createState() => _HoverState();
 }
 
 class _HoverState extends State<Hover> {
-  bool _h = false;
+  bool _h = false, _ring = false;
+
+  late final _actions = <Type, Action<Intent>>{
+    ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => widget.onTap?.call()),
+    ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(onInvoke: (_) => widget.onTap?.call()),
+  };
+
   @override
   Widget build(BuildContext context) {
-    Widget w = MouseRegion(
-      cursor: widget.onTap == null ? SystemMouseCursors.basic : widget.cursor,
-      onEnter: (_) => setState(() => _h = true),
-      onExit: (_) => setState(() => _h = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: widget.builder(context, _h),
+    // A focused one looks hovered as well, so a menu row shows its highlight under the keyboard too. The ring sits
+    // just outside, so it shows on a navy button too; the Stack stays when it goes, so the button keeps its state.
+    Widget w = Stack(fit: StackFit.passthrough, clipBehavior: Clip.none, children: [
+      widget.builder(context, _h || _ring),
+      if (_ring)
+        Positioned(
+          left: -3,
+          top: -3,
+          right: -3,
+          bottom: -3,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: FocusRing.of(context), width: 2),
+                borderRadius: BorderRadius.circular(widget.radius + 3),
+              ),
+            ),
+          ),
+        ),
+    ]);
+    w = FocusableActionDetector(
+      enabled: widget.onTap != null,
+      actions: _actions,
+      mouseCursor: MouseCursor.defer,
+      onShowFocusHighlight: (v) => setState(() => _ring = v),
+      child: MouseRegion(
+        cursor: widget.onTap == null ? SystemMouseCursors.basic : widget.cursor,
+        onEnter: (_) => setState(() => _h = true),
+        onExit: (_) => setState(() => _h = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: w,
+        ),
       ),
     );
     if (widget.tooltip != null) w = tipped(widget.tooltip!, w);
     return Semantics(button: widget.onTap != null, label: widget.tooltip, child: w);
   }
+}
+
+/// The keyboard-focus ring's colour for the controls under it. The top bar is yellow in both themes, so it asks
+/// for navy there; elsewhere it is the theme's [RC.focus].
+class FocusRing extends InheritedWidget {
+  const FocusRing({super.key, required this.color, required super.child});
+  final Color color;
+
+  static Color of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<FocusRing>()?.color ?? RC.of(context).focus;
+
+  @override
+  bool updateShouldNotify(FocusRing old) => color != old.color;
 }
 
 final _shortcutTip = RegExp(r'^(.+) \(((?:Cmd|Ctrl)[^()]*)\)$');
@@ -233,7 +280,7 @@ class RcSwitch extends StatelessWidget {
           padding: const EdgeInsets.all(2),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: value ? (c.dark ? kBrand : kNavy) : (c.dark ? c.line : const Color(0xFFDBDBD8)),
+            color: value ? (c.dark ? kBrand : kNavy) : c.field,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Container(
@@ -278,7 +325,7 @@ class RcInput extends StatelessWidget {
     // An error keeps the ink border (1.5 px) and shows a warning icon in the field; the message under it is bold.
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(6),
-      borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide(color: c.line),
+      borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide(color: c.field),
     );
     return SizedBox(
       height: height,
@@ -400,7 +447,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
           padding: const EdgeInsets.only(left: 10, right: 8),
           decoration: BoxDecoration(
             color: c.dark ? c.sunk : Colors.white,
-            border: _open ? Border.all(color: c.ink, width: 1.5) : Border.all(color: c.line),
+            border: _open ? Border.all(color: c.ink, width: 1.5) : Border.all(color: c.field),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(

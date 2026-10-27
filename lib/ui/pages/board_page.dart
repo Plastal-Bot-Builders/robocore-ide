@@ -102,7 +102,8 @@ class BoardPage extends StatelessWidget {
         ]),
         const SizedBox(height: 16),
         LayoutBuilder(builder: (context, k) {
-          final art = b.id == 'v2' ? Image.asset('assets/images/board.png', width: 380, filterQuality: FilterQuality.medium) : null;
+          final art = b.id == 'v2' ? Image.asset('assets/images/board.png',
+              width: 380, filterQuality: FilterQuality.medium, semanticLabel: 'The RoboCore V2 controller board') : null;
           if (art == null) return specs;
           if (k.maxWidth < 700) return Column(children: [art, const SizedBox(height: 16), specs]);
           return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

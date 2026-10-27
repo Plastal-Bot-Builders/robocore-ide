@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsBinding;
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'hw/local_compiler.dart';
@@ -12,6 +14,9 @@ import 'ui/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // In a browser Flutter builds its tree for screen readers only after a hidden "Enable accessibility" button is
+  // found and pressed; build it from the start instead.
+  if (kIsWeb) SemanticsBinding.instance.ensureSemantics();
   // The Mac app compiles on this Mac when it can (arduino-cli inside the app).
   final state = AppState()
     ..local = localBuilder()
@@ -69,7 +74,7 @@ class _Opening extends StatelessWidget {
       backgroundColor: c.bg,
       body: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SvgPicture.asset('assets/images/app_icon.svg', width: 72, height: 72),
+          SvgPicture.asset('assets/images/app_icon.svg', width: 72, height: 72, excludeFromSemantics: true),
           const SizedBox(height: 16),
           Text('Opening your projects…', style: tLabel(c, color: c.muted)),
         ]),

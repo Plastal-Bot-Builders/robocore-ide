@@ -385,98 +385,102 @@ class TopBar extends StatelessWidget {
       height: 56,
       padding: EdgeInsets.only(left: phone ? 8 : 20, right: phone ? 8 : 16),
       color: c.top,
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            if (phone) ...[IconBtn('menu', onTap: onMenu, tip: 'Open menu', color: kNavy, iconSize: 20), const SizedBox(width: 4)],
-            if (!(phone && p != null))
-              Hover(
-                onTap: () => s.go(Screen.home),
-                tooltip: 'RoboCore IDE home',
-                builder: (context, h) => ProductLockup(scale: phone ? .76 : 1, product: !phone),
-              ),
-            if (!phone) ...[const SizedBox(width: 12), Container(width: 1, height: 24, color: kNavy.withValues(alpha: .2)), const SizedBox(width: 12)],
-            // The project name takes the free space itself: a Flexible next to a Spacer would split it in half and leave
-            // the right-hand buttons stranded mid-bar on wide windows.
-            if (p != null)
-              Expanded(
-                child: Row(children: [
-                  Flexible(child: _ProjectName(p: p)),
-                  if (!phone) ...[const SizedBox(width: 12), _SavePill(p: p)],
-                ]),
-              )
-            else if (!phone) ...[
-              const SizedBox(width: 260, child: SearchBox()),
-              const Spacer(),
-            ] else
-              const Spacer(),
-            const SizedBox(width: 12),
-            BoardChip(compact: phone || (narrow && p != null)),
-            const SizedBox(width: 12),
-            // Editor: Verify · Upload · (Stop) · Ask Cog, as in the design's Top Bar.
-            if (p != null) ...[
-              phone
-                  ? IconBtn('check', onTap: s.busy == null ? s.verify : null, tip: 'Verify', color: kNavy)
-                  : Btn(s.busy == 'verify' ? 'Verifying…' : 'Verify',
-                      icon: 'check',
-                      kind: BtnKind.ghostTop,
-                      busy: s.busy == 'verify',
-                      tooltip: 'Verify ($kMod+R)',
-                      onTap: s.busy == null ? s.verify : null),
-              const SizedBox(width: 8),
-              phone
-                  ? _PrimaryIcon(icon: 'arrow', onTap: s.busy == null ? s.upload : null, tip: 'Upload')
-                  : _TopPrimary(
-                      label: s.busy != 'upload' ? 'Upload' : (s.uploadPct == null ? 'Uploading…' : 'Uploading ${s.uploadPct} %'),
-                      icon: 'arrow',
-                      busy: s.busy == 'upload',
-                      progress: s.busy == 'upload' && s.uploadPct != null ? s.uploadPct! / 100 : null,
-                      tooltip: 'Upload ($kMod+U)',
-                      onTap: s.busy == null ? s.upload : null),
-              // Stop: only while a Verify or Upload runs, or the preview board runs the sketch (E-07).
-              ListenableBuilder(
-                listenable: s.sim,
-                builder: (context, _) => !s.canStop
-                    ? const SizedBox.shrink()
-                    : Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: _PrimaryIcon(
-                          icon: 'stop',
-                          onTap: s.stop,
-                          tip: s.busy == 'upload'
-                              ? 'Cancel the upload'
-                              : s.busy == 'verify'
-                                  ? 'Cancel Verify'
-                                  : 'Stop the sketch',
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              CogButton(compact: phone || narrow),
-            ] else
-              phone
-                  ? _PrimaryIcon(icon: 'plus', onTap: () => showNewProjectDialog(context), tip: 'New project')
-                  : _TopPrimary(label: 'New project', icon: 'plus', onTap: () => showNewProjectDialog(context)),
-            if (!phone) ...[
-              const SizedBox(width: 12),
-              Hover(
-                onTap: () => s.go(Screen.settings),
-                tooltip: 'Settings',
-                builder: (context, h) => Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                      color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-                  child: SvgPicture.string(_gearSvg,
-                      width: 17, height: 17, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn)),
+      // A yellow focus ring (the Navy theme's) would not show on the yellow bar.
+      child: FocusRing(
+        color: kNavy,
+        child: SafeArea(
+          bottom: false,
+          child: Row(
+            children: [
+              if (phone) ...[IconBtn('menu', onTap: onMenu, tip: 'Open menu', color: kNavy, iconSize: 20), const SizedBox(width: 4)],
+              if (!(phone && p != null))
+                Hover(
+                  onTap: () => s.go(Screen.home),
+                  tooltip: 'RoboCore IDE home',
+                  builder: (context, h) => ProductLockup(scale: phone ? .76 : 1, product: !phone),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const AccountButton(),
+              if (!phone) ...[const SizedBox(width: 12), Container(width: 1, height: 24, color: kNavy.withValues(alpha: .2)), const SizedBox(width: 12)],
+              // The project name takes the free space itself: a Flexible next to a Spacer would split it in half and leave
+              // the right-hand buttons stranded mid-bar on wide windows.
+              if (p != null)
+                Expanded(
+                  child: Row(children: [
+                    Flexible(child: _ProjectName(p: p)),
+                    if (!phone) ...[const SizedBox(width: 12), _SavePill(p: p)],
+                  ]),
+                )
+              else if (!phone) ...[
+                const SizedBox(width: 260, child: SearchBox()),
+                const Spacer(),
+              ] else
+                const Spacer(),
+              const SizedBox(width: 12),
+              BoardChip(compact: phone || (narrow && p != null)),
+              const SizedBox(width: 12),
+              // Editor: Verify · Upload · (Stop) · Ask Cog, as in the design's Top Bar.
+              if (p != null) ...[
+                phone
+                    ? IconBtn('check', onTap: s.busy == null ? s.verify : null, tip: 'Verify', color: kNavy)
+                    : Btn(s.busy == 'verify' ? 'Verifying…' : 'Verify',
+                        icon: 'check',
+                        kind: BtnKind.ghostTop,
+                        busy: s.busy == 'verify',
+                        tooltip: 'Verify ($kMod+R)',
+                        onTap: s.busy == null ? s.verify : null),
+                const SizedBox(width: 8),
+                phone
+                    ? _PrimaryIcon(icon: 'arrow', onTap: s.busy == null ? s.upload : null, tip: 'Upload')
+                    : _TopPrimary(
+                        label: s.busy != 'upload' ? 'Upload' : (s.uploadPct == null ? 'Uploading…' : 'Uploading ${s.uploadPct} %'),
+                        icon: 'arrow',
+                        busy: s.busy == 'upload',
+                        progress: s.busy == 'upload' && s.uploadPct != null ? s.uploadPct! / 100 : null,
+                        tooltip: 'Upload ($kMod+U)',
+                        onTap: s.busy == null ? s.upload : null),
+                // Stop: only while a Verify or Upload runs, or the preview board runs the sketch (E-07).
+                ListenableBuilder(
+                  listenable: s.sim,
+                  builder: (context, _) => !s.canStop
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: _PrimaryIcon(
+                            icon: 'stop',
+                            onTap: s.stop,
+                            tip: s.busy == 'upload'
+                                ? 'Cancel the upload'
+                                : s.busy == 'verify'
+                                    ? 'Cancel Verify'
+                                    : 'Stop the sketch',
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 8),
+                CogButton(compact: phone || narrow),
+              ] else
+                phone
+                    ? _PrimaryIcon(icon: 'plus', onTap: () => showNewProjectDialog(context), tip: 'New project')
+                    : _TopPrimary(label: 'New project', icon: 'plus', onTap: () => showNewProjectDialog(context)),
+              if (!phone) ...[
+                const SizedBox(width: 12),
+                Hover(
+                  onTap: () => s.go(Screen.settings),
+                  tooltip: 'Settings',
+                  builder: (context, h) => Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                        color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+                    child: SvgPicture.string(_gearSvg,
+                        width: 17, height: 17, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn), excludeFromSemantics: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const AccountButton(),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -640,7 +644,8 @@ class _BoardChipState extends State<BoardChip> {
           // Open: an ink border and an up chevron (the design's Board Selector).
           decoration: BoxDecoration(
             color: h || open ? Colors.white : const Color(0xFFFFFCF5),
-            border: open ? Border.all(color: kNavy, width: 1.5) : Border.all(color: const Color(0xFFDBDBD8)),
+            // Closed, a 60% navy edge: 3:1 against the yellow bar.
+            border: open ? Border.all(color: kNavy, width: 1.5) : Border.all(color: kNavy.withValues(alpha: .6)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [

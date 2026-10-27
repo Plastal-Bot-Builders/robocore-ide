@@ -82,6 +82,8 @@ class _ShortcutsDialog extends StatelessWidget {
           ('Suggestions', 'Ctrl+Space'),
           ('Quick fix, Explain with Cog', '$m+.'),
           ('Undo / redo', '$m+Z / $m+Shift+Z'),
+          // Monaco's Toggle Tab Key Moves Focus; until then Tab types a tab in the code.
+          ('Let Tab leave the editor (or type tabs again)', m == 'Cmd' ? 'Ctrl+Shift+M' : 'Ctrl+M'),
         ]
       ),
       (
@@ -94,6 +96,14 @@ class _ShortcutsDialog extends StatelessWidget {
           ('Move between blocks', 'Arrow keys'),
           ('Edit the field', 'Enter'),
           ('Open the toolbox', 'T'),
+        ]
+      ),
+      (
+        'Moving around',
+        [
+          ('Next / previous button or field', 'Tab / Shift+Tab'),
+          ('Press the button', 'Enter or Space'),
+          ('Move in a menu', 'Arrow keys'),
         ]
       ),
       ('Menus and dialogs', [('Close', 'Esc')]),

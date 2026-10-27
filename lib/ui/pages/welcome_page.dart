@@ -43,7 +43,7 @@ class _WelcomePageState extends State<WelcomePage> {
     return Scaffold(
       backgroundColor: kBrand,
       body: Stack(children: [
-        Positioned.fill(child: Image.asset('assets/images/contours.png', fit: BoxFit.cover)),
+        Positioned.fill(child: Image.asset('assets/images/contours.png', fit: BoxFit.cover, excludeFromSemantics: true)),
         Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),

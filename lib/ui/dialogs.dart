@@ -260,7 +260,7 @@ class RadioDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(color: on ? kNavy : const Color(0xFFA4A8AD), width: on ? 1.5 : 1),
+        border: Border.all(color: on ? kNavy : RC.paper.field, width: on ? 1.5 : 1),
       ),
       alignment: Alignment.center,
       child: on ? Container(width: 9, height: 9, decoration: const BoxDecoration(color: kNavy, shape: BoxShape.circle)) : null,
