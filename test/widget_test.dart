@@ -20,10 +20,11 @@ void main() {
     expect(find.text('WELCOME TO ROBOCORE'), findsOneWidget);
     expect(find.textContaining('FREDRICK'), findsNothing);
 
-    // An empty name is refused.
+    // The name is optional, but not endless.
+    await tester.enterText(find.byType(TextField).first, 'x' * 41);
     await tester.tap(find.text('Get started'));
     await tester.pump();
-    expect(find.text('Type your name.'), findsOneWidget);
+    expect(find.text('Use 40 characters or fewer.'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, 'Thandi Mokoena');
     await tester.enterText(find.byType(TextField).last, 'Grade 7B');

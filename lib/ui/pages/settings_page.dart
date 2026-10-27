@@ -378,7 +378,7 @@ class _ProfileRowState extends State<_ProfileRow> {
             ),
           ],
         );
-    final name = field('Name', _name, 'Your name', err: _error != null);
+    final name = field('First name or nickname', _name, 'Optional', err: _error != null);
     final school = field('School or class', _school, 'Optional');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),

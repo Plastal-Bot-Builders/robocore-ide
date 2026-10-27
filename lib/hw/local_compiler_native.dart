@@ -79,7 +79,26 @@ class _ArduinoCli implements LocalBuilder {
         'ARDUINO_DIRECTORIES_DOWNLOADS': '$_data/staging',
         'ARDUINO_DIRECTORIES_USER': '$_support/Arduino',
         'ARDUINO_BUILD_CACHE_PATH': '$_caches/arduino',
+        // Otherwise it asks downloads.arduino.cc once a day whether there is a newer arduino-cli.
+        'ARDUINO_UPDATER_ENABLE_NOTIFICATION': 'false',
       };
+
+  /// THIRD-PARTY-NOTICES.txt from the offline bundle (tools/make_offline_bundle.sh).
+  @override
+  Future<String?> licences() async {
+    final f = File('$offline/licenses/THIRD-PARTY-NOTICES.txt');
+    return await f.exists() ? f.readAsString() : null;
+  }
+
+  /// The sketch copies in Caches/RoboCore/build go; the compiled board cores (Caches/RoboCore/arduino) hold no one's
+  /// work and stay, so the next build is quick.
+  @override
+  Future<void> forgetBuilds() async {
+    final d = Directory('$_caches/build');
+    try {
+      if (await d.exists()) await d.delete(recursive: true);
+    } catch (_) {}
+  }
 
   Future<ProcessResult> _run(List<String> args, {String? cwd}) =>
       Process.run(cli, args, environment: _env, includeParentEnvironment: false, workingDirectory: cwd);

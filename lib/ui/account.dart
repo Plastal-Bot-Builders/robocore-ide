@@ -25,7 +25,7 @@ class AccountButton extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
+          Text(s.user.isEmpty ? 'No name set' : s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 2),
           Text(s.school.isEmpty ? 'This device' : '${s.school} · this device', style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
         ]),
@@ -43,9 +43,11 @@ class AccountButton extends StatelessWidget {
           height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: h || open ? kNavyHover : kNavy, shape: BoxShape.circle),
-          child: Text(s.initials,
-              style: const TextStyle(
-                  fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
+          child: s.initials.isEmpty
+              ? const RcIcon('user', size: 16, color: kBrand)
+              : Text(s.initials,
+                  style: const TextStyle(
+                      fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kBrand)),
         ),
       ),
     );

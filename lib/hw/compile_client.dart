@@ -82,6 +82,12 @@ abstract class LocalBuilder {
   /// Like [CompileClient.compile]. [onLog] gets progress lines, such as the board's tools being fetched the
   /// first time they are needed.
   Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog});
+
+  /// Deletes the copies of sketches left from builds (Reset all data). The board tools stay.
+  Future<void> forgetBuilds() async {}
+
+  /// The licences of the compiler and board tools that come with the app (About → Licences), or null.
+  Future<String?> licences() async => null;
 }
 
 /// Cleans up what the user typed in Settings: adds https:// and drops a trailing slash.

@@ -86,6 +86,25 @@ void main() {
     expect(s.projects, hasLength(5));
   });
 
+  test('Reset also removes the copies of damaged saves set aside and the other preferences', () async {
+    SharedPreferences.setMockInitialValues({
+      'robocore-ide-v1': '{"v":1,"profile":true,"user":"Thandi"}',
+      'robocore-ide-v1-damaged-1790000000000': '[{"name":"Thandi’s robot"}]',
+      'robocore-ide-v1-unreadable-1790000000001': 'garbage',
+      'rc-side': true,
+      'rc-usb-granted': '[]',
+      'something-else': 'kept',
+    });
+    final s = AppState();
+    await s.load();
+    s.sim.stop();
+    await s.resetAll();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getKeys(), {'something-else'});
+    s.setProfile(name: 'Mwila');
+    expect(s.projects, hasLength(5));
+  });
+
   test('success toasts hide after 4 s; errors stay until closed', () async {
     final s = await _state();
     s.showToast('Saved.');
