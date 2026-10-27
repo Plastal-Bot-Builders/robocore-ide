@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'hw/local_compiler.dart';
 import 'hw/sketchbook.dart';
+import 'licences.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'ui/app_scope.dart';
@@ -21,6 +22,7 @@ Future<void> main() async {
   final state = AppState()
     ..local = localBuilder()
     ..loading = true;
+  registerLicences(state.local);
   // The window first, so it never stays blank while the projects are read.
   runApp(RoboCoreApp(state: state));
   if (projectsFolderSupported) {

@@ -151,12 +151,15 @@ class _AboutDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    const lines = [
+    final lines = [
       'Blocks editor: Google Blockly (Apache 2.0)',
       'Code editor: Monaco (MIT)',
-      'Uploads: esptool-js (Apache 2.0) over Web Serial',
-      'Compiling: arduino-cli and the esp32 core, on the compile server',
-      'Ask Cog: Claude by Anthropic, through the compile server',
+      'Uploads: esptool-js (Apache 2.0)',
+      AppScope.read(context).local != null
+          ? 'Compiling: arduino-cli (GPL 3.0) with the Arduino AVR and ESP32 tools, on this Mac'
+          : 'Compiling: arduino-cli and the board tools, on the compile server',
+      'Ask Cog: Claude, an AI made by Anthropic, through the RoboCore server',
+      'Fonts: Barlow, JetBrains Mono, Noto (SIL OFL 1.1). Icons: Lucide (ISC)',
     ];
     return DialogFrame(
       title: 'About RoboCore IDE',
@@ -181,7 +184,15 @@ class _AboutDialog extends StatelessWidget {
         const SizedBox(height: 6),
         Text('Designed in Zambia by Plastal-Bot Builders.', style: tBody(c, size: 13, height: 18 / 13)),
       ]),
-      actions: [Btn('Done', kind: BtnKind.primary, onTap: () => Navigator.of(context).pop())],
+      actions: [
+        Btn('Licences', onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'RoboCore IDE',
+              applicationVersion: kAppVersion,
+              applicationIcon: const Padding(padding: EdgeInsets.all(8), child: AppIconTile(size: 48)),
+            )),
+        Btn('Done', kind: BtnKind.primary, onTap: () => Navigator.of(context).pop()),
+      ],
     );
   }
 }
