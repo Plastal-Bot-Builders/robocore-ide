@@ -218,7 +218,8 @@ const CONCEPTS = {
       const cx = ICX, cy = ICY, th = IG.rad(o.tilt), q = o.squash, k = o.rTip / 400;
       const sq = (pts) => pts.map((p) => [p[0], cy + (p[1] - cy) * q, (p[2] || 0)]);
       // the gear ring, flattened into an ellipse (ring frame: axis along x)
-      const outer = sq(IG.gearPoints({ cx, cy, n: o.n, rTip: o.rTip, rRoot: o.rRoot, wTip: o.wTip, wRoot: o.wRoot, rTipCorner: o.tipR, rRootCorner: o.rootR, phase: 0, arcStep: 0.035 }));
+      // spin (degrees): turns the gear in its own plane, so after the squash the teeth travel round the planet
+      const outer = sq(IG.gearPoints({ cx, cy, n: o.n, rTip: o.rTip, rRoot: o.rRoot, wTip: o.wTip, wRoot: o.wRoot, rTipCorner: o.tipR, rRootCorner: o.rootR, phase: IG.rad(o.spin || 0), arcStep: 0.035 }));
       const onAxis = (p) => Math.abs(p[1] - cy) < 0.01;
       // half of the ring: half of the toothed disc with the half inner ellipse carved out of its straight edge
       const half = (sign) => {
