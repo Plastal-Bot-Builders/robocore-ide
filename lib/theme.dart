@@ -5,6 +5,9 @@ const fBody = 'Barlow';
 const fDisplay = 'BarlowCondensed';
 const fMono = 'JetBrainsMono';
 
+/// For the arrows, ✓ and ⌘ that Barlow and JetBrains Mono lack (pubspec.yaml), so the web app never fetches them.
+const kSymbolFonts = ['NotoSansMath', 'NotoSansSymbols2'];
+
 const kBrand = Color(0xFFF2B01E);
 const kBrandPressed = Color(0xFFD99A0F);
 const kNavy = Color(0xFF1B2A41);
@@ -156,6 +159,7 @@ ThemeData buildTheme(RC c) {
     useMaterial3: true,
     brightness: c.dark ? Brightness.dark : Brightness.light,
     fontFamily: fBody,
+    fontFamilyFallback: kSymbolFonts,
     scaffoldBackgroundColor: c.bg,
     colorScheme: ColorScheme.fromSeed(
       seedColor: kBrand,
