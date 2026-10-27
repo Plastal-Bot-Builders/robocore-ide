@@ -12,6 +12,7 @@ import 'ui/editor/web_editors.dart' show EditorFramesObserver, initWebEditors;
 import 'ui/mac_app.dart';
 import 'ui/shell.dart';
 import 'ui/splash.dart';
+import 'ui/widgets/logo_intro.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,13 +62,91 @@ class _LaunchAppState extends State<LaunchApp> {
     });
   }
 
+  void _splashDone() => setState(() => _splash = false);
+
   @override
   Widget build(BuildContext context) => Directionality(
         textDirection: TextDirection.ltr,
         child: Stack(fit: StackFit.expand, children: [
           if (_loaded) RoboCoreApp(key: const ValueKey('app'), state: widget.state),
-          if (_splash) Splash(key: const ValueKey('splash'), ready: _loaded, onDone: () => setState(() => _splash = false)),
+          // The Mac app opens with its icon's gear ring spinning round the planet; the others with the splash.
+          if (_splash)
+            isMacApp
+                ? MacIntro(key: const ValueKey('splash'), state: widget.state, ready: _loaded, onDone: _splashDone)
+                : Splash(key: const ValueKey('splash'), ready: _loaded, onDone: _splashDone),
         ]),
+      );
+}
+
+/// The Mac app's launch: the app icon's gear ring spins round the planet and settles (ui/widgets/logo_intro.dart)
+/// while the app loads behind it, then fades into the app as the splash does. If the projects take longer,
+/// "Opening your projects…" shows under the still icon until they are read.
+class MacIntro extends StatefulWidget {
+  const MacIntro({super.key, required this.state, required this.ready, required this.onDone});
+  final AppState state;
+
+  /// True once the app has loaded; the intro leaves after its animation and this.
+  final bool ready;
+
+  /// Called when the intro has faded out.
+  final VoidCallback onDone;
+
+  @override
+  State<MacIntro> createState() => _MacIntroState();
+}
+
+class _MacIntroState extends State<MacIntro> with SingleTickerProviderStateMixin {
+  late final _exit = AnimationController(vsync: this, duration: const Duration(milliseconds: 300))
+    ..addStatusListener((s) {
+      if (s == AnimationStatus.completed) widget.onDone();
+    });
+  bool _played = false;
+
+  /// Fades out once the animation has played and the app is ready.
+  void _next() {
+    if (_played && widget.ready && !_exit.isAnimating && !_exit.isCompleted) _exit.forward();
+  }
+
+  @override
+  void didUpdateWidget(MacIntro oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _next();
+  }
+
+  @override
+  void dispose() {
+    _exit.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        // The settings are read during the intro: from then on it is on the user's theme (Paper or Navy).
+        animation: Listenable.merge([widget.state, _exit]),
+        builder: (context, _) {
+          final c = widget.state.settings.theme == 'navy' ? RC.navy : RC.paper;
+          return IgnorePointer(
+            ignoring: _exit.isAnimating,
+            child: Opacity(
+              opacity: 1 - Curves.easeIn.transform(_exit.value),
+              child: ColoredBox(
+                color: c.bg,
+                child: LogoIntro(
+                  size: 96,
+                  // Kept in the layout so the icon never moves; seen only while the projects are still being read.
+                  caption: Opacity(
+                    opacity: widget.ready ? 0 : 1,
+                    child: Text('Opening your projects…', style: tLabel(c, color: c.muted)),
+                  ),
+                  onDone: () {
+                    _played = true;
+                    _next();
+                  },
+                ),
+              ),
+            ),
+          );
+        },
       );
 }
 

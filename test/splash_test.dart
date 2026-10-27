@@ -50,4 +50,50 @@ void main() {
     expect(ms, inInclusiveRange(3900, 4100));
     expect(find.text('WELCOME TO ROBOCORE'), findsOneWidget);
   });
+
+  // The Mac app opens with MacIntro instead (the gear ring spins round the planet), on the same terms.
+  double captionOpacity(WidgetTester tester) => tester
+      .widget<Opacity>(find.ancestor(of: find.text('Opening your projects…'), matching: find.byType(Opacity)).first)
+      .opacity;
+
+  testWidgets('the Mac intro spins, waits for the projects, then fades into the app', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState();
+    var done = false;
+    Widget intro(bool ready) => Directionality(
+          textDirection: TextDirection.ltr,
+          child: MacIntro(key: const ValueKey('intro'), state: state, ready: ready, onDone: () => done = true),
+        );
+    await tester.pumpWidget(intro(false));
+
+    // Still loading after the spin: the icon stays, and says so.
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(done, isFalse);
+    expect(captionOpacity(tester), 1);
+
+    // Loaded: the caption goes and the intro fades out.
+    await tester.pumpWidget(intro(true));
+    expect(captionOpacity(tester), 0);
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(done, isFalse);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(done, isTrue);
+  });
+
+  testWidgets('a quick load: the Mac intro leaves as soon as the ring has settled', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var done = false;
+    await tester.pumpWidget(Directionality(
+      textDirection: TextDirection.ltr,
+      child: MacIntro(state: AppState(), ready: true, onDone: () => done = true),
+    ));
+    expect(captionOpacity(tester), 0);
+    var ms = 0;
+    while (!done && ms < 4000) {
+      await tester.pump(const Duration(milliseconds: 20));
+      ms += 20;
+    }
+    expect(ms, inInclusiveRange(1700, 1900));
+  });
 }
