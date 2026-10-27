@@ -25,6 +25,19 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body style="background:#F2B01E">
+  <!-- While the app downloads: the Geared Ring mark where the launch animation (lib/ui/splash.dart) draws it,
+       the same width (kSplashMarkWidth), gently breathing. The app takes over on its first frame. -->
+  <style>
+    #rc-launch { position: fixed; left: 50%; top: 50%; width: 200px; transform: translate(-50%, -50%);
+      opacity: 0; animation: rc-in .4s ease-out .25s forwards, rc-breathe 1.6s ease-in-out .65s infinite; }
+    @keyframes rc-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+    @keyframes rc-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }
+    @media (prefers-reduced-motion: reduce) { #rc-launch { animation: none; opacity: 1; } }
+  </style>
+  <img id="rc-launch" src="assets/assets/images/app_mark.svg" alt="">
+  <script>
+    window.addEventListener('flutter-first-frame', () => document.getElementById('rc-launch')?.remove());
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
