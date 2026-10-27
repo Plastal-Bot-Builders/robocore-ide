@@ -1527,8 +1527,16 @@
       onExplain = onExplainLine || null;
       const o = JSON.parse(optionsJson);
       const opts = codeOptions(o);
+      // Monaco measures one character and places the cursor by multiplying it. Measured before JetBrains Mono had
+      // loaded, that was another font's width, and the cursor drifted away from the text along a line (several
+      // characters in the Mac app's WebKit). So the font comes first, Monaco measures again whenever fonts load, and
+      // the cursor is placed by measuring the text itself (disableMonospaceOptimizations).
+      try {
+        await Promise.all(['400', '700'].map((w) => document.fonts.load(`${w} 13px 'JetBrains Mono'`)));
+      } catch (_) { /* a font that can't load: the fallback, measured as it is */ }
       editor = monaco.editor.create(document.getElementById('host'), Object.assign({
         language: 'cpp',
+        disableMonospaceOptimizations: true,
         theme: CTX.theme === 'navy' ? 'robocore-navy' : 'robocore-paper',
         automaticLayout: true,
         minimap: { enabled: false },
@@ -1552,6 +1560,8 @@
         fixedOverflowWidgets: true,
         padding: { top: 8 },
       }, opts));
+      document.fonts.addEventListener('loadingdone', () => monaco.editor.remeasureFonts());
+      document.fonts.ready.then(() => monaco.editor.remeasureFonts());
       editor.onDidChangeModelContent(() => {
         if (applying || !onCodeChange) return;
         const model = editor.getModel();
