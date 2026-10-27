@@ -12,6 +12,7 @@ dependencies:
   flutter_svg: ^2.0.10
   http: ^1.2.2
   shared_preferences: ^2.3.2
+  webview_flutter: ^4.14.1
   webview_windows: ^0.4.0
 
 dev_dependencies:
@@ -23,6 +24,35 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    # The Blockly and Monaco page for the macOS and Windows apps' WebView (lib/ui/editor/web_editors_native.dart);
+    # the web app serves it from web/ itself.
+    - path: web/robocore_editors.html
+      platforms: [macos, windows]
+    - path: web/robocore_editors.js
+      platforms: [macos, windows]
+    # and the USB helper for the macOS app (lib/hw/usb_link_native.dart).
+    - path: web/robocore_usb_host.html
+      platforms: [macos]
+    - path: web/robocore_serial_shim.js
+      platforms: [macos]
+    - path: web/robocore_usb.js
+      platforms: [macos]
+    - path: web/vendor/esptool-js/
+      platforms: [macos]
+    - path: web/vendor/blockly/
+      platforms: [macos, windows]
+    - path: web/vendor/blockly/media/
+      platforms: [macos, windows]
+    - path: web/vendor/blockly/msg/
+      platforms: [macos, windows]
+    - path: web/vendor/monaco/vs/
+      platforms: [macos, windows]
+    - path: web/vendor/monaco/vs/assets/
+      platforms: [macos, windows]
+    - path: web/vendor/monaco/vs/basic-languages/
+      platforms: [macos, windows]
+    - path: web/vendor/monaco/vs/editor/
+      platforms: [macos, windows]
   fonts:
     - family: Barlow
       fonts:

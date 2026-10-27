@@ -39,7 +39,9 @@ Future<void> showDeleteProjectDialog(BuildContext context, Project p) => showDia
 
         return DialogFrame(
           title: 'Delete ${p.name}?',
-          subtitle: 'This deletes the project from this device. You can’t undo it.',
+          subtitle: s.folder != null
+              ? 'Its folder goes to the Trash, so you can still get it back from there.'
+              : 'This deletes the project from this device. You can’t undo it.',
           onSubmit: delete,
           actions: [
             Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
@@ -158,7 +160,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
       return;
     }
     Navigator.of(context).pop();
-    s.createProject(name: _name.text, mode: mode, boardId: board ?? s.board);
+    s.createProject(name: _name.text, mode: mode, boardId: board ?? s.newProjectBoard);
   }
 
   @override
@@ -193,7 +195,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
         const SizedBox(height: 16),
         const FieldLabel('Board'),
         RcSelect<String>(
-          value: board ?? s.board,
+          value: board ?? s.newProjectBoard,
           height: 36,
           width: double.infinity,
           items: _boardItems,

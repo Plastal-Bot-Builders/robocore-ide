@@ -462,6 +462,10 @@ class Interpreter {
           return 0;
         case 'millis':
           return io.millis();
+        case 'pulseIn':
+          // An HC-SR04 read by hand (the blocks on boards without the RoboCore library): the echo of the preview
+          // board's distance, 58 µs a centimetre.
+          return (io.distance() * 58).round();
         case 'micros':
           return io.millis() * 1000;
         case 'random':

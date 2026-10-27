@@ -1,13 +1,14 @@
 // The USB-C link to a real board: Serial Monitor and flashing.
 //
-// On the web this is Web Serial plus esptool-js (web/robocore_usb.js); in the Windows app, the COM port through
-// arduino-cli, avrdude and esptool (usb_link_native.dart). Elsewhere (tests, and the other
-// native apps for now) it reports itself as unsupported and the IDE keeps using the preview board.
+// On the web this is Web Serial plus esptool-js (web/robocore_usb.js). The macOS app runs the same helper on
+// the Mac’s serial ports (usb_link_native.dart); the Windows app uses the COM port through arduino-cli, avrdude and
+// esptool (usb_link_windows.dart). Elsewhere (tests, and the other native apps for now) it reports
+// itself as unsupported and the IDE keeps using the preview board.
 import 'dart:convert';
 
-import 'usb_link_stub.dart'
-    if (dart.library.js_interop) 'usb_link_web.dart'
-    if (dart.library.io) 'usb_link_native.dart' as impl;
+import 'package:flutter/widgets.dart';
+
+import 'usb_link_native.dart' if (dart.library.js_interop) 'usb_link_web.dart' as impl;
 
 /// The answer to every call: `ok`, plus a `code` and `message` when it failed.
 class UsbResult {
@@ -35,6 +36,13 @@ abstract class UsbLink {
 
   /// unplugged, reconnected, restarted, plugged, error, log, progress, stage.
   void Function(String type, String message)? onEvent;
+
+  /// The macOS app: asks which port to use (a browser shows its own chooser). Gets the USB serial ports
+  /// ({path, vid, pid, product, maker, serial}) and gives back the one chosen, or null.
+  Future<Map<String, Object?>?> Function(List<Map<String, Object?>> ports)? choosePort;
+
+  /// The macOS app: a widget that must stay in the window while USB is used (its hidden helper page).
+  Widget? get hostView => null;
 
   /// True when this platform can talk to a board over USB.
   bool get supported;

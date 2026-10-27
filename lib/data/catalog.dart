@@ -864,16 +864,29 @@ const Map<String, List<int>> kColors = {
 };
 const kPins = ['2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '18', '48'];
 
-/// Pins the "set pin" and "tone" blocks offer on [board]. On the RoboCore V2 almost every GPIO
-/// already drives a motor, reads a sensor or carries USB / I²C, so only the free ones are offered
-/// (and the buzzer, IO47, for tones).
-List<String> pinOptions(String board, {bool tone = false}) {
-  if (board != 'v2') return kPins;
-  return [
-    if (tone) '${RoboCoreV2Pins.buzzer}',
-    for (final p in RoboCoreV2Pins.freePins) '$p',
-  ];
+/// Pins the pin blocks offer on [board] ([tone]: the tone block, [analog]: "read analog pin").
+/// - RoboCore V2: almost every GPIO already drives a motor, reads a sensor or carries USB / I²C, so only the
+///   free ones (and the buzzer, IO47, for tones).
+/// - Arduino Uno: 2 to 13 and A0 to A5, which are pins 14 to 19 (the blocks show and write them as A0 … A5);
+///   0 and 1 carry USB serial. Analog: A0 to A5.
+/// - ESP32 DevKit / NodeMCU-32S: the GPIOs that are free to use (not the flash pins 6–11, nor 0, 1, 3 and 12,
+///   which boot or USB serial need). Analog: the ADC1 pins, which still work with Wi-Fi on.
+List<String> pinOptions(String board, {bool tone = false, bool analog = false}) {
+  switch (board) {
+    case 'v2':
+      return [
+        if (tone) '${RoboCoreV2Pins.buzzer}',
+        for (final p in RoboCoreV2Pins.freePins) '$p',
+      ];
+    case 'uno':
+      return [for (var p = analog ? 14 : 2; p <= 19; p++) '$p'];
+    default:
+      return analog ? _esp32Analog : _esp32Pins;
+  }
 }
+
+const _esp32Pins = ['2', '4', '5', '13', '14', '15', '16', '17', '18', '19', '21', '22', '23', '25', '26', '27', '32', '33'];
+const _esp32Analog = ['32', '33', '34', '35', '36', '39'];
 
 /// A new block's starting values on [board].
 Map<String, dynamic> blockDefaults(String type, String board) {

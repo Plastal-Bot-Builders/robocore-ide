@@ -52,6 +52,7 @@ const builtinFns = {
   'pinMode', 'digitalWrite', 'digitalRead', 'analogRead', 'analogWrite', 'delay', 'delayMicroseconds', 'millis', //
   'micros', 'random', 'randomSeed', 'map', 'constrain', 'abs', 'min', 'max', 'sqrt', 'pow', 'sq', 'tone', 'noTone',
   'String', 'yield', 'bitRead', 'bitWrite', 'attachInterrupt', 'detachInterrupt', 'sin', 'cos', 'floor', 'ceil', 'round',
+  'pulseIn',
 };
 const espFns = {'rgbLedWrite', 'neopixelWrite', 'ledcAttach', 'ledcWrite'};
 const primTypes = {

@@ -34,7 +34,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - name: USB bridge (fake Web Serial and esptool) and editor shortcuts, in Node
-        run: node --test test/js/robocore_usb.test.mjs test/js/robocore_editors.test.mjs
+        run: node --test test/js/robocore_usb.test.mjs test/js/robocore_editors.test.mjs test/js/robocore_serial_shim.test.mjs
       - name: Analyze
         run: |
           set +e
@@ -222,10 +222,26 @@ jobs:
           cache: true
       - run: flutter build macos --release
       - run: cd build/macos/Build/Products/Release && zip -qry "$GITHUB_WORKSPACE/robocore-ide-macos.zip" *.app
+      # The offline bundles (arduino-cli, board tools, libraries) for each kind of Mac: about 2.5 GB to download
+      # each, so they are kept between runs until the script (with its versions) or the RoboCore library changes.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/offline-*
+          key: offline-${{ hashFiles('tools/make_offline_bundle.sh', 'firmware/RoboCore/**') }}
+      - run: |
+          for arch in arm64 x86_64; do
+            [ -f "build/offline-$arch/manifest.json" ] || bash tools/make_offline_bundle.sh "$arch"
+          done
+      # One DMG for each kind of Mac, each able to compile with no internet.
+      - run: bash tools/package_dmg.sh build/macos/Build/Products/Release/RoboCore.app robocore-ide-macos-apple-silicon.dmg build/offline-arm64
+      - run: bash tools/package_dmg.sh build/macos/Build/Products/Release/RoboCore.app robocore-ide-macos-intel.dmg build/offline-x86_64
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: robocore-ide-macos
-          path: robocore-ide-macos.zip
+          path: |
+            robocore-ide-macos.zip
+            robocore-ide-macos-apple-silicon.dmg
+            robocore-ide-macos-intel.dmg
 
   ios:
     name: iOS (unsigned)

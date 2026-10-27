@@ -165,8 +165,18 @@ class Settings {
   double cppPaneWidth;
   double consoleHeight;
 
-  static const defaultCppPaneWidth = 400.0;
-  static const defaultConsoleHeight = 232.0;
+  /// The "C++ from the blocks" pane beside Blockly: closed until the student opens it.
+  bool showCpp;
+
+  static const defaultCppPaneWidth = 340.0;
+  static const defaultConsoleHeight = 180.0;
+
+  /// The defaults before 2026-10-24. A saved size equal to one of them was never dragged, so it takes the
+  /// new, smaller default.
+  static double _paneSize(Object? saved, double oldDefault, double fallback) {
+    final v = (saved as num?)?.toDouble();
+    return v == null || v == oldDefault ? fallback : v;
+  }
 
   /// Cog: help style (hints | explain | write), whether it may read the project, and the teacher
   /// PIN (a hash, empty = none) that guards "Write code for me" and changing the style.
@@ -187,6 +197,7 @@ class Settings {
     this.compileServer = '',
     this.cppPaneWidth = defaultCppPaneWidth,
     this.consoleHeight = defaultConsoleHeight,
+    this.showCpp = false,
     this.cogStyle = 'hints',
     this.cogRead = true,
     this.cogPin = '',
@@ -202,6 +213,7 @@ class Settings {
         'compileServer': compileServer,
         'cppPaneWidth': cppPaneWidth,
         'consoleHeight': consoleHeight,
+        'showCpp': showCpp,
         'cogStyle': cogStyle,
         'cogRead': cogRead,
         'cogPin': cogPin,
@@ -215,8 +227,9 @@ class Settings {
         autosave: j['autosave'] as bool? ?? true,
         lang: j['lang'] as String? ?? 'English',
         compileServer: j['compileServer'] as String? ?? '',
-        cppPaneWidth: (j['cppPaneWidth'] as num?)?.toDouble() ?? defaultCppPaneWidth,
-        consoleHeight: (j['consoleHeight'] as num?)?.toDouble() ?? defaultConsoleHeight,
+        cppPaneWidth: _paneSize(j['cppPaneWidth'], 400, defaultCppPaneWidth),
+        consoleHeight: _paneSize(j['consoleHeight'], 232, defaultConsoleHeight),
+        showCpp: j['showCpp'] as bool? ?? false,
         cogStyle: const ['hints', 'explain', 'write'].contains(j['cogStyle']) ? j['cogStyle'] as String : 'hints',
         cogRead: j['cogRead'] as bool? ?? true,
         cogPin: j['cogPin'] as String? ?? '',

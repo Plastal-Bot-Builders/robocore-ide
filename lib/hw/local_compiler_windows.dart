@@ -1,19 +1,22 @@
 // Real compiles on this computer (the Windows app): arduino-cli, as the compile server runs it
 // (server/src/compile.js), with the answer in the same shape (ServerBuild), so Verify and Upload work the same.
+// local_compiler_native.dart hands it out on Windows.
 import 'dart:convert';
 import 'dart:io';
 
 import '../engine/compiler.dart' show SourceFile;
 import 'arduino_cli.dart';
-import 'compile_client.dart' show ServerBuild;
+import 'compile_client.dart' show LocalBuilder, ServerBuild;
 
-class LocalBuilder {
+class WindowsBuilder implements LocalBuilder {
   final _cli = ArduinoCli.instance;
 
-  /// True when this computer can compile by itself (Windows).
-  bool get supported => _cli.supported;
+  @override
+  bool canBuild(String board) => _cli.supported && kFqbn.containsKey(board);
 
-  Future<ServerBuild> compile({required String board, required List<SourceFile> files, required void Function(String) log}) async {
+  @override
+  Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog}) async {
+    final log = onLog ?? (String _) {};
     final fqbn = kFqbn[board];
     if (fqbn == null) return ServerBuild.failed('This board can’t be compiled on this computer yet.');
     try {

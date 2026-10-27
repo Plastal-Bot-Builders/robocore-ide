@@ -1,19 +1,31 @@
 import 'package:flutter/material.dart';
 
+import 'hw/local_compiler.dart';
+import 'hw/sketchbook.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'ui/app_scope.dart';
 import 'ui/editor/web_editors.dart' show EditorFramesObserver, initWebEditors;
+import 'ui/mac_app.dart';
 import 'ui/shell.dart';
 import 'ui/splash.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final state = AppState();
+  // The desktop apps compile on this computer when they can (arduino-cli).
+  final state = AppState()..local = localBuilder();
   // The window opens on the launch animation straight away; projects and settings load behind it.
   Future<void> load() async {
+    if (projectsFolderSupported) {
+      // The Mac app keeps the projects as files in a folder the user picks (Settings → Projects folder).
+      state.chooseFolder = chooseProjectsFolder;
+      state.folderAt = projectsFolderAt;
+      state.folder = await restoreProjectsFolder();
+    }
     await state.load();
     await initWebEditors();
+    // The Mac app's messages go to Notification Centre.
+    if (isMacApp) state.systemToast = showMacNotification;
   }
 
   runApp(LaunchApp(state: state, ready: load()));
@@ -73,6 +85,7 @@ class RoboCoreApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: state.settings.theme == 'navy' ? _navyTheme : _paperTheme,
             navigatorObservers: [_framesObserver],
+            // The launch animation covers the start-up, so the app opens straight on Home (or Welcome).
             home: const Shell(),
           );
         },

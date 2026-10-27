@@ -26,6 +26,7 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CANVAS = 1024
 MAC = ('macos', 'Runner', 'Assets.xcassets', 'AppIcon.appiconset')
+MAC_ICON = ('macos', 'Runner', 'AppIcon.icon')
 IOS = ('ios', 'Runner', 'Assets.xcassets', 'AppIcon.appiconset')
 RES = ('android', 'app', 'src', 'main', 'res')
 ANDROID_DPI = (('mdpi', 1), ('hdpi', 1.5), ('xhdpi', 2), ('xxhdpi', 3), ('xxxhdpi', 4))
@@ -261,6 +262,46 @@ def app_icon_svg(layout):
             '</svg>\n')
 
 
+def srgb(hex_colour):
+    return 'srgb:' + ','.join(f'{v / 255:.5f}' for v in rgb(hex_colour)) + ',1.00000'
+
+
+def icon_composer_glyph(layout):
+    """The full-bleed glyph on the 1024 canvas, the one layer of the Icon Composer icon."""
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">\n'
+            f'<path fill="{layout_ink(layout)}" fill-rule="evenodd" d="{one_decimal(layout["icons"]["Square"]["glyph"])}"/>\n'
+            '</svg>\n')
+
+
+def icon_composer_json(layout):
+    """macOS 26 draws app icons with Liquid Glass. Given only PNGs it turns the flat glyph into frosted
+    glass, which looks blurred in the Dock, so the icon is an Icon Composer document: the plate colour
+    as the fill and the glyph as one layer with the glass off. In dark, clear and tinted the system draws
+    its own backdrop, and the glyph takes the Dark or Tinted ink."""
+    looks = layout['looks']
+
+    def solid(hex_colour):
+        return {'solid': srgb(hex_colour)}
+
+    return {
+        'fill': solid(looks['Default']['plate']),
+        'groups': [{
+            'layers': [{
+                'fill-specializations': [
+                    {'appearance': 'dark', 'value': solid(looks['Dark']['ink'])},
+                    {'appearance': 'tinted', 'value': solid(looks['Tinted']['ink'])},
+                ],
+                'glass': False,
+                'image-name': 'GearedRing.svg',
+                'name': 'GearedRing',
+            }],
+            'shadow': {'kind': 'none', 'opacity': 0},
+            'translucency': {'enabled': False, 'value': 0},
+        }],
+        'supported-platforms': {'squares': ['macOS']},
+    }
+
+
 IOS_CONTENTS = {
     'images': [
         {'filename': 'Icon-App-1024x1024@1x.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'},
@@ -290,6 +331,10 @@ def main():
     # macOS: Apple's grid (824 plate in a 1024 canvas, shadow inside); 16 and 32 use the small glyph.
     for n in (16, 32, 64, 128, 256, 512, 1024):
         save(render_icon(L, 'macOS', n), *MAC, f'app_icon_{n}.png')
+    # macOS 26 and later: the Icon Composer document. Xcode 26 uses it instead of the PNGs above (and
+    # makes the images for older macOS from it); older Xcode versions still use the PNGs.
+    write_text(icon_composer_glyph(L), *MAC_ICON, 'Assets', 'GearedRing.svg')
+    write_text(json.dumps(icon_composer_json(L), indent=2) + '\n', *MAC_ICON, 'icon.json')
 
     # iOS: one opaque square 1024 per appearance; Xcode makes the smaller sizes.
     # Dark is the glyph on transparent (iOS draws the dark backdrop); Tinted is greyscale.

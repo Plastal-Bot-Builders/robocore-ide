@@ -1,4 +1,4 @@
-// arduino-cli on this computer, for the Windows app: real compiles (local_build_io.dart) and the board tools
+// arduino-cli on this computer, for the Windows app: real compiles (local_compiler_windows.dart) and the board tools
 // that write them over USB (usb_link_native.dart). The same arduino-cli, cores and libraries as the compile
 // server (server/Dockerfile).
 //

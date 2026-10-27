@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- macOS app only: the web app's USB helper (robocore_usb.js, with esptool-js) in a hidden WebView, on the Mac's
+     serial ports through robocore_serial_shim.js. The app (lib/hw/usb_link_native.dart) calls rcUsbCall(id, method,
+     args) and gets ['result', id, json, open], ['text', text] and ['event', type, message, open] on the RoboCoreHost
+     channel (open: whether a port is open now, which the app needs without asking). -->
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>RoboCore USB</title>
+  <script src="robocore_serial_shim.js"></script>
+  <script type="module">
+    import './robocore_usb.js';
+
+    const post = (...m) => window.RoboCoreHost.postMessage(JSON.stringify(m));
+    const usb = window.robocoreUsb;
+    usb.setHandlers((text) => post('text', text), (type, message) => post('event', type, message, usb.isOpen()));
+    window.rcUsbCall = async (id, method, args) => {
+      let json;
+      try {
+        json = await usb[method](...args);
+      } catch (e) {
+        json = JSON.stringify({ ok: false, code: 'js', message: String((e && e.message) || e) });
+      }
+      post('result', id, json, usb.isOpen());
+    };
+    post('ready');
+  </script>
+</head>
+<body></body>
+</html>

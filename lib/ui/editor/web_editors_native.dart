@@ -1,49 +1,28 @@
-// Blockly and Monaco for the Windows app. The same page as the web app (web/robocore_editors.html,
-// #blocks or #code) runs in a WebView2 (package:webview_windows). The page's files are copied next to
-// RoboCore.exe (data/editors, windows/CMakeLists.txt) and served as https://robocore.editor/.
-// web/robocore_editors_native.js turns the app's messages into window.rcEditor calls and posts the
-// editors' callbacks back.
-//
-// The WebView is drawn by Flutter (a texture), so menus, dialogs and dividers over it need none of the
-// iframe tricks the web app needs: setEditorFramesInteractive, coverEditorFrames and FrameShield do nothing.
-// Other platforms, the tests, and a PC without the WebView2 runtime keep the Flutter BlocksView and CodeView.
+// Blockly and Monaco for the macOS and Windows apps: the web app's page (web/robocore_editors.html, bundled for
+// them in pubspec.yaml) in a WebView, so the desktop editors look and work like the web ones; lib/hw/page_server.dart
+// serves it. The Mac uses WKWebView (webview_flutter), Windows WebView2 (web_editors_windows.dart). The other native
+// apps keep the Flutter BlocksView and CodeView for now (kWebEditors is false there).
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:webview_windows/webview_windows.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
-bool _enabled = false;
-bool get kWebEditors => _enabled;
+import '../../hw/page_server.dart';
+import 'web_editors_windows.dart';
 
-String _folder = '';
-String _bridge = '';
-const _host = 'robocore.editor';
+var _windows = false;
 
-/// Turns the editors on when this is Windows, the WebView2 runtime is installed and the editor files are
-/// next to the app. Called once from main().
+bool get kWebEditors => defaultTargetPlatform == TargetPlatform.macOS || _windows;
+
+/// Turns the editors on in the Windows app when the WebView2 runtime is installed. Called once at start-up.
 Future<void> initWebEditors() async {
-  if (!Platform.isWindows) return;
-  try {
-    final dir = '${File(Platform.resolvedExecutable).parent.path}\\data\\editors';
-    final bridge = File('$dir\\robocore_editors_native.js');
-    if (!File('$dir\\robocore_editors.html').existsSync() || !bridge.existsSync()) return;
-    if (await WebviewController.getWebViewVersion() == null) return;
-    _folder = dir;
-    _bridge = await bridge.readAsString();
-    _enabled = true;
-  } catch (_) {
-    _enabled = false;
-  }
+  if (defaultTargetPlatform == TargetPlatform.windows) _windows = await webView2Installed();
 }
 
-void Function(String action)? _ideKey;
-
-/// Ctrl + S, R, U, I, B and J typed inside Blockly or Monaco: [handler] gets 'save', 'verify', 'upload', 'cog',
-/// 'sidebar' or 'console'.
-void setEditorShortcutHandler(void Function(String action)? handler) => _ideKey = handler;
-
+// On macOS, Flutter takes the clicks wherever it paints over a WebView (menus, dialogs, the Cog panel) and
+// a drag that starts in Flutter stays there, so the editors need none of the web app's iframe guards.
 void setEditorFramesInteractive(bool on) {}
 
 void coverEditorFrames(bool on) {}
@@ -57,73 +36,87 @@ class FrameShield extends StatelessWidget {
   Widget build(BuildContext context) => child;
 }
 
-/// One WebView showing robocore_editors.html#[mode]. [onReady] runs after every load (to mount the editor
-/// again if the page reloads), [onCallback] for every editor callback.
+void Function(String action)? _ideKey;
+
+/// Ctrl/⌘ + S, R, U and I typed inside Blockly or Monaco never reach Flutter (the WebView has the keys), so
+/// the editors hand them over: [handler] gets 'save', 'verify', 'upload' or 'cog'.
+void setEditorShortcutHandler(void Function(String action)? handler) => _ideKey = handler;
+
+/// A JavaScript call with JSON arguments (JSON is valid JavaScript).
+String _js(String fn, [List<Object?> args = const []]) => '$fn(${args.map(jsonEncode).join(',')})';
+
+/// One editor: robocore_editors.html#[mode] in a WebView. The page answers on the RoboCoreHost channel
+/// with [event, ...args] (see "The desktop app" in robocore_editors.js); [onLoaded] runs after every load,
+/// so a page the WebView reloads comes back, as the web app's iframes do.
 class _Page {
-  _Page(this.mode, {required this.onReady, required this.onCallback, required this.onChanged});
+  _Page(this.mode, this.onLoaded, this.onEvent) {
+    final url = servePages().then((origin) {
+      _home = origin;
+      return origin.replace(path: '/robocore_editors.html', fragment: mode);
+    });
+    if (_windows) {
+      _win = WindowsEditorPage(url, _message);
+      return;
+    }
+    final c = _mac = WebViewController();
+    c
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel('RoboCoreHost', onMessageReceived: (m) => _message(m.message))
+      ..setNavigationDelegate(NavigationDelegate(onNavigationRequest: _navigate));
+    unawaited(url.then(c.loadRequest));
+  }
+
   final String mode;
-  final void Function() onReady;
-  final void Function(String name, List<dynamic> args) onCallback;
-  final void Function() onChanged;
-  final controller = WebviewController();
-  StreamSubscription<dynamic>? _messages;
-  bool mounted = false;
-  bool _disposed = false;
+  final void Function() onLoaded;
+  final void Function(String event, List<Object?> args) onEvent;
+  WebViewController? _mac;
+  WindowsEditorPage? _win;
+  late final Widget _webView = _win?.view() ?? WebViewWidget(controller: _mac!);
+  Uri? _home;
 
-  Future<void> start() async {
+  /// The WebView, under the page's background until the editor is up (while it loads, a WebView is
+  /// blank, and black in dark mode).
+  Widget view({required bool ready, required Object? theme}) => Stack(fit: StackFit.expand, children: [
+        _webView,
+        if (!ready) ColoredBox(color: theme == 'navy' ? const Color(0xFF17253A) : const Color(0xFFFFFCF5)),
+      ]);
+
+  /// The page stays the page: links (e.g. in a hover) do not replace it.
+  NavigationDecision _navigate(NavigationRequest r) {
+    final u = Uri.tryParse(r.url);
+    return u != null && u.origin == _home?.origin && u.path == '/robocore_editors.html'
+        ? NavigationDecision.navigate
+        : NavigationDecision.prevent;
+  }
+
+  void _message(String json) {
+    final List<Object?> a;
     try {
-      await controller.initialize();
-      if (_disposed) return;
-      await controller.setBackgroundColor(const Color(0x00000000));
-      await controller.setPopupWindowPolicy(WebviewPopupWindowPolicy.deny);
-      await controller.addVirtualHostNameMapping(_host, _folder, WebviewHostResourceAccessKind.allow);
-      await controller.addScriptToExecuteOnDocumentCreated(_bridge);
-      _messages = controller.webMessage.listen(_onMessage);
-      await controller.loadUrl('https://$_host/robocore_editors.html#$mode');
-      if (!_disposed) onChanged();
-    } catch (e) {
-      debugPrint('RoboCore editor ($mode) did not start: $e');
+      a = jsonDecode(json) as List<Object?>;
+    } on FormatException {
+      return;
     }
-  }
-
-  void _onMessage(dynamic m) {
-    if (m is! Map) return;
-    switch (m['t']) {
-      case 'ready':
-        mounted = false;
-        onReady();
-      case 'mounted':
-        mounted = true;
-        onCallback('mounted', const []);
-      case 'cb':
-        final name = '${m['name']}';
-        final args = (m['args'] as List?) ?? const [];
-        if (name == 'ideKey') {
-          if (args.isNotEmpty) _ideKey?.call('${args.first}');
-        } else {
-          onCallback(name, args);
-        }
+    final event = a.first as String;
+    final args = a.sublist(1);
+    switch (event) {
+      case 'loaded':
+        onLoaded();
+      case 'key':
+        _ideKey?.call(args.first as String);
       case 'error':
-        debugPrint('RoboCore editor ($mode): ${m['message']}');
+        debugPrint('RoboCore editor ($mode): ${args.first}');
+      default:
+        onEvent(event, args);
     }
   }
 
-  /// Calls window.rcEditor.[call](...args) in the page.
-  void call(String call, [List<Object?> args = const []]) {
-    if (_disposed || !controller.value.isInitialized) return;
-    unawaited(controller.postWebMessage(jsonEncode({'call': call, 'args': args})));
-  }
-
-  Widget view() => controller.value.isInitialized ? Webview(controller) : const SizedBox.expand();
-
-  void dispose() {
-    _disposed = true;
-    unawaited(_messages?.cancel());
-    unawaited(controller.dispose());
+  void run(String js) {
+    if (_win != null) return _win!.run(js);
+    unawaited(_mac!.runJavaScript(js).catchError((Object e) {
+      debugPrint('RoboCore editor ($mode): $e');
+    }));
   }
 }
-
-int _int(Object? v) => v is num ? v.toInt() : 0;
 
 /// Google Blockly with the RoboCore blocks. [onChange] gets the workspace (Blockly JSON), the C++
 /// and the number of blocks after every change.
@@ -139,12 +132,22 @@ class BlocklyEditor extends StatefulWidget {
       this.onSelect,
       this.onHistory});
   final String projectId;
+
+  /// The workspace to open; [tidy] lays it out first (for blocks converted from the old editor).
   final String? json;
   final bool tidy;
+
+  /// name, board, pins, tonePins, userPin, theme.
   final Map<String, Object?> options;
   final void Function(String json, String code, int count) onChange;
+
+  /// The workspace scale after every zoom (1 = the starting size).
   final void Function(double scale)? onZoom;
+
+  /// The selected block as JSON {type, label, cpp}, or '' when none is selected.
   final void Function(String json)? onSelect;
+
+  /// Whether Undo and Redo have something to do.
   final void Function(bool canUndo, bool canRedo)? onHistory;
 
   @override
@@ -152,38 +155,40 @@ class BlocklyEditor extends StatefulWidget {
 }
 
 class BlocklyEditorState extends State<BlocklyEditor> {
-  late final _Page _page = _Page('blocks', onReady: _mount, onCallback: _onCallback, onChanged: _rebuild);
+  var _ready = false; // mounted in the page; calls before that are dropped, as in the web app
   String? _json; // the latest workspace, so a reloaded page comes back as it was
+  var _count = 0;
   late String _options = jsonEncode(widget.options);
-  int _count = 0;
+  late final _page = _Page('blocks', _loaded, _event);
 
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_page.start());
+  void _setReady(bool on) {
+    if (mounted && on != _ready) setState(() => _ready = on);
   }
 
-  void _rebuild() {
-    if (mounted) setState(() {});
+  void _loaded() {
+    _setReady(false);
+    _page.run(_js('rcNative.mountBlocks', [_options, _json ?? widget.json, _json == null && widget.tidy]));
   }
 
-  void _mount() => _page.call('blocks.mount', [_options, _json ?? widget.json, _json == null && widget.tidy]);
-
-  void _onCallback(String name, List<dynamic> a) {
-    if (!mounted) return;
-    switch (name) {
+  void _event(String event, List<Object?> a) {
+    switch (event) {
+      case 'mounted':
+        _setReady(true);
       case 'change':
-        _json = '${a[0]}';
-        _count = _int(a[2]);
-        widget.onChange(_json!, '${a[1]}', _count);
+        _json = a[0] as String;
+        _count = (a[2] as num).toInt();
+        if (mounted) widget.onChange(_json!, a[1] as String, _count);
       case 'zoom':
-        final scale = a.isEmpty ? null : a[0];
-        if (scale is num) widget.onZoom?.call(scale.toDouble());
+        if (mounted) widget.onZoom?.call((a[0] as num).toDouble());
       case 'select':
-        widget.onSelect?.call(a.isEmpty ? '' : '${a[0]}');
+        if (mounted) widget.onSelect?.call(a[0] as String);
       case 'history':
-        widget.onHistory?.call(a[0] == true, a[1] == true);
+        if (mounted) widget.onHistory?.call(a[0] as bool, a[1] as bool);
     }
+  }
+
+  void _call(String method, [List<Object?> args = const []]) {
+    if (_ready) _page.run(_js('rcEditor.blocks.$method', args));
   }
 
   @override
@@ -192,34 +197,26 @@ class BlocklyEditorState extends State<BlocklyEditor> {
     final o = jsonEncode(widget.options);
     if (o != _options) {
       _options = o;
-      if (_page.mounted) _page.call('blocks.setOptions', [o]);
+      _call('setOptions', [o]);
     }
     if (widget.projectId != oldWidget.projectId) {
       _json = null;
-      if (_page.mounted) _page.call('blocks.load', [widget.json, widget.tidy]);
+      _call('load', [widget.json, widget.tidy]);
     }
   }
 
-  void undo() => _page.call('blocks.undo');
-  void redo() => _page.call('blocks.redo');
-  void clear() => _page.call('blocks.clear');
-
-  /// The number of blocks after the last change.
+  void undo() => _call('undo');
+  void redo() => _call('redo');
+  void clear() => _call('clear');
   int get count => _count;
 
   /// [dir] 1 zooms in, -1 out.
-  void zoom(int dir) => _page.call('blocks.zoom', [dir]);
-  void zoomToFit() => _page.call('blocks.zoomToFit');
-  void resetZoom() => _page.call('blocks.resetZoom');
+  void zoom(int dir) => _call('zoom', [dir]);
+  void zoomToFit() => _call('zoomToFit');
+  void resetZoom() => _call('resetZoom');
 
   @override
-  void dispose() {
-    _page.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => _page.view();
+  Widget build(BuildContext context) => _page.view(ready: _ready, theme: widget.options['theme']);
 }
 
 /// Monaco showing one file at a time ([fileKey] names its model, so each file keeps its own undo
@@ -236,11 +233,17 @@ class MonacoEditor extends StatefulWidget {
       this.onCursor,
       this.onExplain});
   final String fileKey, text;
+
+  /// theme, fontSize, wrap, autocomplete, words.
   final Map<String, Object?> options;
   final bool readOnly;
+
+  /// Problems in this file: line, column, message, severity.
   final List<Map<String, Object?>> problems;
   final void Function(String text)? onChange;
   final void Function(int line, int column)? onCursor;
+
+  /// "Explain with Cog" on a line (quick fix on a problem, or the context menu).
   final void Function(int line)? onExplain;
 
   @override
@@ -248,54 +251,56 @@ class MonacoEditor extends StatefulWidget {
 }
 
 class MonacoEditorState extends State<MonacoEditor> {
-  late final _Page _page = _Page('code', onReady: _mount, onCallback: _onCallback, onChanged: _rebuild);
+  var _ready = false;
   String? _key, _text, _problems;
   bool? _readOnly;
   late String _options = jsonEncode(widget.options);
+  late final _page = _Page('code', _loaded, _event);
 
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_page.start());
+  void _setReady(bool on) {
+    if (mounted && on != _ready) setState(() => _ready = on);
   }
 
-  void _rebuild() {
-    if (mounted) setState(() {});
+  void _loaded() {
+    _setReady(false);
+    _page.run(_js('rcNative.mountCode', [_options, widget.onExplain != null]));
   }
 
-  void _mount() => _page.call('code.mount', [_options, widget.onExplain != null]);
-
-  void _onCallback(String name, List<dynamic> a) {
-    if (!mounted) return;
-    switch (name) {
+  void _event(String event, List<Object?> a) {
+    switch (event) {
       case 'mounted':
+        _setReady(true);
         _key = null;
         _sync();
       case 'change':
-        if ('${a[0]}' != _key) return;
-        _text = '${a[1]}';
-        widget.onChange?.call(_text!);
+        if (a[0] != _key) return;
+        _text = a[1] as String;
+        if (mounted) widget.onChange?.call(_text!);
       case 'cursor':
-        widget.onCursor?.call(_int(a[0]), _int(a[1]));
+        if (mounted) widget.onCursor?.call((a[0] as num).toInt(), (a[1] as num).toInt());
       case 'explain':
-        widget.onExplain?.call(_int(a[0]));
+        if (mounted) widget.onExplain?.call((a[0] as num).toInt());
     }
   }
 
+  void _call(String method, [List<Object?> args = const []]) {
+    if (_ready) _page.run(_js('rcEditor.code.$method', args));
+  }
+
   void _sync() {
-    if (!_page.mounted) return;
+    if (!_ready) return;
     final w = widget;
     if (w.fileKey != _key || w.text != _text || w.readOnly != _readOnly) {
       _key = w.fileKey;
       _text = w.text;
       _readOnly = w.readOnly;
       _problems = null;
-      _page.call('code.setFile', [w.fileKey, w.text, w.readOnly]);
+      _call('setFile', [w.fileKey, w.text, w.readOnly]);
     }
     final p = jsonEncode(w.problems);
     if (p != _problems) {
       _problems = p;
-      _page.call('code.setMarkers', [w.fileKey, p]);
+      _call('setMarkers', [w.fileKey, p]);
     }
   }
 
@@ -305,20 +310,17 @@ class MonacoEditorState extends State<MonacoEditor> {
     final o = jsonEncode(widget.options);
     if (o != _options) {
       _options = o;
-      if (_page.mounted) _page.call('code.setOptions', [o]);
+      _call('setOptions', [o]);
     }
     _sync();
   }
 
-  void find() => _page.call('code.find');
-  void reveal(int line, [int column = 1]) => _page.call('code.reveal', [line, column]);
+  void find() => _call('find');
+  void reveal(int line, [int column = 1]) => _call('reveal', [line, column]);
+
+  /// Runs a Monaco command by id ('undo', 'editor.action.commentLine' …).
+  void action(String id) => _call('action', [id]);
 
   @override
-  void dispose() {
-    _page.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => _page.view();
+  Widget build(BuildContext context) => _page.view(ready: _ready, theme: widget.options['theme']);
 }

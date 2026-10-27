@@ -272,6 +272,25 @@ void main() {
       expect(s.sim.running, isFalse);
     });
 
+    test('an Arduino Uno on USB stops an upload for the RoboCore V2 before building, and examples open for it',
+        () async {
+      s.usbLabel = 'Arduino Uno (2341:0043)';
+      await s.upload();
+      expect(requests, isEmpty);
+      expect(usb.flashed, isNull);
+      expect(s.output.map((o) => o.text).join('\n'),
+          contains('The board on USB is Arduino Uno R3, but “Blink LED” is set to RoboCore V2. Pick Arduino Uno R3'));
+      expect(s.newProjectBoard, 'uno');
+      s.openExample('traffic');
+      expect(s.cur!.board, 'uno');
+    });
+
+    test('a USB bridge used by several boards (CH340) does not stop an upload', () {
+      s.usbLabel = 'CH340 USB-UART (1A86:7523)';
+      expect(s.usbBoardMismatch(s.cur!), isNull);
+      expect(s.newProjectBoard, s.board);
+    });
+
     test('compiles on the server, flashes every part and reopens the monitor', () async {
       await s.upload();
       expect(requests.single['board'], 'v2');
@@ -396,6 +415,7 @@ void main() {
 
     test('an Uno project uploads its HEX through the bootloader, on USB (not USB-C)', () async {
       s.cur!.board = 'uno';
+      s.usbLabel = 'Arduino Uno (2341:0043)';
       reply = _unoOk;
       await s.upload();
       expect(requests.single['board'], 'uno');
@@ -415,6 +435,7 @@ void main() {
 
     test('an Uno that does not answer its bootloader gets the Uno tip, not BOOT + RESET', () async {
       s.cur!.board = 'uno';
+      s.usbLabel = 'Arduino Uno (2341:0043)';
       reply = _unoOk;
       usb.failBootloader = true;
       await s.upload();

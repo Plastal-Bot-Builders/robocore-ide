@@ -20,4 +20,13 @@ void main() {
     expect(old.cppPaneWidth, Settings.defaultCppPaneWidth);
     expect(old.consoleHeight, Settings.defaultConsoleHeight);
   });
+
+  test('the C++ pane starts closed, and the old default sizes take the new smaller ones', () {
+    final old = Settings.fromJson({'cppPaneWidth': 400, 'consoleHeight': 232});
+    expect(old.showCpp, isFalse);
+    expect(old.cppPaneWidth, Settings.defaultCppPaneWidth);
+    expect(old.consoleHeight, Settings.defaultConsoleHeight);
+    final open = Settings.fromJson(jsonDecode(jsonEncode((Settings()..showCpp = true).toJson())) as Map<String, dynamic>);
+    expect(open.showCpp, isTrue);
+  });
 }

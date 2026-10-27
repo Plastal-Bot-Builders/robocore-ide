@@ -72,6 +72,62 @@ void main() {
     return out;
   }
 
+  test('an HC-SR04 read by hand (the distance blocks on an Uno) runs on the preview board', () async {
+    // What the blocks make (web/robocore_editors.js) with "distance sensor on TRIG pin 7 ECHO pin 8".
+    const sketch = r'''// Distance test
+// Made with blocks in RoboCore IDE.
+
+// The distance sensor (HC-SR04).
+const int SONAR_TRIG = 7;
+const int SONAR_ECHO = 8;
+bool sonarWasClose = false;
+
+// The distance to the nearest obstacle in cm (400 when nothing answers): a 10 µs pulse on TRIG, then how
+// long the echo takes to come back on ECHO, 58 µs for each centimetre there and back.
+float distanceCm() {
+  digitalWrite(SONAR_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(SONAR_TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(SONAR_TRIG, LOW);
+  unsigned long us = pulseIn(SONAR_ECHO, HIGH, 25000);
+  return us == 0 ? 400 : us / 58.0;
+}
+
+// True once each time something comes closer than cm, so a "when" script runs once.
+bool justCloserThan(float cm) {
+  bool now = distanceCm() < cm;
+  bool rose = now && !sonarWasClose;
+  sonarWasClose = now;
+  return rose;
+}
+
+void setup() {
+  pinMode(A0, OUTPUT);
+  pinMode(SONAR_TRIG, OUTPUT);
+  pinMode(SONAR_ECHO, INPUT);
+  Serial.begin(115200);
+}
+
+void loop() {
+  if (justCloserThan(10)) {
+  }
+  Serial.print("distance_cm=");
+  Serial.println(distanceCm(), 1);
+  if (distanceCm() < 20) {
+    digitalWrite(A0, HIGH);
+  }
+}
+''';
+    late SimBoard board;
+    final out = await runFor(check(sketch, board: 'uno'), poke: (sim) {
+      board = sim;
+      sim.held[SimSensor.sonar] = 15;
+    });
+    expect(out, contains('distance_cm=15.0'));
+    expect(board.readsDistance, isTrue);
+  });
+
   group('RoboCore V2', () {
     test('every V2 example is the library example from firmware/RoboCore/examples', () {
       for (final ex in kExamples.where((e) => e.v2 != null)) {
@@ -130,6 +186,13 @@ void main() {
       }
       expect(blockDefaults('tone', 'v2')['pin'], '47');
       expect(blockDefaults('tone', 'uno')['pin'], '8');
+    });
+
+    test('an Uno offers pins 2 to 13 and A0 to A5 (14 to 19), not the USB serial pins', () {
+      expect(pinOptions('uno'), [for (var p = 2; p <= 19; p++) '$p']);
+      expect(pinOptions('uno', analog: true), ['14', '15', '16', '17', '18', '19']);
+      expect(pinOptions('devkit'), allOf(contains('25'), isNot(contains('6')), isNot(contains('12'))));
+      expect(pinOptions('nodemcu', analog: true), ['32', '33', '34', '35', '36', '39']);
     });
 
     test('the USER button block reads IO42 without the internal pull-up', () {

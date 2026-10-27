@@ -5,8 +5,8 @@ One codebase for the RoboCore IDE on **web, Windows, macOS, Linux, Android and i
 ## What's in it
 
 - **Home, Projects, Examples, Libraries, Board Setup, Serial Monitor, Settings**: every screen from the Figma file, in the Paper (cream) and Navy themes.
-- **Blocks editor**: Google Blockly in the web app (RoboCore blocks plus if / else, loops, comparisons and variables; C++ updates live beside the blocks). The native apps keep a simpler Flutter block editor for now. Blocks generate Arduino C++ code. See `docs/blockly-monaco.md`.
-- **C++ editor**: Monaco (the editor in VS Code) in the web app: C++ highlighting, Arduino and RoboCore suggestions and hovers, find, compile problems in the code, multiple files. The native apps use a Flutter code editor.
+- **Blocks editor**: Google Blockly in the web app (RoboCore blocks plus if / else, loops, comparisons and variables; C++ updates live beside the blocks), and the same page in a WebView in the macOS app. The other native apps keep a simpler Flutter block editor for now. Blocks generate Arduino C++ code. See `docs/blockly-monaco.md`.
+- **C++ editor**: Monaco (the editor in VS Code) in the web app: C++ highlighting, Arduino and RoboCore suggestions and hovers, find, compile problems in the code, multiple files; also in the macOS app. The other native apps use a Flutter code editor.
 - **Verify and Upload**: with a compile server, a real C++ build (arduino-cli) and an upload over USB-C to the RoboCore V2. Without one, a built-in check like the Arduino compiler's (missing includes, undeclared names, types and board support), then a run on a **simulated RoboCore board** (RGB LED, USER button, motors, servo, sonar, line sensor, IMU, battery and serial in and out).
 - **Cog, the learning partner** (Ask Cog, Ctrl+I): explains errors and blocks, gives hints one at a time before it ever
   shows a fix, applies a fix only when the student presses Apply, asks a quick question afterwards, and keeps a "You've
@@ -82,7 +82,24 @@ To use it:
    Arduino IDE's Serial Monitor, has its port open.)
 
 Without a board the IDE keeps using the **preview board** (the simulator), and without a compile server **Verify** uses the
-built-in preview check. The native apps (Windows, macOS, Linux, Android, iOS) use the preview board for now; USB serial there is a later step.
+built-in preview check. The macOS app uploads over USB too: the same USB helper runs in a hidden WebView on the Mac's
+serial ports (`lib/hw/usb_link_native.dart`, `web/robocore_serial_shim.js`, `macos/Runner/SerialPorts.swift`), with the
+app's own port chooser. The other native apps (Windows, Linux, Android, iOS) use the preview board for now.
+
+The macOS app can keep the projects as files: Settings → Projects folder (it also asks once). Each project is then a
+sketch folder named after its main .ino, as the Arduino IDE expects, with a hidden `.robocore.json` for the blocks and
+the board (`lib/state/project_folder.dart`, `lib/hw/sketchbook_native.dart`, `macos/Runner/Sketchbook.swift`).
+Arduino sketches already in that folder show up as code projects, File → Open Sketch… copies one in, and a deleted
+project's folder goes to the Trash.
+
+The macOS app works offline, for schools and hubs without steady internet: it compiles on the Mac itself, as the
+Arduino IDE does, with arduino-cli and the board tools inside the app (`lib/hw/local_compiler_native.dart`). There is
+one DMG for each kind of Mac (Apple silicon, Intel), each with an offline bundle made by
+`tools/make_offline_bundle.sh`: arduino-cli, the Arduino Uno's tools, the ESP32 package trimmed to the ESP32-S3
+(RoboCore V2) and the classic ESP32 (DevKit, NodeMCU), and the libraries the IDE offers. A board's tools are unpacked
+into `~/Library/Application Support/RoboCore` (never the Arduino IDE's folder) the first time it is built. Only Cog needs
+the internet. The app runs without Apple's App Sandbox, as the Arduino IDE does, because a sandboxed app may not run
+the compilers it carries. On Apple silicon the Uno's compiler (Arduino builds it for Intel only) needs Rosetta.
 
 `docs/robocore-v2-support.md` has the full status and the test checklist for the real board.
 
