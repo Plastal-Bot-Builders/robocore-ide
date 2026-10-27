@@ -1,10 +1,12 @@
 // The launch animation: the Geared Ring mark comes together on the app icon's yellow while the app loads
 // its projects and settings behind it, then fades into Home (or Welcome).
 //
-//   0 – 0.5 s    the planet grows into place; the gear ring turns in around it and meshes (a small overshoot)
-//   0.6 – 1 s    a shine sweeps across the mark; "RoboCore IDE" rises in under it
-//   1.15 s       if the app is still loading, the ring keeps rocking gently and "Loading your projects…" shows
-//   then         a 0.3 s fade into the app
+//   0 – 1.2 s    the planet grows into place; the gear ring turns in around it and meshes (a small overshoot)
+//   1.1 – 1.7 s  "RoboCore IDE" rises in under the mark
+//   1.5 – 2.2 s  a shine sweeps across the mark
+//   2.2 – 3.7 s  the logo holds while the ring rocks gently (the app loads behind it)
+//   3.7 – 4 s    a fade into the app. If the app is still loading at 3.7 s, the ring keeps rocking and
+//                "Loading your projects…" shows until it is ready.
 //
 // With Windows' "Animation effects" off (MediaQuery.disableAnimations) it shows the finished logo and fades.
 // In the web app the page already shows the mark while Flutter loads (web/index.html), so the mark starts in
@@ -36,16 +38,19 @@ class Splash extends StatefulWidget {
 }
 
 class _SplashState extends State<Splash> with TickerProviderStateMixin {
-  late final _intro = AnimationController(vsync: this, duration: const Duration(milliseconds: 1150));
+  late final _intro = AnimationController(vsync: this, duration: const Duration(milliseconds: 3700));
   late final _idle = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
   late final _exit = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
   bool _started = false;
+
+  /// The intro is over and the app is still loading.
+  bool _waiting = false;
 
   @override
   void initState() {
     super.initState();
     _intro.addStatusListener((s) {
-      if (s == AnimationStatus.completed) _next();
+      if (s == AnimationStatus.completed) setState(_next);
     });
     _exit.addStatusListener((s) {
       if (s == AnimationStatus.completed) widget.onDone();
@@ -62,7 +67,8 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       _next();
     } else {
       // On the web the page's stand-in mark is already in place: start where the mark has landed.
-      _intro.forward(from: kIsWeb ? .62 : 0);
+      _intro.forward(from: kIsWeb ? .33 : 0);
+      _idle.repeat();
     }
   }
 
@@ -72,15 +78,12 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     if (widget.ready && !oldWidget.ready) _next();
   }
 
-  /// After the intro: leave if the app is ready, otherwise rock the ring until it is.
+  /// After the intro: leave if the app is ready, otherwise keep rocking the ring and say it is loading.
   void _next() {
     if (_intro.status != AnimationStatus.completed || _exit.isAnimating || _exit.isCompleted) return;
-    if (widget.ready) {
-      _idle.stop();
-      _exit.forward();
-    } else if (!(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
-      _idle.repeat();
-    }
+    // The ring keeps rocking through the fade, so it never stops with a jump.
+    _waiting = !widget.ready;
+    if (widget.ready) _exit.forward();
   }
 
   @override
@@ -102,15 +105,16 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       animation: Listenable.merge([_intro, _idle, _exit]),
       builder: (context, _) {
         // Planet: grows in with a little overshoot.
-        final planetIn = _at(0, .45, Curves.easeOutBack);
-        final planetFade = _at(0, .2);
+        final planetIn = _at(0, .27, Curves.easeOutBack);
+        final planetFade = _at(0, .11);
         // Ring: turns in from a quarter turn back and settles as the gear meshes; later it rocks while loading.
-        final ringIn = _at(.1, .62, Curves.easeOutBack);
-        final ringFade = _at(.1, .3);
-        final rock = _idle.isAnimating ? .07 * math.sin(_idle.value * 2 * math.pi) : 0.0;
+        final ringIn = _at(.054, .324, Curves.easeOutBack);
+        final ringFade = _at(.054, .162);
+        // Once the logo is complete the ring rocks gently, easing in so it starts from rest.
+        final rock = _at(.57, .68, Curves.easeInOut) * .06 * math.sin(_idle.value * 2 * math.pi);
         // Shine across the mark, then the name.
-        final shine = _at(.55, .85, Curves.easeInOut);
-        final name = _at(.5, .78, Curves.easeOutCubic);
+        final shine = _at(.405, .595, Curves.easeInOut);
+        final name = _at(.297, .46, Curves.easeOutCubic);
         final out = Curves.easeIn.transform(_exit.value);
 
         final mark = SizedBox(
@@ -170,7 +174,7 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
                   child: Transform.translate(
                     offset: Offset(0, markH / 2 + 92),
                     child: AnimatedOpacity(
-                      opacity: _idle.isAnimating ? 1 : 0,
+                      opacity: _waiting ? 1 : 0,
                       duration: const Duration(milliseconds: 300),
                       child: Text('Loading your projects…',
                           textDirection: TextDirection.ltr,
