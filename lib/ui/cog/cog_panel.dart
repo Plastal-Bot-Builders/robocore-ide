@@ -617,7 +617,8 @@ class _Suggestion extends StatelessWidget {
     final firstLine = rows.where((r) => r.$1 == '+').firstOrNull?.$2;
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.ink), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(8)),
+      foregroundDecoration: BoxDecoration(border: Border.all(color: c.ink), borderRadius: BorderRadius.circular(8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),

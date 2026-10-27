@@ -246,14 +246,12 @@ class RcCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
+    // The edge is drawn over the content, so a child filled to the edges can't cover it at the rounded corners.
     return Container(
       padding: padding,
       clipBehavior: clip ? Clip.antiAlias : Clip.none,
-      decoration: BoxDecoration(
-        color: color ?? c.surface,
-        border: Border.all(color: c.line),
-        borderRadius: BorderRadius.circular(radius),
-      ),
+      decoration: BoxDecoration(color: color ?? c.surface, borderRadius: BorderRadius.circular(radius)),
+      foregroundDecoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(radius)),
       child: child,
     );
   }

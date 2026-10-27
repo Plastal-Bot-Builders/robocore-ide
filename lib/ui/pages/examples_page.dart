@@ -104,7 +104,8 @@ Future<void> showExampleDialog(BuildContext context, Example e) => showDialog<vo
             Container(
               height: 120,
               clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+              foregroundDecoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
               child: Thumb(blocks: e.hasBlocks),
             ),
             const SizedBox(height: 12),
