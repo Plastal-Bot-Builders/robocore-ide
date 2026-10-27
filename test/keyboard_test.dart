@@ -1,11 +1,15 @@
 // Keyboard access (WCAG 2.1.1, 2.4.7): every button built on Hover takes the focus with Tab, shows a ring and is pressed
-// with Enter or Space; menus move with the arrow keys and give the focus back when Esc closes them.
+// with Enter or Space; menus move with the arrow keys and give the focus back when Esc closes them. And the pointer:
+// split handles move only with a press and drag, and fields are as tall as the buttons beside them on desktops.
+import 'package:flutter/foundation.dart' show TargetPlatform, debugDefaultTargetPlatformOverride;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:robocore_ide/theme.dart';
 import 'package:robocore_ide/ui/widgets/common.dart';
 import 'package:robocore_ide/ui/widgets/menu.dart';
+import 'package:robocore_ide/ui/widgets/split_handle.dart';
 
 Widget _app(Widget child) => MaterialApp(theme: buildTheme(RC.paper), home: Scaffold(body: Center(child: child)));
 
@@ -91,5 +95,32 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(find.text('Open'), findsOneWidget, reason: 'Esc left the focus on the button that opened the menu');
+  });
+
+  testWidgets('a split handle moves with a press and drag, not with a two-finger trackpad scroll', (tester) async {
+    var moved = 0.0;
+    await tester.pumpWidget(_app(SizedBox(
+      width: 300,
+      height: 40,
+      child: SplitHandle(axis: Axis.vertical, thickness: 12, onDrag: (dy) => moved += dy),
+    )));
+    final at = tester.getCenter(find.byType(SplitHandle));
+
+    final scroll = await tester.createGesture(kind: PointerDeviceKind.trackpad);
+    await scroll.panZoomStart(at);
+    await scroll.panZoomUpdate(at, pan: const Offset(0, 60));
+    await scroll.panZoomEnd();
+    await tester.pump();
+    expect(moved, 0, reason: 'scrolling over it with two fingers');
+
+    await tester.dragFrom(at, const Offset(0, 60), kind: PointerDeviceKind.mouse);
+    expect(moved, greaterThan(30), reason: 'press and drag (a trackpad click-and-drag comes as a mouse)');
+  });
+
+  testWidgets('on a Mac a field is as tall as the button beside it (no compact desktop density)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final theme = buildTheme(RC.paper);
+    debugDefaultTargetPlatformOverride = null;
+    expect(theme.visualDensity, VisualDensity.standard);
   });
 }

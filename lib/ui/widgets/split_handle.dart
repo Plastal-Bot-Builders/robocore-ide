@@ -1,5 +1,6 @@
-// A drag handle between two panes (blocks ⇄ C++, editor ⇄ console). Drag it to resize the panes;
+// A drag handle between two panes (blocks ⇄ C++, editor ⇄ console). Press and drag it to resize the panes;
 // double-click it to go back to the default size.
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import '../../theme.dart';
@@ -83,6 +84,9 @@ class _SplitHandleState extends State<SplitHandle> {
           onPointerCancel: (_) => setEditorFramesInteractive(true),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
+            // A press and drag only: Flutter would also take a two-finger trackpad scroll over the handle as a drag
+            // (a click-and-drag on a trackpad comes as a mouse).
+            supportedDevices: const {PointerDeviceKind.mouse, PointerDeviceKind.touch, PointerDeviceKind.stylus, PointerDeviceKind.invertedStylus},
             onDoubleTap: widget.onReset,
             onHorizontalDragStart: _sideways ? (_) => _start() : null,
             onHorizontalDragUpdate: _sideways ? (d) => widget.onDrag(d.delta.dx) : null,

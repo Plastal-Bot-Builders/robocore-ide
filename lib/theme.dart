@@ -160,6 +160,9 @@ ThemeData buildTheme(RC c) {
     brightness: c.dark ? Brightness.dark : Brightness.light,
     fontFamily: fBody,
     fontFamilyFallback: kSymbolFonts,
+    // The design's sizes everywhere: on desktops Flutter would otherwise shrink fields and menus ("compact"), so a
+    // text field came out 8 px shorter than the button beside it on the Mac.
+    visualDensity: VisualDensity.standard,
     scaffoldBackgroundColor: c.bg,
     colorScheme: ColorScheme.fromSeed(
       seedColor: kBrand,
