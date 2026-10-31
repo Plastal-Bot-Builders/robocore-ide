@@ -27,7 +27,8 @@ class CogMark extends StatelessWidget {
       );
 }
 
-/// "Ask Cog" in the top bar (Ctrl/⌘ + I). Navy while the panel is open.
+/// "Ask Cog" in the top bar (Ctrl/⌘ + I): a soft brandSoft pill (the Paper one: the bar is yellow in both themes),
+/// navy while the panel is open.
 class CogButton extends StatelessWidget {
   const CogButton({super.key, this.compact = false});
   final bool compact;
@@ -44,8 +45,7 @@ class CogButton extends StatelessWidget {
         height: 32,
         padding: EdgeInsets.only(left: 4, right: compact ? 4 : 12),
         decoration: BoxDecoration(
-          color: on ? kNavy : (h ? Colors.white.withValues(alpha: .3) : Colors.transparent),
-          border: Border.all(color: kNavy),
+          color: on ? kNavy : (h ? Colors.white : RC.paper.brandSoft),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -155,7 +155,6 @@ class _CogPanelState extends State<CogPanel> {
     final header = Container(
       height: 56,
       padding: const EdgeInsets.only(left: 14, right: 8),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
       child: Row(children: [
         const CogMark(size: 30),
         const SizedBox(width: 10),
@@ -193,7 +192,6 @@ class _CogPanelState extends State<CogPanel> {
     final prompts = cog.prompts;
     final footer = Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         if (prompts.isNotEmpty) ...[
           Wrap(spacing: 6, runSpacing: 6, children: [
@@ -310,8 +308,7 @@ class _PromptChip extends StatelessWidget {
         height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: h && onTap != null ? c.brandSoft : Colors.transparent,
-          border: Border.all(color: onTap == null ? c.line2 : c.line),
+          color: onTap == null ? c.sunk : (h ? Color.lerp(c.brandSoft, kBrand, c.dark ? .18 : .3) : c.brandSoft),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Center(
@@ -402,7 +399,6 @@ class _CogBubble extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           decoration: BoxDecoration(
             color: c.raised,
-            border: Border.all(color: c.line),
             borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(2), topRight: Radius.circular(10), bottomLeft: Radius.circular(10), bottomRight: Radius.circular(10)),
           ),
@@ -500,7 +496,7 @@ class CogText extends StatelessWidget {
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(8)),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SelectableText(code, style: tMono(c, size: 12, height: 18 / 12)),
@@ -617,12 +613,10 @@ class _Suggestion extends StatelessWidget {
     final firstLine = rows.where((r) => r.$1 == '+').firstOrNull?.$2;
     return EdgedBox(
       radius: 8,
-      edge: c.ink,
       color: c.raised,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
+        Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
           child: Row(children: [
             Expanded(child: Text('SUGGESTED FIX', style: tOverline(c))),
             Text('${f.file}${firstLine == null ? '' : ' · line $firstLine'}', style: tCaption(c, color: c.faint)),
@@ -644,9 +638,8 @@ class _Suggestion extends StatelessWidget {
               ),
             ]),
           ),
-        Container(
+        Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: switch (item.fixState) {
             'applied' => Row(children: [
                 RcIcon('check', size: 16, color: c.ok),
@@ -691,7 +684,7 @@ class _QuickCheckState extends State<_QuickCheck> {
     final right = it.answered && it.picked == q.answer;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('QUICK CHECK', style: tOverline(c, color: c.textBrand)),
         const SizedBox(height: 6),
@@ -765,8 +758,7 @@ class _Concepts extends StatelessWidget {
           height: 24,
           padding: const EdgeInsets.only(left: 6, right: 8),
           decoration: BoxDecoration(
-            color: done ? c.ink : Colors.transparent,
-            border: done ? null : Border.all(color: c.ink),
+            color: done ? c.ink : c.brandSoft,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [

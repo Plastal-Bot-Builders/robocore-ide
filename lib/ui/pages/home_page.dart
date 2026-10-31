@@ -188,8 +188,8 @@ class _HeroBtn extends StatelessWidget {
         height: 32,
         padding: const EdgeInsets.only(left: 12, right: 14),
         decoration: BoxDecoration(
-          color: primary ? (h ? kNavyHover : kNavy) : (h ? Colors.white.withValues(alpha: .3) : Colors.transparent),
-          border: Border.all(color: kNavy),
+          // The banner is yellow in both themes, so the soft button uses the Paper brandSoft in both.
+          color: primary ? (h ? kNavyHover : kNavy) : (h ? Colors.white : RC.paper.brandSoft),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -216,8 +216,7 @@ class _TemplateTile extends StatelessWidget {
       builder: (context, h) => Container(
         padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
         decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: h ? c.faint : c.line),
+          color: h ? c.raised : c.surface,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(children: [
