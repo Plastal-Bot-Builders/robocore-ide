@@ -179,9 +179,10 @@
       '.robocore-renderer .blocklyOutlinePath { fill: rgba(27,42,65,.28) !important; }',
       '.robocore-renderer .rcNavyText > .blocklyOutlinePath { fill: rgba(27,42,65,.14) !important; }',
       // A dropdown's menu: white, the chosen option on a yellow row with a check on the right (the design's Menu Item).
-      '.blocklyDropDownDiv { background: #FFFFFF !important; border: 1px solid rgba(27,42,65,.16) !important; border-radius: 8px !important;' +
+      // No edge (the design has had no outlines since v1.0.1): the shadow sets the menu apart.
+      '.blocklyDropDownDiv { background: #FFFFFF !important; border: none !important; border-radius: 8px !important;' +
         ' box-shadow: 0 8px 24px rgba(27,42,65,.16) !important; }',
-      '.blocklyDropDownDiv .blocklyDropDownArrow { background: #FFFFFF !important; border-color: rgba(27,42,65,.16) !important; }',
+      '.blocklyDropDownDiv .blocklyDropDownArrow { background: #FFFFFF !important; border-color: transparent !important; }',
       '.blocklyDropDownDiv .blocklyMenu { padding: 4px !important; }',
       '.blocklyDropDownDiv .blocklyMenuItem { position: relative; border-radius: 6px; padding: 7px 36px 7px 10px !important; min-width: 120px;' +
         ' font: 500 13px Barlow, sans-serif; }',
@@ -190,7 +191,7 @@
       '.blocklyDropDownDiv .blocklyMenuItemSelected { background: #FCE9BF !important; font-weight: 600; }',
       '.blocklyDropDownDiv .blocklyMenuItemSelected .blocklyMenuItemCheckbox { position: absolute; right: 10px; top: 50%; margin: -8px 0 0 0;' +
         ` float: none; background: url("${svgUri('<path d="M20 6 9 17l-5-5"/>', INK, 16, 2.5)}") center / 16px no-repeat !important; }`,
-      '.rcNavy .blocklyDropDownDiv, .rcNavy .blocklyDropDownDiv .blocklyDropDownArrow { background: ' + INK + ' !important; border-color: rgba(247,241,227,.2) !important; }',
+      '.rcNavy .blocklyDropDownDiv, .rcNavy .blocklyDropDownDiv .blocklyDropDownArrow { background: ' + INK + ' !important; border-color: transparent !important; }',
       '.rcNavy .blocklyDropDownDiv .blocklyMenuItemContent { color: ' + CREAM + ' !important; }',
       '.rcNavy .blocklyDropDownDiv .blocklyMenuItemHighlight { background: #22344F !important; }',
       '.rcNavy .blocklyDropDownDiv .blocklyMenuItemSelected { background: rgba(242,176,30,.2) !important; }',
@@ -204,8 +205,8 @@
       // On the yellow Events blocks the dropdown chevron is navy, like their labels.
       '.robocore-renderer .rcNavyText > .blocklyDropdownField > image { filter: brightness(0.15); }',
       // The toolbox (the design's Block Category rows): 160 px wide, 34 px rows, 22 px colour chips.
-      '.blocklyToolbox { width: ' + z(160) + '; box-sizing: border-box; padding: ' + z(12) + ' ' + z(8) + ' !important;' +
-        ' border-right: 1px solid rgba(27,42,65,.10); }',
+      // No divider line between the toolbox and the workspace.
+      '.blocklyToolbox { width: ' + z(160) + '; box-sizing: border-box; padding: ' + z(12) + ' ' + z(8) + ' !important; border: none !important; }',
       '.blocklyToolboxCategoryContainer { margin: 0 0 ' + z(2) + '; }',
       '.blocklyToolboxCategory { position: relative; height: ' + z(34) + '; line-height: ' + z(34) + '; margin: 0;' +
         ' padding: 0 ' + z(8) + ' 0 ' + z(10) + ' !important;' +
@@ -226,17 +227,21 @@
       '.injectionDiv .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { font: 600 18px "Barlow Condensed", Barlow, sans-serif;' +
         ' letter-spacing: .54px; fill: ' + INK + ' !important; }',
       '.robocore-navy-theme .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { fill: ' + CREAM + ' !important; }',
-      '.blocklyFlyoutButton .blocklyFlyoutButtonBackground { fill: ' + PAPER + '; stroke: ' + INK + '; stroke-width: 1px; }',
-      '.blocklyFlyoutButton:hover .blocklyFlyoutButtonBackground { fill: #FCE9BF; }',
+      // The design's Secondary button: a soft brandSoft fill, no outline.
+      '.blocklyFlyoutButton .blocklyFlyoutButtonBackground { fill: #FCE9BF; stroke: none; }',
+      '.blocklyFlyoutButton:hover .blocklyFlyoutButtonBackground { fill: #F9DB96; }',
+      '.robocore-navy-theme .blocklyFlyoutButton .blocklyFlyoutButtonBackground { fill: #3B3220; }',
+      '.robocore-navy-theme .blocklyFlyoutButton:hover .blocklyFlyoutButtonBackground { fill: #50421F; }',
+      '.robocore-navy-theme .blocklyFlyoutButton .blocklyText { fill: ' + CREAM + ' !important; }',
       '.blocklyFlyoutButton .blocklyText { fill: ' + INK + ' !important; font: 600 13px Barlow, sans-serif; }',
       '.blocklyFlyoutButtonShadow { display: none; }',
       // Zoom buttons and trashcan drawn as in the design (Blockly's sprite images hidden).
       '.blocklyZoom > image, .blocklyZoom > svg > image, .blocklyTrash > image, .blocklyTrashLid > svg { display: none; }',
       '.blocklyZoom { cursor: pointer; }',
-      '.rcZoomBox { fill: #FFFFFF; stroke: rgba(27,42,65,.16); stroke-width: 1px; }',
+      '.rcZoomBox { fill: #FFFFFF; stroke: none; }',
       '.blocklyZoom:hover .rcZoomBox { fill: ' + CREAM + '; }',
       '.rcIcon { fill: none; stroke: ' + INK + '; stroke-width: 2.25px; stroke-linecap: round; stroke-linejoin: round; }',
-      '.robocore-navy-theme .rcZoomBox { fill: #22344F; stroke: rgba(247,241,227,.2); }',
+      '.robocore-navy-theme .rcZoomBox { fill: #22344F; }',
       '.robocore-navy-theme .blocklyZoom:hover .rcZoomBox { fill: #2C405E; }',
       '.robocore-navy-theme .rcIcon { stroke: ' + CREAM + '; }',
       '.blocklyTrashLid { opacity: 1 !important; }',
@@ -1371,9 +1376,9 @@
       ];
     };
     const common = {
-      'editorSuggestWidget.background': '#FFFFFF', 'editorSuggestWidget.border': '#1B2A4129',
+      'editorSuggestWidget.background': '#FFFFFF', 'editorSuggestWidget.border': '#00000000',
       'editorSuggestWidget.selectedBackground': '#F2B01E38', 'editorHoverWidget.background': '#FFFFFF',
-      'editorHoverWidget.border': '#1B2A4129', 'diffEditor.insertedTextBackground': '#F2B01E38',
+      'editorHoverWidget.border': '#00000000', 'diffEditor.insertedTextBackground': '#F2B01E38',
       'diffEditor.removedTextBackground': '#1B2A410F',
       'editor.lineHighlightBackground': '#F2B01E1F', 'editor.selectionBackground': '#F2B01E55',
       'editorOverviewRuler.errorForeground': '#1B2A41', 'editorOverviewRuler.warningForeground': '#8A5A00',

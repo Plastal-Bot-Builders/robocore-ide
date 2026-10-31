@@ -22,13 +22,12 @@ class ProjectCard extends StatelessWidget {
       onTap: () => s.openProject(p.id),
       builder: (context, h) => EdgedBox(
         radius: 10,
-        edge: h ? c.faint : c.line,
-        color: c.surface,
+        // No edge: hovering lifts the card to the raised surface instead.
+        color: h ? c.raised : c.surface,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
           SizedBox(height: 112, child: Thumb(blocks: p.mode == 'blocks')),
-          Container(
+          Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
             child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -136,7 +135,7 @@ class Thumb extends StatelessWidget {
             child: Container(
               height: 22,
               padding: const EdgeInsets.only(left: 6, right: 8),
-              decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(4)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 RcIcon(blocks ? 'blocks' : 'code', size: 14, color: c.ink),
                 const SizedBox(width: 4),
@@ -176,7 +175,6 @@ class BoardSummary extends StatelessWidget {
       Container(
         height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
         child: Row(children: [
           Text('BOARD', style: tH2(c)),
           const Spacer(),

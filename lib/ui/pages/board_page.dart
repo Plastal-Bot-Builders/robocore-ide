@@ -62,7 +62,7 @@ class BoardPage extends StatelessWidget {
                   if (id == s.board && id != sel)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: BoxDecoration(border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
                       child: Text('Default', style: tCaption(c).copyWith(fontSize: 11)),
                     ),
                 ]),
@@ -77,7 +77,6 @@ class BoardPage extends StatelessWidget {
         Container(
           padding: const EdgeInsets.only(bottom: 8),
           margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(width: 84, child: Text(d[0], style: tCaption(c))),
             Expanded(child: Text(d[1], style: tBody(c, size: 13, height: 18 / 13))),

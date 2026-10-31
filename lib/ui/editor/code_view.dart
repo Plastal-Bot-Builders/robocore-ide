@@ -402,7 +402,7 @@ class CodeViewState extends State<CodeView> {
         child: Container(
           width: 260,
           padding: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8), boxShadow: popShadow),
+          decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(8), boxShadow: popShadow),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             for (var i = 0; i < _ac.length; i++)
               GestureDetector(
@@ -431,7 +431,7 @@ class CodeViewState extends State<CodeView> {
   Widget _findBar(RC c) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: c.surface, border: Border(bottom: BorderSide(color: c.line2))),
+      color: c.surface,
       child: Row(children: [
         Expanded(
           child: RcInput(

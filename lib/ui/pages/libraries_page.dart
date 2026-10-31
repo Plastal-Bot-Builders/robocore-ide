@@ -30,8 +30,7 @@ class LibrariesPage extends StatelessWidget {
                 for (var i = 0; i < list.length; i++)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    decoration: BoxDecoration(border: i == 0 ? null : Border(top: BorderSide(color: c.line2))),
-                    child: Tooltip(
+                                        child: Tooltip(
                       message: '#include <${list[i].h}>${list[i].arch == 'esp32' ? ' · ESP32 boards only' : ''}',
                       waitDuration: const Duration(milliseconds: 800),
                       child: Row(children: [
