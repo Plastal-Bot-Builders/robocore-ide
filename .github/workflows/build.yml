@@ -80,6 +80,13 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: build/web
+      # TEMPORARY (PR #5): the PR's web build on its own branch, for review screenshots. Removed before merging.
+      - name: Save the PR's web build to the pr-web-build branch
+        if: github.event_name == 'pull_request'
+        run: |
+          cd build/web && git init -q && git checkout -q -b pr-web-build && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "pr web ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" pr-web-build
       - name: Save the web build to the web-build branch
         if: github.event_name != 'pull_request'
         run: |
