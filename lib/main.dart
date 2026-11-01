@@ -1,12 +1,15 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsBinding;
+import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
 
 import 'hw/local_compiler.dart';
 import 'hw/sketchbook.dart';
+import 'hw/update_check.dart' show fetchLatestRelease;
 import 'licences.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
+import 'ui/account.dart' show kAppVersion;
 import 'ui/app_scope.dart';
 import 'ui/editor/web_editors.dart' show EditorFramesObserver, initWebEditors;
 import 'ui/mac_app.dart';
@@ -35,6 +38,12 @@ Future<void> main() async {
     await initWebEditors();
     // The Mac app's messages go to Notification Centre.
     if (isMacApp) state.systemToast = showMacNotification;
+    // The installed apps say when a newer release is out (the web app is always the latest).
+    if (!kIsWeb) {
+      state.openUrl = (url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication).catchError((Object _) => false);
+      // A few seconds in, so the notice doesn't land on top of the launch animation.
+      Future<void>.delayed(const Duration(seconds: 4), () => state.checkForUpdate(kAppVersion, fetchLatestRelease));
+    }
   }
 
   runApp(LaunchApp(state: state, ready: load()));

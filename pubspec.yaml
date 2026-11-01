@@ -1,7 +1,7 @@
 name: robocore_ide
 description: RoboCore IDE — build, code and run sketches for the RoboCore classroom robot, on web, Android, iOS, Windows and macOS.
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ^3.5.0
@@ -12,6 +12,7 @@ dependencies:
   flutter_svg: ^2.0.10
   http: ^1.2.2
   shared_preferences: ^2.3.2
+  url_launcher: ^6.3.1
   webview_flutter: ^4.14.1
   webview_windows: ^0.4.0
 
