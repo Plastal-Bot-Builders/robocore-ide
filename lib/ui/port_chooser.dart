@@ -51,8 +51,7 @@ class _PortChooserState extends State<_PortChooser> {
                     return Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: on ? c.brandSoft : (c.dark ? c.sunk : Colors.white),
-                        border: Border.all(color: on ? c.ink : c.line),
+                        color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(children: [

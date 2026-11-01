@@ -337,7 +337,6 @@ class _Toast extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
         decoration: BoxDecoration(
           color: bg,
-          border: error ? null : Border.all(color: c.line),
           borderRadius: BorderRadius.circular(10),
           boxShadow: popShadow,
         ),
@@ -403,7 +402,7 @@ class TopBar extends StatelessWidget {
                   tooltip: 'RoboCore IDE home',
                   builder: (context, h) => ProductLockup(scale: phone ? .76 : 1, product: !phone),
                 ),
-              if (!phone) ...[const SizedBox(width: 12), Container(width: 1, height: 24, color: kNavy.withValues(alpha: .2)), const SizedBox(width: 12)],
+              if (!phone) const SizedBox(width: 25),
               // The project name takes the free space itself: a Flexible next to a Spacer would split it in half and leave
               // the right-hand buttons stranded mid-bar on wide windows.
               if (p != null)
@@ -645,11 +644,9 @@ class _BoardChipState extends State<BoardChip> {
         builder: (context, h) => Container(
           height: 40,
           padding: const EdgeInsets.only(left: 8, right: 10),
-          // Open: an ink border and an up chevron (the design's Board Selector).
+          // White with no edge (the design's Board Selector since v1.0.1); open, an up chevron.
           decoration: BoxDecoration(
-            color: h || open ? Colors.white : const Color(0xFFFFFCF5),
-            // Closed, a 60% navy edge: 3:1 against the yellow bar.
-            border: open ? Border.all(color: kNavy, width: 1.5) : Border.all(color: kNavy.withValues(alpha: .6)),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -665,10 +662,9 @@ class _BoardChipState extends State<BoardChip> {
                       style: const TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, color: Color(0xFF6A7380))),
                 ],
               ),
-              const SizedBox(width: 10),
-              Container(width: 1, height: 20, color: const Color(0xFFE7E5E0)),
+              const SizedBox(width: 21),
             ],
-            const SizedBox(width: 10),
+            if (widget.compact) const SizedBox(width: 10),
             Dot(color: kNavy, ring: !s.linked),
             if (!widget.compact) ...[
               const SizedBox(width: 6),
@@ -696,7 +692,6 @@ class BoardMenu extends StatelessWidget {
       width: 340,
       decoration: BoxDecoration(
         color: c.raised,
-        border: Border.all(color: c.line),
         borderRadius: BorderRadius.circular(10),
         boxShadow: popShadow,
       ),
@@ -733,7 +728,6 @@ class BoardMenu extends StatelessWidget {
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Text('Port', style: tLabel(c, w: FontWeight.w500)),
@@ -852,7 +846,7 @@ class _SearchBoxState extends State<SearchBox> {
       popup: (context) => Container(
         width: 320,
         padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(10), boxShadow: popShadow),
+        decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(10), boxShadow: popShadow),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (ps.isNotEmpty) _h(c, 'Projects'),
           for (final p in ps)
@@ -892,6 +886,8 @@ class _SearchBoxState extends State<SearchBox> {
           focusNode: _focus,
           hint: 'Search',
           icon: 'search',
+          // White on the yellow bar, like the board chip; the Navy theme keeps its dark field (its text is cream).
+          fill: c.dark ? null : Colors.white,
           onChanged: (v) => setState(() => q = v),
           onSubmitted: (_) {
             if (ps.isNotEmpty) {
@@ -964,7 +960,7 @@ class SideBar extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       width: collapsed ? 64 : 208,
       padding: EdgeInsets.fromLTRB(collapsed ? 10 : 12, 12, collapsed ? 10 : 12, 10),
-      decoration: BoxDecoration(color: c.bg, border: Border(right: BorderSide(color: c.line2))),
+      color: c.bg,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (rp != null)
           Hover(
@@ -977,8 +973,8 @@ class SideBar extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 10),
               padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 10, vertical: 8),
               decoration: BoxDecoration(
-                color: s.view == Screen.editor ? c.surface : (h ? c.sunk : Colors.transparent),
-                border: Border.all(color: s.view == Screen.editor ? c.ink : c.line),
+                // The open project: a brandSoft tile, like the current page in the list below.
+                color: s.view == Screen.editor ? c.brandSoft : (h ? c.sunk : Colors.transparent),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
@@ -1013,7 +1009,6 @@ class SideBar extends StatelessWidget {
         const SizedBox(height: 2),
         Container(
           padding: EdgeInsets.only(top: 10, left: collapsed ? 0 : 12, right: collapsed ? 0 : 4),
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween, children: [
             if (!collapsed)
               Flexible(
@@ -1104,7 +1099,7 @@ class StatusBar extends StatelessWidget {
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line2))),
+      color: c.bg,
       child: Row(children: [
         // Ink dot, the box yellow while busy, a warning icon on an error (the design's Connection Status).
         if (s.stateKind == 'err')

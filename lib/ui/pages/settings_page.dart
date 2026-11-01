@@ -24,11 +24,8 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title.toUpperCase(), style: tH2(c))),
-            for (var i = 0; i < rows.length; i++)
-              Container(
-                decoration: BoxDecoration(border: i == 0 ? null : Border(top: BorderSide(color: c.line2))),
-                child: rows[i],
-              ),
+            // No divider lines between the rows: the rows' own padding spaces them.
+            ...rows,
           ]),
         );
 
@@ -54,8 +51,7 @@ class SettingsPage extends StatelessWidget {
         builder: (context, h) => Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: on ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-            border: Border.all(color: on ? c.ink : c.line),
+            color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(children: [
@@ -440,7 +436,14 @@ Future<String?> _pin(BuildContext context, {required String title, required Stri
               keyboardType: TextInputType.number,
               onSubmitted: (_) => done(),
               style: tBody(c, size: 14),
-              decoration: InputDecoration(hintText: hint, isDense: true, border: const OutlineInputBorder()),
+              decoration: InputDecoration(
+                hintText: hint,
+                isDense: true,
+                filled: true,
+                fillColor: c.sunk,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.focus, width: 1.5)),
+              ),
             );
         return AlertDialog(
           backgroundColor: c.raised,
@@ -511,8 +514,7 @@ class _CogStyleRow extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: on ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-            border: Border.all(color: on ? c.ink : c.line),
+            color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
             borderRadius: BorderRadius.circular(8),
           ),
           // The design's Help Style: title and description, the radio on the right.
@@ -703,7 +705,7 @@ class _LockedField extends StatelessWidget {
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       alignment: Alignment.centerLeft,
-      decoration: BoxDecoration(color: c.sunk, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(6)),
       child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: tBody(c, size: 13, color: c.muted)),
     );
   }

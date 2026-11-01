@@ -50,8 +50,7 @@ class ExampleCard extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 156),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: h ? c.faint : c.line),
+          color: h ? c.raised : c.surface,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -60,7 +59,7 @@ class ExampleCard extends StatelessWidget {
               width: 40,
               height: 40,
               alignment: Alignment.center,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c.ink)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: c.brandSoft),
               child: RcIcon(kExIcon[e.id] ?? 'bolt', size: 20, color: c.ink),
             ),
             const Spacer(),
@@ -101,7 +100,7 @@ Future<void> showExampleDialog(BuildContext context, Example e) => showDialog<vo
               Badge2(e.cat, bg: c.sunk, fg: c.ink),
             ]),
             const SizedBox(height: 14),
-            SizedBox(height: 120, child: EdgedBox(radius: 8, edge: c.line, child: Thumb(blocks: e.hasBlocks))),
+            SizedBox(height: 120, child: EdgedBox(radius: 8, child: Thumb(blocks: e.hasBlocks))),
             const SizedBox(height: 12),
             Text(e.hasBlocks ? 'Opens as a Blocks project; switch to C++ any time.' : 'Opens as a C++ project.',
                 style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),

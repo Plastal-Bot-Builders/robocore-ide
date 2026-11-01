@@ -48,7 +48,6 @@ class _SplitHandleState extends State<SplitHandle> {
 
   @override
   Widget build(BuildContext context) {
-    final c = RC.of(context);
     final on = _hover || _drag;
     final Widget mark;
     if (widget.line) {
@@ -56,7 +55,8 @@ class _SplitHandleState extends State<SplitHandle> {
         duration: const Duration(milliseconds: 120),
         width: _sideways ? (on ? 3 : 1) : null,
         height: _sideways ? null : (on ? 3 : 1),
-        color: on ? kBrand : c.line2,
+        // No resting line (the design has no dividers): the handle shows only when hovered or dragged.
+        color: on ? kBrand : Colors.transparent,
       );
     } else {
       mark = AnimatedOpacity(

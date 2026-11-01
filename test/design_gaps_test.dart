@@ -10,7 +10,7 @@ import 'package:robocore_ide/hw/usb_link.dart';
 import 'package:robocore_ide/main.dart';
 import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/sim_board.dart';
-import 'package:robocore_ide/theme.dart' show kBrand;
+import 'package:robocore_ide/theme.dart' show RC, kBrand;
 import 'package:robocore_ide/ui/shell.dart' show SearchBox, TopBar, kHelpTopics;
 import 'package:robocore_ide/ui/widgets/common.dart' show tipped;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -257,7 +257,7 @@ void main() {
     await _stop(tester, state);
   });
 
-  testWidgets('the preview board: USER is outlined until held, and a white LED is lit in the box yellow', (tester) async {
+  testWidgets('the preview board: USER is soft-filled until held, and a white LED is lit in the box yellow', (tester) async {
     final state = await _start(tester);
     state.openProject(state.sortedProjects.firstWhere((p) => p.mode == 'code' && p.board == 'v2').id);
     if (!state.panelOpen) state.togglePanel();
@@ -269,14 +269,16 @@ void main() {
     BoxDecoration user() => tester
         .widget<AnimatedContainer>(find.ancestor(of: find.text('USER'), matching: find.byType(AnimatedContainer)).first)
         .decoration! as BoxDecoration;
-    expect(user().color, isNull, reason: 'outlined when up');
+    final c = RC.of(tester.element(find.text('USER')));
+    expect(user().color, c.brandSoft, reason: 'soft brandSoft fill when up, no outline');
+    expect(user().border, isNull);
     final press = await tester.startGesture(tester.getCenter(find.text('USER')));
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.sim.user, isTrue);
-    expect(user().color, isNotNull, reason: 'filled while held');
+    expect(user().color, c.ink, reason: 'ink while held');
     await press.up();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(user().color, isNull);
+    expect(user().color, c.brandSoft);
 
     // The sketch turns the RGB LED white (digitalWrite on LED_BUILTIN).
     state.sim.running = true;

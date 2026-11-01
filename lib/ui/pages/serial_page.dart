@@ -37,7 +37,6 @@ class SerialPage extends StatelessWidget {
               Container(
                 constraints: const BoxConstraints(minHeight: 52),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
                 child: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 8,

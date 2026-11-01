@@ -165,7 +165,7 @@ class _EditorPageState extends State<EditorPage> {
     final toolbar = Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(color: c.surface, border: Border(bottom: BorderSide(color: c.line2))),
+      color: c.surface,
       child: Row(children: [
         Container(
           padding: const EdgeInsets.all(3),
@@ -405,7 +405,7 @@ class _EditorPageState extends State<EditorPage> {
     return Container(
       height: 40,
       padding: const EdgeInsets.only(left: 12, right: 8),
-      decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
+      color: c.sunk,
       child: Row(children: [
         RcIcon(icon, size: 16, color: c.ink),
         const SizedBox(width: 10),
@@ -593,7 +593,6 @@ class ConsolePanel extends StatelessWidget {
         Container(
           height: 40,
           padding: const EdgeInsets.only(left: 8, right: 8),
-          decoration: BoxDecoration(border: s.panelOpen ? Border(bottom: BorderSide(color: c.line2)) : null),
           child: Row(children: [
             Expanded(
               child: SingleChildScrollView(
@@ -703,7 +702,6 @@ class _LiveBoardState extends State<LiveBoard> {
           Container(
             height: 40,
             padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
             child: Row(children: [
               Expanded(child: Text('PREVIEW BOARD', style: tH2(c), overflow: TextOverflow.ellipsis)),
               Tooltip(
@@ -865,7 +863,6 @@ class _UsbBoardStatus extends StatelessWidget {
     final pct = s.uploadPct;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           LinkDot(on: s.usbOpen, size: 7),
@@ -929,9 +926,9 @@ class _UserButton extends StatelessWidget {
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: sim.user ? c.ink : null,
+              // Pressed, ink; otherwise the soft brandSoft fill of the design's Secondary buttons.
+              color: sim.user ? c.ink : c.brandSoft,
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: c.ink),
             ),
             child: Text(label, style: tBody(c, size: 12, w: FontWeight.w500, height: 16 / 12, color: sim.user ? c.bg : c.ink)),
           ),

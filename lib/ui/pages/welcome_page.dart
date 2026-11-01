@@ -53,7 +53,6 @@ class _WelcomePageState extends State<WelcomePage> {
               padding: EdgeInsets.all(phone ? 20 : 32),
               decoration: BoxDecoration(
                 color: c.raised,
-                border: Border.all(color: c.line),
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: modalShadow,
               ),

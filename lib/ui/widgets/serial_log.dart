@@ -78,7 +78,7 @@ class _SerialLogState extends State<SerialLog> {
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Container(
               padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-              decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
+              color: c.sunk,
               child: Row(children: [
                 Expanded(
                   child: Text.rich(
@@ -279,7 +279,7 @@ class _SendRowState extends State<SendRow> {
     final phone = MediaQuery.sizeOf(context).width < 760;
     return Container(
       padding: widget.big ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10) : const EdgeInsets.fromLTRB(12, 8, 8, 8),
-      decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.line2))),
+      color: c.surface,
       child: Row(children: [
         Expanded(child: RcInput(controller: _c, focusNode: _f, hint: widget.hint, height: h, onSubmitted: (_) => _send())),
         if (widget.big && !phone) ...[

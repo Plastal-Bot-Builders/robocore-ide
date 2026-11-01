@@ -88,7 +88,8 @@ class _RcMenuState extends State<RcMenu> {
   Widget build(BuildContext context) {
     final c = RC.of(context);
     Widget row(MenuEntry e) {
-      if (e.divider) return Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 4), color: c.line2);
+      // A gap, not a line: the design has no dividers.
+      if (e.divider) return const SizedBox(height: 9);
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Hover(
@@ -118,7 +119,6 @@ class _RcMenuState extends State<RcMenu> {
         width: widget.width,
         decoration: BoxDecoration(
           color: c.raised,
-          border: Border.all(color: c.line),
           borderRadius: BorderRadius.circular(10),
           boxShadow: popShadow,
         ),

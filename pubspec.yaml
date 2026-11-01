@@ -1,7 +1,7 @@
 name: robocore_ide
 description: RoboCore IDE — build, code and run sketches for the RoboCore classroom robot, on web, Android, iOS, Windows and macOS.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.5.0

@@ -119,7 +119,8 @@ Widget tipped(String tip, Widget child) {
   );
 }
 
-// Primary (navy), outline (the design's Secondary), plain (Ghost), and the outline on the yellow top bar.
+// Primary (navy), outline (the design's Secondary: no edge since v1.0.1, a soft brandSoft fill), plain (Ghost), and
+// the Secondary on the yellow top bar (the Paper brandSoft in both themes, since the bar is yellow in both).
 // There is no red "danger" button in the design: Reset is Secondary, Delete project is Ghost with a trash icon.
 enum BtnKind { primary, outline, plain, ghostTop }
 
@@ -154,39 +155,35 @@ class Btn extends StatelessWidget {
       onTap: onTap,
       tooltip: tooltip,
       builder: (context, h) {
-        Color bg, fg, border;
+        Color bg, fg;
         switch (kind) {
           case BtnKind.primary:
             bg = c.dark ? kBrand : kNavy;
             fg = c.dark ? kNavy : kCream;
-            border = bg;
             if (h) bg = c.dark ? kBrandPressed : kNavyHover;
             break;
           case BtnKind.outline:
-            bg = h ? c.sunk : Colors.transparent;
+            bg = h ? Color.lerp(c.brandSoft, kBrand, c.dark ? .18 : .3)! : c.brandSoft;
             fg = c.ink;
-            border = c.ink;
             break;
           case BtnKind.plain:
             bg = h ? c.sunk : Colors.transparent;
             fg = c.ink;
-            border = Colors.transparent;
             break;
           case BtnKind.ghostTop:
-            bg = h ? Colors.white.withValues(alpha: .35) : Colors.transparent;
+            bg = h ? Colors.white : RC.paper.brandSoft;
             fg = kNavy;
-            border = kNavy;
             break;
         }
         if (onTap == null && !busy) {
           fg = fg.withValues(alpha: .45);
-          border = border.withValues(alpha: .3);
+          if (kind != BtnKind.plain) bg = bg.withValues(alpha: bg.a * .6);
         }
         final hh = small ? 28.0 : height;
         return Container(
           height: hh,
           padding: EdgeInsets.only(left: small ? 10 : 12, right: small ? 10 : 14),
-          decoration: BoxDecoration(color: bg, border: Border.all(color: border), borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
           child: Row(
             mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -246,29 +243,26 @@ class RcCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    return EdgedBox(radius: radius, edge: c.line, color: color ?? c.surface, padding: padding, clip: clip, child: child);
+    return EdgedBox(radius: radius, color: color ?? c.surface, padding: padding, clip: clip, child: child);
   }
 }
 
-/// A rounded box with a 1 px edge that its content can't cover. The content is clipped to the inside of the edge, so a
-/// fill, a picture or an editor reaching the corners stops where the corner line starts (clipped to the outside, it
-/// covered the line round each corner). The edge itself is drawn under the content: on the Mac, anything Flutter draws
-/// over the editors' WebViews takes their clicks.
+/// A rounded box, filled, with no edge (the design has had no outlines on cards and panels since v1.0.1). The content
+/// is clipped to the rounded corners, so a fill, a picture or an editor reaching the corners follows them. Nothing is
+/// drawn over the content: on the Mac, anything Flutter draws over the editors' WebViews takes their clicks.
 class EdgedBox extends StatelessWidget {
-  const EdgedBox(
-      {super.key, required this.child, required this.radius, required this.edge, this.color, this.padding = EdgeInsets.zero, this.clip = true});
+  const EdgedBox({super.key, required this.child, required this.radius, this.color, this.padding = EdgeInsets.zero, this.clip = true});
   final Widget child;
   final double radius;
-  final Color edge;
   final Color? color;
   final EdgeInsets padding;
   final bool clip;
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(color: color, border: Border.all(color: edge), borderRadius: BorderRadius.circular(radius)),
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(radius)),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius - 1),
+          borderRadius: BorderRadius.circular(radius),
           clipBehavior: clip ? Clip.antiAlias : Clip.none,
           child: Padding(padding: padding, child: child),
         ),
@@ -325,6 +319,7 @@ class RcInput extends StatelessWidget {
     this.error = false,
     this.trailing,
     this.obscure = false,
+    this.fill,
   });
   final TextEditingController? controller;
   final String? hint, icon;
@@ -339,13 +334,17 @@ class RcInput extends StatelessWidget {
   /// A button inside the field, on the right (Cog's send).
   final Widget? trailing;
 
+  /// The field's fill; [RC.sunk] when null. The search on the yellow top bar is white, like the board chip beside it.
+  final Color? fill;
+
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    // An error keeps the ink border (1.5 px) and shows a warning icon in the field; the message under it is bold.
+    // A sunk fill and no edge. Focused, the focus ring's colour as a 1.5 px edge; an error keeps the ink edge (1.5 px)
+    // and shows a warning icon in the field; the message under it is bold.
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(6),
-      borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide(color: c.field),
+      borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide.none,
     );
     return SizedBox(
       height: height,
@@ -362,7 +361,7 @@ class RcInput extends StatelessWidget {
         decoration: InputDecoration(
           isDense: true,
           filled: true,
-          fillColor: c.dark ? c.sunk : Colors.white,
+          fillColor: fill ?? c.sunk,
           hintText: hint,
           hintStyle: TextStyle(fontFamily: fBody, fontSize: fontSize, color: c.faint),
           contentPadding: EdgeInsets.symmetric(horizontal: icon != null ? 0 : 12, vertical: (height - 18) / 2),
@@ -376,7 +375,7 @@ class RcInput extends StatelessWidget {
           border: border,
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: c.ink, width: 1.5),
+            borderSide: BorderSide(color: c.focus, width: 1.5),
           ),
         ),
       ),
@@ -384,9 +383,8 @@ class RcInput extends StatelessWidget {
   }
 }
 
-/// A compact dropdown styled like the Figma selects (border, chevron, 6px radius).
-/// A select as in the design: white field with a chevron; while open, an ink border and an up chevron. In the menu the
-/// chosen option has a yellow row, bold text and a check.
+/// A select as in the design: a sunk field with a chevron and no edge; while open, an up chevron. The menu has no edge
+/// either (its shadow sets it apart); the chosen option has a yellow row, bold text and a check.
 class RcSelect<T> extends StatefulWidget {
   const RcSelect({
     super.key,
@@ -435,7 +433,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
         color: c.raised,
         elevation: 6,
         menuPadding: const EdgeInsets.all(4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.line)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         constraints: BoxConstraints(minWidth: (w.width != null && w.width!.isFinite) ? w.width! : 160),
         itemBuilder: (_) => [
           for (final it in w.items)
@@ -467,8 +465,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
           height: w.height,
           padding: const EdgeInsets.only(left: 10, right: 8),
           decoration: BoxDecoration(
-            color: c.dark ? c.sunk : Colors.white,
-            border: _open ? Border.all(color: c.ink, width: 1.5) : Border.all(color: c.field),
+            color: c.sunk,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -544,8 +541,7 @@ class Pills extends StatelessWidget {
                 height: 30,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: on ? c.ink : (h ? c.sunk : Colors.transparent),
-                  border: Border.all(color: on ? c.ink : c.line),
+                  color: on ? c.ink : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Center(
