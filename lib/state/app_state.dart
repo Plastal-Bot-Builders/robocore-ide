@@ -14,6 +14,7 @@ import '../engine/zip.dart';
 import '../hw/cog_client.dart';
 import '../hw/compile_client.dart';
 import '../hw/download.dart';
+import '../hw/update_check.dart' show isNewerVersion;
 import '../hw/usb_link.dart';
 import 'cog.dart';
 import 'models.dart';
@@ -165,6 +166,13 @@ class AppState extends ChangeNotifier {
   bool toastError = false;
   bool toastInfo = false;
   Timer? _toastTimer;
+
+  /// A newer release than this app (the desktop and Android apps check once at start): its version and its
+  /// download page. Shown in the status bar until the app is updated.
+  String? updateVersion, updateUrl;
+
+  /// Opens a web page in the browser (set in main.dart); null in tests.
+  Future<bool> Function(String url)? openUrl;
 
   /// Set in the macOS app: shows a toast as a system notification instead, and answers false when the
   /// system won't (the user turned them off), so the toast shows in the window after all.
@@ -600,6 +608,28 @@ class AppState extends ChangeNotifier {
       });
     }
     notifyListeners();
+  }
+
+  /// Asks [latest] for the newest release and, when it is newer than [current], keeps it for the status bar and says
+  /// so once in a toast. Any failure is silent.
+  Future<void> checkForUpdate(String current, Future<({String version, String url})?> Function() latest) async {
+    final r = await latest();
+    if (r == null || !isNewerVersion(r.version, current)) return;
+    updateVersion = r.version;
+    updateUrl = r.url;
+    showToast('RoboCore ${r.version} is out',
+        body: 'You have $current. Download the new version from the link in the status bar.', info: true);
+  }
+
+  /// Opens the new release's download page.
+  Future<void> openUpdate() async {
+    final url = updateUrl, open = openUrl;
+    if (url == null) return;
+    final ok = open != null && await open(url);
+    if (!ok) {
+      await Clipboard.setData(ClipboardData(text: url));
+      showToast('Link copied', body: 'Paste it into your browser to download RoboCore $updateVersion.', info: true);
+    }
   }
 
   void closeToast() {

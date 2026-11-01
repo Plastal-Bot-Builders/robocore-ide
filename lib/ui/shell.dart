@@ -1115,6 +1115,25 @@ class StatusBar extends StatelessWidget {
             builder: (context, _, __) => Text(_detail(s, p), style: tCaption(c, color: c.faint), overflow: TextOverflow.ellipsis),
           ),
         ),
+        // A newer release (the desktop and Android apps): a soft brandSoft pill that opens its download page.
+        if (s.updateVersion != null) ...[
+          Hover(
+            onTap: s.openUpdate,
+            tooltip: 'Download RoboCore ${s.updateVersion}',
+            builder: (context, h) => Container(
+              height: 20,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: h ? Color.lerp(c.brandSoft, kBrand, c.dark ? .18 : .3) : c.brandSoft,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(phone ? 'Update' : 'Update available: ${s.updateVersion}',
+                  style: tCaption(c, color: c.ink, w: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(width: 16),
+        ],
         if (!phone)
           Hover(
             onTap: () => s.go(Screen.board),

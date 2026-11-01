@@ -58,7 +58,8 @@ jobs:
       - name: Save logs to the ci-logs branch
         if: always()
         run: |
-          mkdir -p /tmp/ci && cp analyze.txt test.txt /tmp/ci/ 2>/dev/null || true
+          # pubspec.lock too: the packages as resolved here, to commit after adding a package.
+          mkdir -p /tmp/ci && cp analyze.txt test.txt pubspec.lock /tmp/ci/ 2>/dev/null || true
           cd /tmp/ci && git init -q && git checkout -q -b ci-logs && git add -A
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "logs ${{ github.sha }}"
           git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-logs
@@ -260,3 +261,36 @@ jobs:
         with:
           name: robocore-ide-ios-unsigned
           path: robocore-ide-ios-unsigned.zip
+
+  # On a version tag: the Android, Linux and macOS apps join the Windows installer on the GitHub Release, so every
+  # platform downloads from the release page. Runs after the Windows job, which creates the release if needed.
+  release-assets:
+    name: Attach apps to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, android, linux, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: apps
+          pattern: robocore-ide-{android,linux,macos}
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          v="${tag#v}"
+          mkdir -p out
+          cp apps/robocore-ide-android/app-release.apk "out/RoboCore-$v-android.apk"
+          cp apps/robocore-ide-linux/robocore-ide-linux-x64.tar.gz "out/RoboCore-$v-linux-x64.tar.gz"
+          cp apps/robocore-ide-linux/robocore-ide-linux-x64.rpm "out/RoboCore-$v-linux-x64.rpm"
+          cp apps/robocore-ide-macos/robocore-ide-macos-apple-silicon.dmg "out/RoboCore-$v-mac-apple-silicon.dmg"
+          cp apps/robocore-ide-macos/robocore-ide-macos-intel.dmg "out/RoboCore-$v-mac-intel.dmg"
+          ls -la out
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "RoboCore $tag" --generate-notes
+          fi
+          gh release upload "$tag" out/* --clobber
