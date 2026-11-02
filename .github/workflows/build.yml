@@ -263,7 +263,8 @@ jobs:
           path: robocore-ide-ios-unsigned.zip
 
   # On a version tag: the Android, Linux and macOS apps join the Windows installer on the GitHub Release, so every
-  # platform downloads from the release page. Runs after the Windows job, which creates the release if needed.
+  # platform downloads from the release page. Runs after the Windows job, which creates the release if needed. Each
+  # app is also attached without its version in the name, for links that always fetch the newest version.
   release-assets:
     name: Attach apps to the release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -272,10 +273,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: apps
-          pattern: robocore-ide-{android,linux,macos}
+          pattern: robocore-ide-{android,linux,macos,windows-installer}
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -294,3 +296,12 @@ jobs:
             gh release create "$tag" --title "RoboCore $tag" --generate-notes
           fi
           gh release upload "$tag" out/* --clobber
+      # RoboCore-mac-intel.dmg, RoboCore-Setup.exe and so on: the website's download buttons link to
+      # releases/latest/download/<these names>, so they fetch this version as soon as it is the latest release.
+      - name: Attach the apps without the version in their names
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp apps/robocore-ide-windows-installer/*.exe out/
+          bash tools/release_latest_names.sh "${GITHUB_REF_NAME}" out

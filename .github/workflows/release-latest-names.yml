@@ -1,0 +1,29 @@
+# Attaches an existing release's apps again without the version in their names (tools/release_latest_names.sh), so
+# links to releases/latest/download/RoboCore-mac-intel.dmg and the like work for it. build.yml does this for every
+# new version tag; run this by hand (Actions → "Release: names without the version" → Run workflow) for a release
+# made before that, or to repair one.
+name: 'Release: names without the version'
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The release tag, for example v1.0.2'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  names:
+    name: Attach the apps without the version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release download "$TAG" --pattern 'RoboCore-*' --dir release
+          bash tools/release_latest_names.sh "$TAG" release
