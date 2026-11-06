@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { BOARDS, ESP32_PARTS } from './boards.js';
 import { parseCliJson, parseDiagnostics, parseStructured, mergeProblems, parseSizes, scrub } from './parse.js';
+import { RequestError } from './errors.js';
 
 export const LIMITS = {
   maxFiles: 20,
@@ -14,12 +15,7 @@ export const LIMITS = {
 
 const NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}\.(ino|h|hpp|c|cpp)$/;
 
-export class RequestError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
+export { RequestError };
 
 // Checks the JSON body. Returns { boardId, board, files, main }.
 export function validateRequest(body) {

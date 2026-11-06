@@ -12,7 +12,7 @@
 //   GET /cog/key     200 when the X-Cog-Key header is a school key (the IDE's Test Cog)
 import { createHash, timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
-import { RequestError } from './compile.js';
+import { RequestError } from './errors.js';
 
 // On a safety decline the API re-runs the request on Anthropic's recommended fallback model. Only some
 // models offer it (not Claude Haiku 5.5), so it is sent only for those.

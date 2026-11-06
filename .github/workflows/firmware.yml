@@ -3,9 +3,9 @@ name: Firmware and compile server
 on:
   push:
     branches: [main]
-    paths: ['firmware/**', 'server/**', 'tools/gen_*.py', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
+    paths: ['firmware/**', 'server/**', 'cog-worker/**', 'tools/gen_*.py', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
   pull_request:
-    paths: ['firmware/**', 'server/**', 'tools/gen_*.py', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
+    paths: ['firmware/**', 'server/**', 'cog-worker/**', 'tools/gen_*.py', 'hardware/**', 'lib/data/robocore_v2_*.dart', '.dockerignore', '.github/workflows/firmware.yml']
   workflow_dispatch:
 
 permissions:
@@ -97,6 +97,8 @@ jobs:
       - name: Unit tests (fake arduino-cli, fake Anthropic API)
         working-directory: server
         run: npm test
+      - name: Cog Worker tests (cog-worker/, on the server's packages; fake Anthropic API)
+        run: node --test cog-worker/test/worker.test.mjs
       - name: Build the Docker image (real arduino-cli and cores)
         run: docker build -f server/Dockerfile -t robocore-compile .
       - name: Start it

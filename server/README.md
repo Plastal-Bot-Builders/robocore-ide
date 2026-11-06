@@ -89,6 +89,9 @@ teacher PIN). A wrong or missing key gets 401; `GET /cog/key` answers 200 for a 
 `COG_KEYS` the Cog routes answer 503, unless `COG_OPEN=1` (only for a server on your own computer). To shut a school
 out, remove its key and restart.
 
+Cog can also run on its own, without the compiler, on Cloudflare Workers: `cog-worker/README.md`. The API key then
+never sits next to students' builds.
+
 Cog's instructions (`src/cog.js`) tell it to say it is an AI when asked, never to ask for or repeat personal details,
 and to point a student who mentions harm or distress to a trusted adult without asking for details.
 

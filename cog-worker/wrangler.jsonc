@@ -1,0 +1,20 @@
+{
+  // Cog on Cloudflare Workers (README.md here). The two secrets are never in this file:
+  //   wrangler secret put ANTHROPIC_API_KEY     the Anthropic API key
+  //   wrangler secret put COG_KEYS              the schools' keys, comma-separated
+  "name": "robocore-cog",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // node:crypto, for comparing school keys in constant time (server/src/cog.js).
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    // The model Cog uses (server/README.md and docs/cog.md say what each costs). claude-haiku-5-5 costs far less.
+    "COG_MODEL": "claude-opus-5-5",
+    // Cog requests per minute from one address, and from one school key (all its classrooms together).
+    "COG_RATE_PER_MIN": "12",
+    "COG_KEY_RATE_PER_MIN": "60",
+    // Web pages that may call Cog; the desktop apps send no Origin and are always let in.
+    "ALLOWED_ORIGINS": "https://plastal-bot-builders.github.io,http://localhost:*,http://127.0.0.1:*"
+    // "COMPILE_SERVER": "https://robocore-compile.onrender.com"   passes compiles on, for the web IDE
+  }
+}
