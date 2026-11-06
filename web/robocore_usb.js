@@ -244,6 +244,18 @@ async function loadEsptool() {
   }
 }
 
+// Restarts the chip out of its bootloader into the sketch. esptool-js 0.6.1's after('hard_reset') only lets go of
+// RTS, which its bootloader sequence has already let go of, so nothing happened: the board waited in the flasher
+// until someone pressed RESET. This pulses RTS as esptool (Python) does, with DTR off so GPIO0 stays high and the
+// chip boots the sketch, not the bootloader: the same pulse as reset() below.
+async function restartChip(loader) {
+  const t = loader.transport;
+  await t.setDTR(false);
+  await t.setRTS(true);
+  await sleep(120);
+  await t.setRTS(false);
+}
+
 // After flashing or asking the chip its name: let go of the bootloader and give the Serial Monitor back.
 async function release(transport, monitorBaud, ms) {
   if (transport) {
@@ -317,7 +329,7 @@ async function flash(jobJson) {
     }
     if (job.chip && chipKey(chipName) && chipKey(chipName) !== chipKey(job.chip)) {
       try {
-        await loader.after('hard_reset');
+        await restartChip(loader);
       } catch (e) {
         /* ignore */
       }
@@ -349,7 +361,7 @@ async function flash(jobJson) {
 
     // 4. Restart the board so the new sketch runs.
     emit('stage', 'resetting');
-    await loader.after('hard_reset');
+    await restartChip(loader);
     try {
       await transport.disconnect();
     } catch (e) {
@@ -376,7 +388,7 @@ async function flash(jobJson) {
       if (loader) {
         try {
           state.quietUntil = Date.now() + 9000;
-          await loader.after('hard_reset');
+          await restartChip(loader);
         } catch (err) {
           /* ignore */
         }
@@ -420,7 +432,7 @@ async function identify(baud, arch) {
     }
     state.quietUntil = Date.now() + 9000;
     try {
-      await loader.after('hard_reset');
+      await restartChip(loader);
     } catch (e) {
       /* it answered; the restart is best effort */
     }

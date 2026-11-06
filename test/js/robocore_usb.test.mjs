@@ -99,10 +99,12 @@ before(async () => {
     `const esp = (globalThis.__esp ??= { log: [] });
 export class Transport {
   constructor(port) { this.port = port; esp.transport = this; }
+  async setDTR(on) { esp.log.push('dtr:' + (on ? 1 : 0)); }
+  async setRTS(on) { esp.log.push('rts:' + (on ? 1 : 0)); }
   async disconnect() { esp.log.push('disconnect'); await this.port.close(); }
 }
 export class ESPLoader {
-  constructor(o) { this.o = o; this.chip = null; esp.loader = this; esp.baud = o.baudrate; }
+  constructor(o) { this.o = o; this.transport = o.transport; this.chip = null; esp.loader = this; esp.baud = o.baudrate; }
   async main(mode) {
     esp.log.push('main:' + mode);
     await this.o.transport.port.open({ baudRate: 115200 });
@@ -133,6 +135,9 @@ export class ESPLoader {
 });
 
 const call = async (p) => JSON.parse(await p);
+// The restart after esptool-js: RTS on with DTR off, then RTS off, so the chip boots the sketch. (esptool-js's own
+// after('hard_reset') only lets go of RTS, which left the board in its bootloader until someone pressed RESET.)
+const RESTART = ['dtr:0', 'rts:1', 'rts:0'];
 const b64 = (n, fill) => Buffer.alloc(n, fill).toString('base64');
 
 test('cancelling the port chooser is reported, not thrown', async () => {
@@ -215,7 +220,7 @@ test('flash closes the monitor, writes every part, resets and reopens the monito
   assert.equal(r.bytes, 400);
   assert.equal(r.reopened, true);
   assert.equal(esp.baud, 921600);
-  assert.deepEqual(esp.log, ['main:default_reset', 'after:hard_reset', 'disconnect']);
+  assert.deepEqual(esp.log, ['main:default_reset', ...RESTART, 'disconnect']);
   assert.deepEqual(esp.flash.fileArray.map((f) => [f.address, f.data.length, f.data[0]]), [
     [0x0, 100, 1],
     [0x8000, 30, 2],
@@ -266,7 +271,7 @@ test('Stop while writing cancels the upload, restarts the board and gives the mo
   assert.equal(r.ok, false);
   assert.equal(r.code, 'cancelled');
   assert.equal(r.partial, true, 'stopped while writing: the program is incomplete');
-  assert.deepEqual(esp.log, ['main:default_reset', 'after:hard_reset', 'disconnect']);
+  assert.deepEqual(esp.log, ['main:default_reset', ...RESTART, 'disconnect']);
   await sleep(400);
   assert.equal(usb.isOpen(), true);
 });
@@ -299,7 +304,7 @@ test('identify asks the chip its name, restarts it and reopens the monitor', asy
   assert.equal(r.chip, 'ESP32-S3 (QFN56) (revision v0.2)');
   assert.equal(r.label, 'ESP32-S3 USB (303A:1001)');
   assert.equal(r.reopened, true);
-  assert.deepEqual(esp.log, ['main:default_reset', 'after:hard_reset', 'disconnect']);
+  assert.deepEqual(esp.log, ['main:default_reset', ...RESTART, 'disconnect']);
   assert.equal(usb.isOpen(), true);
 });
 
