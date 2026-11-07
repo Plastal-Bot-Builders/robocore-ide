@@ -105,7 +105,7 @@ class HomePage extends StatelessWidget {
               mainAxisSize: phone ? MainAxisSize.min : MainAxisSize.max,
               children: [
                 // The school or class from the profile, when there is one (W-03).
-                Text('ROBOCORE V2 · ${s.school.isEmpty ? 'CLASSROOM ROBOT' : s.school.toUpperCase()}',
+                Text('ROBOCORE · ${s.school.isEmpty ? 'CLASSROOM ROBOT' : s.school.toUpperCase()}',
                     style: const TextStyle(fontFamily: fDisplay, fontWeight: FontWeight.w600, fontSize: 12, height: 16 / 12, letterSpacing: .96, color: kNavy)),
                 const SizedBox(height: 10),
                 Text(s.firstName.isEmpty ? 'WELCOME BACK' : 'WELCOME BACK, ${s.firstName.toUpperCase()}',
