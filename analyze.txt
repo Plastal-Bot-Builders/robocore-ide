@@ -1,0 +1,2 @@
+INFO|LINT|LIBRARY_PRIVATE_TYPES_IN_PUBLIC_API|/home/runner/work/robocore-ide/robocore-ide/lib/engine/interpreter.dart|147|21|4|Invalid use of a private type in a public API.
+INFO|HINT|UNNECESSARY_IMPORT|/home/runner/work/robocore-ide/robocore-ide/lib/ui/widgets/common.dart|4|8|31|The import of 'package:flutter/services.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart'.
