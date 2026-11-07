@@ -120,7 +120,7 @@ void main() {
 
   testWidgets('Settings: explanation level, and Reset all data back to Welcome', (tester) async {
     final s = await _start(tester);
-    expect(find.text('ROBOCORE V2 · GRADE 7B'), findsOneWidget, reason: 'the school on Home');
+    expect(find.text('ROBOCORE · GRADE 7B'), findsOneWidget, reason: 'the school on Home');
     s.go(Screen.settings);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Explanation level'), findsWidgets);
