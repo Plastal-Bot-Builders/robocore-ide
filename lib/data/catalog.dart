@@ -868,7 +868,8 @@ const kPins = ['2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '18', 
 
 /// Pins the pin blocks offer on [board] ([tone]: the tone block, [analog]: "read analog pin").
 /// - RoboCore V2: almost every GPIO already drives a motor, reads a sensor or carries USB / I²C, so only the
-///   free ones (and the buzzer, IO47, for tones).
+///   free ones (and the buzzer, IO47, for tones). Analog: the ESP32-S3 reads analog only on GPIO1–20, so IO3 and the
+///   line sensor's L, C and R (when no line sensor is plugged in); IO35–IO44 are digital only.
 /// - Arduino Uno: 2 to 13 and A0 to A5, which are pins 14 to 19 (the blocks show and write them as A0 … A5);
 ///   0 and 1 carry USB serial. Analog: A0 to A5.
 /// - ESP32 DevKit / NodeMCU-32S: the GPIOs that are free to use (not the flash pins 6–11, nor 0, 1, 3 and 12,
@@ -876,6 +877,11 @@ const kPins = ['2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '18', 
 List<String> pinOptions(String board, {bool tone = false, bool analog = false}) {
   switch (board) {
     case 'v2':
+      if (analog) {
+        return [
+          for (final p in [RoboCoreV2Pins.expIo3, RoboCoreV2Pins.lineLeft, RoboCoreV2Pins.lineCentre, RoboCoreV2Pins.lineRight]) '$p',
+        ];
+      }
       return [
         if (tone) '${RoboCoreV2Pins.buzzer}',
         for (final p in RoboCoreV2Pins.freePins) '$p',

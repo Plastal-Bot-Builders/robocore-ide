@@ -200,6 +200,14 @@ void loop() {
       expect(pinLabels('uno'), isEmpty);
     });
 
+    test('V2 "read analog pin" offers only pins the ESP32-S3 can read analog on: IO3 and the line sensor', () {
+      expect(pinOptions('v2', analog: true), ['3', '7', '10', '2']);
+      expect(pinLabels('v2')['7'], 'Line sensor L (IO7)');
+      for (final p in pinOptions('v2', analog: true)) {
+        expect(int.parse(p), inInclusiveRange(1, 20), reason: 'ADC1/ADC2 are GPIO1–20');
+      }
+    });
+
     test('the V2 pin guide matches RoboCore.h: every RC_PIN name, on the same GPIO, each GPIO once', () {
       final guide = {for (final p in kV2Pins.where((p) => p.cName.isNotEmpty)) p.cName: p.io};
       final header = {

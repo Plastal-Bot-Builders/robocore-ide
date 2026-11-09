@@ -29,7 +29,7 @@ const kV2Pins = <V2Pin>[
   V2Pin(RoboCoreV2Pins.bootButton, 'BOOT button', 'RC_PIN_BOOT_BUTTON', 'Button', note: 'LOW while pressed'),
   V2Pin(RoboCoreV2Pins.imuInt1, 'IMU interrupt', 'RC_PIN_IMU_INT1', 'Expansion B pin 10'),
   V2Pin(RoboCoreV2Pins.lineRight, 'Line sensor R', 'RC_PIN_LINE_RIGHT', 'Line header, expansion A pin 5', note: 'Analog'),
-  V2Pin(RoboCoreV2Pins.expIo3, '', 'RC_PIN_EXP_IO3', 'Expansion A pin 12', note: 'Free; the ESP32 reads it at power-up'),
+  V2Pin(RoboCoreV2Pins.expIo3, '', 'RC_PIN_EXP_IO3', 'Expansion A pin 12', note: 'Free, analog; the ESP32 reads it at power-up'),
   V2Pin(RoboCoreV2Pins.batterySense, 'Battery voltage', 'RC_PIN_BATTERY_SENSE', '', note: 'Half the battery voltage'),
   V2Pin(RoboCoreV2Pins.motor1Isense, 'Motor 1 current', 'RC_PIN_MOTOR1_ISENSE', ''),
   V2Pin(RoboCoreV2Pins.motor2Isense, 'Motor 2 current', 'RC_PIN_MOTOR2_ISENSE', ''),
