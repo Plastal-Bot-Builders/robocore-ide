@@ -65,7 +65,7 @@ The IDE talks to a real RoboCore V2 (schematic Rev 2.0, ESP32-S3-WROOM-1-N8R2) o
 
 | Part | Where |
 | --- | --- |
-| Pin map | `hardware/pinout.md`, from `hardware/RoboCore_V2_schematic_rev2.0.pdf`. In code: `firmware/RoboCore/src/RoboCoreV2Pins.h` (the single source of truth), generated into `lib/data/robocore_v2_pins.dart` by `tools/gen_pins.py` |
+| Pin map | `hardware/pinout.md`, the board as built (pins checked at the module pads, 2026-11-06). In code: `firmware/RoboCore/src/RoboCoreV2Pins.h` (the single source of truth), generated into `lib/data/robocore_v2_pins.dart` by `tools/gen_pins.py` |
 | Arduino library | `firmware/RoboCore`: `RoboCoreMotors`, `Sonar`, `LineSensor`, `IMU`, `RoboCore::` helpers, `RC_PIN_…` names |
 | Board test and examples | `firmware/RoboCore/examples`. The IDE's RoboCore V2 examples are these files (`tools/gen_examples.py` writes `lib/data/robocore_v2_examples.dart`) |
 | Compile server | `server/`: arduino-cli 1.5.1, esp32 core 3.3.12, Docker. Deploy with `render.yaml` or Cloud Run (`server/README.md`) |

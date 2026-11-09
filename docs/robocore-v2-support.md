@@ -4,7 +4,7 @@ Real RoboCore V2 (schematic Rev 2.0) support in the IDE, following the 10-step p
 
 | # | Step | Where | Status |
 |---|---|---|---|
-| 1 | Pin map from the schematic | `hardware/pinout.md`, `firmware/RoboCore/src/RoboCoreV2Pins.h`, `lib/data/robocore_v2_pins.dart` | Done. Every GPIO checked against the Rev 2.0 schematic (U201 net labels and GPIO map) |
+| 1 | Pin map from the schematic | `hardware/pinout.md`, `firmware/RoboCore/src/RoboCoreV2Pins.h`, `lib/data/robocore_v2_pins.dart` | Done. Every GPIO checked against the Rev 2.0 schematic (U201 net labels and GPIO map), then at the module pads of the built board (2026-11-06); `hardware/pinout.md` updated to the board as built (2026-11-09) |
 | 2 | RoboCore Arduino library | `firmware/RoboCore` | Done. PC checks pass (`-Werror`, logic tests) |
 | 3 | Board test and examples | `firmware/RoboCore/examples` (BoardTest + 15) | Done. The IDE's V2 examples are generated from these (`tools/gen_examples.py`) |
 | 4 | CI compile for the ESP32-S3 | `.github/workflows/firmware.yml` | Ready, first real run on this PR |

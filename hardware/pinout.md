@@ -1,7 +1,10 @@
 # RoboCore V2 pin map (Rev 2.0)
 
-Source: `RoboCore_V2_schematic_rev2.0.pdf` (draft, 2026-10-04).
-The same numbers live in code in `firmware/RoboCore/src/RoboCoreV2Pins.h`. Change them there and here together.
+Source: the board as built (V2-01 and V2-02), pins checked at the ESP32 module's pads on 2026-11-06.
+The guide for users, with example sketches, is
+[`RoboCore_V2_pin_reference.md`](https://github.com/Plastal-Bot-Builders/RoboCoreDocumentation/blob/main/docs/RoboCore_V2_pin_reference.md).
+The same numbers live in code in `firmware/RoboCore/src/RoboCoreV2Pins.h`. Change them there, here and in the pin
+reference together.
 
 ## Chip and USB
 
@@ -45,10 +48,13 @@ The same numbers live in code in `firmware/RoboCore/src/RoboCoreV2Pins.h`. Chang
 | IO42 | USER button | LOW when pressed, 10k pull-up. Free for sketches |
 | IO43, IO44 | UART0 TX, RX | On expansion header B. `Serial` uses USB, so these are free |
 | IO45, IO46 | Not connected | Strapping pins, left open |
-| IO47 | Buzzer | Drives a low-side N-FET; magnetic buzzer on VSYS_SW. Use `tone()` |
-| IO48 | RGB LED | WS2812B-2020-V6. `LED_BUILTIN` / `RGB_BUILTIN` in the Arduino core |
+| IO47 | Buzzer | Drives a low-side N-FET; magnetic buzzer on VSYS_SW. Use `tone()`: `digitalWrite(47, HIGH)` only clicks and leaves the coil on |
+| IO48 | RGB LED | WS2812B-2020-V6. `LED_BUILTIN` / `RGB_BUILTIN` in the Arduino core. `digitalWrite(48, HIGH)` doesn't light it |
 
 There is no plain single-colour user LED. `digitalWrite(LED_BUILTIN, HIGH)` lights the RGB LED white.
+
+The parts on the board have no IO numbers printed beside them, only the headers do (errata E-016). Uno habits don't
+carry over: pin 8 is I²C SDA, and `A0` means IO1, the IMU interrupt.
 
 ## I²C devices
 
@@ -61,11 +67,34 @@ There is no plain single-colour user LED. `digitalWrite(LED_BUILTIN, HIGH)` ligh
 
 | Connector | Pins |
 |---|---|
-| Motor 1, Motor 2 (XRP JST SH 6) | 1 M+, 2 M-, 3 3.3 V, 4 encoder A, 5 encoder B, 6 GND |
-| Ultrasonic (JST SH 4) | GND, 3V3, TRIG, ECHO |
-| Line follower (JST SH 5) | GND, 3V3, L, C, R (3× TCRT5000, analog) |
-| Servo 1-4 (3-pin) | signal, + (VMOT 5.5 V), − |
-| Expansion A, B | 2.54 mm female, 330R in series with every ESP32 pin |
+| Motor 1, Motor 2 (J301, J302, JST SH 6) | 1 M+, 2 M-, 3 3.3 V, 4 encoder A, 5 encoder B, 6 GND. **XRP motors need a reversed 6-way cable** (pin 1 to pin 6): the V2 sockets number the pins from the other end (errata E-015) |
+| Ultrasonic (J403, 2.54 mm 1×4 header) | 3V3, TRIG (IO40), ECHO (IO41), GND, as printed: an HC-SR04's order, so a straight cable works. 3.3 V modules only |
+| Line follower (J404, 2.54 mm 1×5 header) | 3V3, GND, L (IO7), C (IO10), R (IO2), as printed (3× TCRT5000, analog). Line modules differ: check the order first (E-009) |
+| Servo 1-4 (J401, J402, J407, J408, 3-pin) | signal, + (VMOT 5.5 V), −, printed as IOnn, 5.5V, GND |
+| Expansion A, B (J405, J406) | 2.54 mm female, 14 pins, names printed on the back. See below |
+
+### Expansion headers
+
+| Pin | A (J405) | B (J406) |
+|---|---|---|
+| 1 | 3.3 V | 3.3 V |
+| 2 | GND | GND |
+| 3 | Line L (IO7) | I²C SDA (IO8) ⚠ |
+| 4 | Line C (IO10) | I²C SCL (IO9) ⚠ |
+| 5 | Line R (IO2) | UART TX (IO43) |
+| 6 | Ultrasonic TRIG (IO40) | UART RX (IO44) |
+| 7 | Ultrasonic ECHO (IO41) | Servo 3 (IO35) |
+| 8 | Servo 1 (IO38) | Servo 4 (IO36) |
+| 9 | Servo 2 (IO39) | IO37 |
+| 10 | Buzzer (IO47) ⚠ | IMU INT1 (IO1) ⚠ |
+| 11 | RGB LED data out ⚠ | USER button (IO42) ⚠ |
+| 12 | IO3 | EN (reset) ⚠ |
+| 13 | VMOT 5.5 V ⚠ | VSYS_SW ⚠ |
+| 14 | GND | GND |
+
+Pins without ⚠ have a 330 Ω resistor in series to the ESP32. Pins marked ⚠ have none: SDA, SCL, IMU INT1, USER,
+BUZZER and RGB data out connect straight through (errata E-004), and EN sits on B12 right next to VSYS_SW on B13
+(E-003). 5.5 V from A13 on a ⚠ pin can destroy the ESP32, the IMU or the LED.
 
 ## Power
 

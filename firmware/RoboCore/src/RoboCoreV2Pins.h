@@ -1,5 +1,6 @@
 // RoboCore V2 (Rev 2.0) pin map.
-// Source: hardware/RoboCore_V2_schematic_rev2.0.pdf. Keep hardware/pinout.md in step.
+// Source: the board as built, pins checked at the ESP32 module's pads on 2026-11-06. Keep hardware/pinout.md and the
+// V2 pin reference (RoboCoreDocumentation, docs/RoboCore_V2_pin_reference.md) in step.
 // The RoboCore IDE reads these values too (its CI checks that they match).
 #pragma once
 #include <stdint.h>
