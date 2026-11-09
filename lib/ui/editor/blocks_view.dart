@@ -260,12 +260,13 @@ class _BlockBody extends StatelessWidget {
       final f = part as BField;
       final v = values[f.k] ?? d.def[f.k];
       if (f.type == 'sel') {
-        // Pin lists depend on the board (on the RoboCore V2 only the free pins are offered).
+        // Pin lists depend on the board (on the RoboCore V2 only the free pins are offered, named by part).
         final board = AppScope.of(context).cur?.board ?? 'v2';
         final opts = f.k == 'pin' ? pinOptions(board, tone: type == 'tone') : f.opts;
         kids.add(_SelectPill(
           value: '$v',
           opts: opts,
+          labels: f.k == 'pin' ? pinLabels(board) : const {},
           control: ctl,
           onChanged: pal ? null : (nv) => AppScope.read(context).setBlockField(stack!, index!, f.k, nv),
         ));
@@ -294,9 +295,12 @@ class _BlockBody extends StatelessWidget {
 }
 
 class _SelectPill extends StatelessWidget {
-  const _SelectPill({required this.value, required this.opts, required this.control, this.onChanged});
+  const _SelectPill({required this.value, required this.opts, this.labels = const {}, required this.control, this.onChanged});
   final String value;
   final List<String> opts;
+
+  /// What to show for an option, when it isn't the value itself (pins: "Buzzer (IO47)").
+  final Map<String, String> labels;
   final bool control;
   final ValueChanged<String>? onChanged;
 
@@ -310,7 +314,8 @@ class _SelectPill extends StatelessWidget {
       padding: const EdgeInsets.only(left: 8, right: 6),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(value, style: TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w600, color: fg)),
+        Text(labels[value] ?? value,
+            style: TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w600, color: fg)),
         const SizedBox(width: 4),
         RcIcon('chev', size: 12, color: fg),
       ]),
@@ -328,7 +333,8 @@ class _SelectPill extends StatelessWidget {
           PopupMenuItem<String>(
             value: o,
             height: 32,
-            child: Text(o, style: TextStyle(fontFamily: fBody, fontSize: 13, fontWeight: o == value ? FontWeight.w700 : FontWeight.w500, color: c.ink)),
+            child: Text(labels[o] ?? o,
+                style: TextStyle(fontFamily: fBody, fontSize: 13, fontWeight: o == value ? FontWeight.w700 : FontWeight.w500, color: c.ink)),
           ),
       ],
       child: MouseRegion(cursor: SystemMouseCursors.click, child: pill),

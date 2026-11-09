@@ -188,6 +188,33 @@ void loop() {
       expect(blockDefaults('tone', 'uno')['pin'], '8');
     });
 
+    test('V2 pin menus name each pin by its part (errata E-016: the parts have no numbers printed beside them)', () {
+      final labels = pinLabels('v2');
+      expect(labels['47'], 'Buzzer (IO47)');
+      expect(labels['38'], 'Servo 1 (IO38)');
+      expect(labels['37'], 'IO37 (expansion B pin 9)');
+      expect(labels['3'], 'IO3 (expansion A pin 12)');
+      for (final p in pinOptions('v2', tone: true)) {
+        expect(labels[p], isNotNull, reason: 'IO$p has a name in the menu');
+      }
+      expect(pinLabels('uno'), isEmpty);
+    });
+
+    test('the V2 pin guide matches RoboCore.h: every RC_PIN name, on the same GPIO, each GPIO once', () {
+      final guide = {for (final p in kV2Pins.where((p) => p.cName.isNotEmpty)) p.cName: p.io};
+      final header = {
+        for (final e in RoboCoreV2Pins.byCName.entries)
+          if (e.key.startsWith('RC_PIN_')) e.key: e.value,
+      };
+      expect(guide, header);
+      final ios = kV2Pins.map((p) => p.io).toList();
+      expect(ios.toSet().length, ios.length);
+      expect(ios, [...ios]..sort());
+      for (final (part, io, _, _) in kV2PartUses) {
+        expect(kV2Pins.firstWhere((p) => p.io == io).part, startsWith(part.split(' ').first));
+      }
+    });
+
     test('an Uno offers pins 2 to 13 and A0 to A5 (14 to 19), not the USB serial pins', () {
       expect(pinOptions('uno'), [for (var p = 2; p <= 19; p++) '$p']);
       expect(pinOptions('uno', analog: true), ['14', '15', '16', '17', '18', '19']);

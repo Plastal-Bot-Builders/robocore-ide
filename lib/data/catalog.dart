@@ -1,8 +1,10 @@
 // Boards, libraries, examples and block definitions (same data as the web IDE).
 // ignore_for_file: prefer_single_quotes
 import 'robocore_v2_examples.dart';
+import 'robocore_v2_pin_guide.dart';
 import 'robocore_v2_pins.dart';
 
+export 'robocore_v2_pin_guide.dart' show V2Pin, kV2Pins, kV2PartUses;
 export 'robocore_v2_pins.dart' show RoboCoreV2Pins;
 
 class BoardDef {
@@ -884,6 +886,12 @@ List<String> pinOptions(String board, {bool tone = false, bool analog = false}) 
       return analog ? _esp32Analog : _esp32Pins;
   }
 }
+
+/// What the pin menus call each pin on [board]: on the RoboCore V2 the part and the IO number ("Buzzer (IO47)",
+/// "IO37 (expansion B pin 9)"), since the parts on the board have no numbers printed beside them (errata E-016).
+/// Other boards: none, the menus show the number (A0 … A5 on an Uno).
+Map<String, String> pinLabels(String board) =>
+    board == 'v2' ? {for (final p in kV2Pins) '${p.io}': p.label} : const {};
 
 const _esp32Pins = ['2', '4', '5', '13', '14', '15', '16', '17', '18', '19', '21', '22', '23', '25', '26', '27', '32', '33'];
 const _esp32Analog = ['32', '33', '34', '35', '36', '39'];

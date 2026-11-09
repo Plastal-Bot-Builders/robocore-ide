@@ -153,6 +153,7 @@ final class MenuBar: NSObject, NSMenuItemValidation {
     let m = NSMenu(title: "Help")
     m.addItem(link("RoboCore IDE Help", "https://www.plastalbotbuilders.com/robocore/ide"))
     m.addItem(command("Keyboard Shortcuts", "shortcuts"))
+    m.addItem(command("RoboCore V2 Pins", "pins"))
     m.addItem(.separator())
     m.addItem(link("Arduino Language Reference", "https://docs.arduino.cc/language-reference/"))
     m.addItem(.separator())

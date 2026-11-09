@@ -79,6 +79,8 @@ void main() {
     expect(find('test conn'), ['Board Setup']);
     expect(find('keyb'), ['Keyboard shortcuts']);
     expect(find('BAUD'), ['Serial Monitor']);
+    expect(find('pinout'), ['RoboCore V2 pins']);
+    expect(find('buzzer'), ['RoboCore V2 pins']);
     expect(find('?'), isEmpty);
   });
 
@@ -101,6 +103,18 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 50));
     expect(find.text('KEYBOARD SHORTCUTS'), findsOneWidget);
     expect(find.text('Move between blocks'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+    // Which pin is the buzzer on? The pin guide (errata E-016).
+    await tester.enterText(find.descendant(of: find.byType(SearchBox), matching: find.byType(EditableText)), 'pinout');
+    await tester.pump();
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle(const Duration(milliseconds: 50));
+    expect(find.text('ROBOCORE V2 PINS'), findsOneWidget);
+    expect(find.text('tone(RC_PIN_BUZZER, 523);'), findsOneWidget);
+    expect(find.text('RC_PIN_BUZZER · Expansion A pin 10'), findsOneWidget);
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle(const Duration(milliseconds: 50));
 

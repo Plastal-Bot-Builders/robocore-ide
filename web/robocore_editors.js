@@ -17,7 +17,7 @@
   // The Navy theme's Pins & Serial blue: 3:1 against its workspace, with cream text at 4.5:1 (WCAG).
   const PINS_NAVY = '#4F6FA0';
   // Board context from the app: project name, board id and the pins the pin blocks offer.
-  const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], analogPins: [], userPin: 42, led: 2, theme: 'paper' };
+  const CTX = { name: 'Sketch', board: 'v2', pins: ['13'], tonePins: ['47'], analogPins: [], pinLabels: {}, userPin: 42, led: 2, theme: 'paper' };
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -380,16 +380,19 @@
   const isUnoAnalog = (n) => CTX.board === 'uno' && n >= 14 && n <= 19;
   // An HC-SR04's TRIG and ECHO pins when the sketch doesn't say: the usual 9 and 10 on an Uno, 5 and 18 on an ESP32.
   const sonarDefaults = () => (CTX.board === 'uno' ? ['9', '10'] : ['5', '18']);
-  const pinLabel = (p) => (CTX.board === 'v2' ? 'IO' + p : isUnoAnalog(+p) ? 'A' + (p - 14) : p);
+  // On the RoboCore V2 the app names each pin by its part, "Buzzer (IO47)" (lib/data/robocore_v2_pin_guide.dart).
+  const pinLabel = (p) => CTX.pinLabels[p] || (CTX.board === 'v2' ? 'IO' + p : isUnoAnalog(+p) ? 'A' + (p - 14) : p);
   function pinMenu(list) {
     return function () {
       const pins = CTX[list] && CTX[list].length ? CTX[list] : CTX.pins;
       const opts = pins.map((p) => [pinLabel(p), p]);
       const v = this && typeof this.getValue === 'function' ? this.getValue() : null;
-      for (const x of [v, ...SAVED_PINS]) if (x && !opts.some((o) => o[1] === x)) opts.push([x, x]);
+      for (const x of [v, ...SAVED_PINS]) if (x && !opts.some((o) => o[1] === x)) opts.push([pinLabel(x), x]);
       return opts;
     };
   }
+  // The pin blocks' tooltips point V2 users at the pin guide (right-click, see defineBlocks()).
+  const pinHelp = () => (CTX.board === 'v2' ? ' Right-click › Which pin is which? lists every pin on the RoboCore V2.' : '');
 
   // Messages for "when I receive" / "broadcast": every name used in the workspace, plus New message….
   const MESSAGES = new Set(['message1']);
@@ -599,7 +602,7 @@
           this.appendDummyInput().appendField(label).appendField(new Blockly.FieldDropdown(pinMenu(list)), 'PIN');
           this.setOutput(true, 'Number');
           this.setStyle('rc_pins');
-          this.setTooltip(tooltip);
+          this.setTooltip(() => tooltip + pinHelp());
         },
       };
     };
@@ -610,7 +613,7 @@
         this.appendDummyInput().appendField('set pin').appendField(new Blockly.FieldDropdown(pinMenu('pins')), 'PIN')
           .appendField('to').appendField(new Blockly.FieldDropdown(dropdown(['HIGH', 'LOW'])), 'STATE');
         this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_pins');
-        this.setTooltip('digitalWrite(pin, HIGH);');
+        this.setTooltip(() => 'digitalWrite(pin, HIGH);' + pinHelp());
       },
     };
     // Where an HC-SR04 distance sensor is wired on an Uno or an ESP32 board (the RoboCore V2's sonar port is fixed).
@@ -633,9 +636,20 @@
           .appendField(new Blockly.FieldDropdown(dropdown(Object.keys(NOTES))), 'NOTE')
           .appendField('for').appendField(new Blockly.FieldNumber(0.5, 0), 'SECS').appendField('s');
         this.setPreviousStatement(true); this.setNextStatement(true); this.setStyle('rc_light');
-        this.setTooltip('tone(pin, frequency, ms); delay(ms);');
+        this.setTooltip(() => 'tone(pin, frequency, ms); delay(ms);' + (CTX.board === 'v2' ? ' The buzzer is IO47.' : '') + pinHelp());
       },
     };
+    // Right-click a pin block on the RoboCore V2: the app's pin guide. The parts on the board have no pin numbers
+    // printed beside them (errata E-016). The app opens it like a menu command (shell.dart, action 'pins').
+    const PIN_BLOCKS = new Set(['rc_tone', 'rc_pin', 'rc_read_pin', 'rc_read_analog']);
+    Blockly.ContextMenuRegistry.registry.register({
+      id: 'rcWhichPin',
+      scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+      displayText: 'Which pin is which?',
+      preconditionFn: (scope) => (CTX.board === 'v2' && onIdeKey && scope.block && PIN_BLOCKS.has(scope.block.type) ? 'enabled' : 'hidden'),
+      callback: () => onIdeKey('pins'),
+      weight: -10,
+    });
     // Blockly's own blocks, in the RoboCore categories.
     const restyle = (type, style) => {
       const init = Blockly.Blocks[type].init;
@@ -1254,6 +1268,7 @@
     if (o.pins) CTX.pins = o.pins;
     if (o.tonePins) CTX.tonePins = o.tonePins;
     if (o.analogPins) CTX.analogPins = o.analogPins;
+    if (o.pinLabels) CTX.pinLabels = o.pinLabels;
     if (o.userPin != null) CTX.userPin = o.userPin;
     if (o.led != null) CTX.led = o.led;
     if (o.zoom != null) setZoom(o.zoom);

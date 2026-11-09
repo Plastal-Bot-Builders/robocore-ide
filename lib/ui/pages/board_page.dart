@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import '../../data/catalog.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../pins_dialog.dart';
 import '../shell.dart' show ConnStatus;
 import '../widgets/common.dart';
 import 'home_page.dart';
 
-/// RoboCore V2 pins (Rev 2.0 schematic), grouped for the pin map card.
+/// RoboCore V2 pins (the board as built), grouped for the pin map card.
 const _v2PinRows = [
   ('Motor 1 (left)', 'IN1 IO${RoboCoreV2Pins.motor1In1} · IN2 IO${RoboCoreV2Pins.motor1In2} · encoder IO${RoboCoreV2Pins.enc1A}/IO${RoboCoreV2Pins.enc1B} · current IO${RoboCoreV2Pins.motor1Isense}'),
   ('Motor 2 (right)', 'IN1 IO${RoboCoreV2Pins.motor2In1} · IN2 IO${RoboCoreV2Pins.motor2In2} · encoder IO${RoboCoreV2Pins.enc2A}/IO${RoboCoreV2Pins.enc2B} · current IO${RoboCoreV2Pins.motor2Isense}'),
@@ -199,7 +200,7 @@ class BoardPage extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text('PIN MAP (REV 2.0)', style: tH2(c)),
               const SizedBox(height: 4),
-              Text('From the schematic. Sketches use these names from RoboCore.h, e.g. RC_PIN_BUZZER.', style: tCaption(c)),
+              Text('The board as built. Sketches use these names from RoboCore.h, e.g. RC_PIN_BUZZER.', style: tCaption(c)),
               const SizedBox(height: 12),
               for (final r in _v2PinRows)
                 Padding(
@@ -209,6 +210,11 @@ class BoardPage extends StatelessWidget {
                     Expanded(child: Text(r.$2, style: tMono(c, size: 12, height: 18 / 12))),
                   ]),
                 ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Btn('Every pin and where it comes out', icon: 'chip', onTap: () => showV2PinsDialog(context)),
+              ),
             ]),
           )
         : null;

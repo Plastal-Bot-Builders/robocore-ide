@@ -22,6 +22,7 @@ import 'pages/projects_page.dart';
 import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/welcome_page.dart';
+import 'pins_dialog.dart';
 import 'port_chooser.dart';
 import 'cog/cog_panel.dart' show CogButton;
 import 'widgets/brand.dart';
@@ -83,6 +84,8 @@ class _ShellState extends State<Shell> {
           s.toggleSidebar();
         case 'console':
           _console(s);
+        case 'pins': // a pin block's right-click menu: Which pin is which?
+          showV2PinsDialog(context);
       }
     });
     attachMenuBar((id) => _menuCommand(s, id));
@@ -143,6 +146,8 @@ class _ShellState extends State<Shell> {
         s.setMode('code');
       case 'shortcuts':
         showShortcutsDialog(context);
+      case 'pins':
+        showV2PinsDialog(context);
       // In the editor they zoom the blocks or the code (EditorPage); anywhere else, the whole app.
       case 'zoomIn' || 'zoomOut' || 'zoomReset' when s.view != Screen.editor || p == null:
         s.updateSettings((st) => st.uiScale = id == 'zoomReset' ? 0 : stepUiScale(UiScale.of(context), id == 'zoomIn' ? 1 : -1));
@@ -158,7 +163,7 @@ class _ShellState extends State<Shell> {
     final blocks = editor && p.mode == 'blocks';
     updateMenuBar(enabled: {
       'about', 'settings', 'newProject', 'openProject', 'openSketch', 'examples', 'libraries', 'board', 'serial', //
-      'shortcuts', 'sidebar',
+      'shortcuts', 'pins', 'sidebar',
       if (s.folder != null) 'reveal',
       if (p != null) ...['rename', 'duplicate', 'projectSettings'],
       if (editor) ...['save', 'verify', 'upload', 'cog', 'console', 'modeBlocks', 'modeCode', 'undo', 'redo'],
@@ -804,6 +809,8 @@ final kHelpTopics = <HelpTopic>[
   HelpTopic('Settings', 'gear', 'settings preferences theme dark light font size cog level autosave', (_, s) => s.go(Screen.settings)),
   HelpTopic('New project', 'plus', 'new project create start blank', (context, _) => showNewProjectDialog(context)),
   HelpTopic('Keyboard shortcuts', 'keyboard', 'keyboard shortcuts keys hotkeys', (context, _) => showShortcutsDialog(context)),
+  HelpTopic('RoboCore V2 pins', 'chip', 'pins pinout gpio io which pin buzzer led rgb button servo sensor expansion header',
+      (context, _) => showV2PinsDialog(context)),
   HelpTopic('About RoboCore IDE', 'info', 'about version licence license credits', (context, _) => showAboutRoboCoreDialog(context)),
 ];
 
