@@ -115,7 +115,7 @@ class _NativeUsb extends UsbLink {
   Future<UsbResult> _open({required int baud, bool espressifOnly = false, bool quiet = false}) async {
     if (!supported) return UsbResult.unsupported;
     try {
-      final port = _pick(await _ports(), espressifOnly: espressifOnly);
+      final port = _pick(await _ports(), espressifOnly: espressifOnly) ?? await _catchPort(espressifOnly: espressifOnly);
       if (port == null) {
         return const UsbResult(false,
             code: 'no-port', message: 'No board found on USB. Plug it in with a data USB cable (some cables only charge) and press Connect.');
@@ -143,6 +143,41 @@ class _NativeUsb extends UsbLink {
     } catch (e) {
       return UsbResult(false, code: 'helper', message: 'Could not open the board’s port: $e');
     }
+  }
+
+  /// No board in one scan: a board restarting in a loop is only on USB for moments at a time, so watch the COM ports
+  /// for a few seconds. A port that comes up is checked with arduino-cli; one that keeps coming and going is a
+  /// restarting board (counted as drops, so the restart-loop message appears) and is used even unidentified.
+  Future<_Port?> _catchPort({bool espressifOnly = false, Duration limit = const Duration(seconds: 8)}) async {
+    final end = DateTime.now().add(limit);
+    var last = await _comPorts();
+    final flips = <String, int>{};
+    while (DateTime.now().isBefore(end)) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      final now = await _comPorts();
+      for (final a in {...last, ...now}) {
+        if (last.contains(a) != now.contains(a)) flips[a] = (flips[a] ?? 0) + 1;
+      }
+      final appeared = now.difference(last);
+      last = now;
+      if (appeared.isNotEmpty) {
+        final p = _pick(await _ports(), espressifOnly: espressifOnly);
+        if (p != null) return p;
+      }
+      for (final e in flips.entries) {
+        if (e.value >= 3) {
+          // Up, down, up again within seconds: the board keeps restarting.
+          final port = _Port(e.key, e.key, '0x303a', '', null);
+          _port = port;
+          for (var i = 0; i < e.value ~/ 2; i++) {
+            _loop.onDrop();
+          }
+          if (_loop.looping) _announceLoop(_loop.reason);
+          return port;
+        }
+      }
+    }
+    return null;
   }
 
   // ---------- Serial Monitor ----------
