@@ -1130,6 +1130,10 @@ class AppState extends ChangeNotifier {
         serialPush('The board has stopped restarting and is running normally.', 'sys');
         setStatus('Ready');
         break;
+      case 'found':
+        // The Windows app saw a board appear on USB (or there at start): connect to it, no button needed.
+        unawaited(_onBoardFound(msg));
+        break;
       case 'plugged':
         if (!usbOpen) showToast('A board was plugged in', body: '$msg. Press Connect in Board Setup to use it.', info: true);
         break;
@@ -1161,6 +1165,32 @@ class AppState extends ChangeNotifier {
         break;
     }
     notifyListeners();
+  }
+
+  bool _autoConnecting = false;
+
+  Future<void> _onBoardFound(String json) async {
+    if (usbOpen || busy != null || _autoConnecting) return;
+    var label = 'a board';
+    try {
+      label = '${(jsonDecode(json) as Map)['label'] ?? label}';
+    } catch (_) {}
+    _autoConnecting = true;
+    conn = ConnMsg('', 'Found $label on USB. Connecting…');
+    notifyListeners();
+    try {
+      final r = await usb.connect(baud: baud);
+      if (usbOpen) return; // a 'bootloop' event already took it
+      if (r.ok) {
+        _usbUp(r.data['label'] as String?, 'Found and connected to');
+        showToast('Board found', body: 'Connected to $usbLabel.');
+      } else {
+        conn = ConnMsg('err', r.message); // shown in Board Setup; Connect there tries again
+      }
+    } finally {
+      _autoConnecting = false;
+      notifyListeners();
+    }
   }
 
   void _onBootLoop(String json) {

@@ -46,7 +46,41 @@ class _Port {
 }
 
 class _NativeUsb extends UsbLink {
+  _NativeUsb() {
+    if (_cli.supported) _detect = Timer.periodic(const Duration(milliseconds: 1500), (_) => _lookForBoards());
+  }
+
   final _cli = ArduinoCli.instance;
+
+  // Auto-detect, as the Arduino IDE and the LEGO app do: the COM ports are checked all the time (a fast registry
+  // read), and a board that appears (or is already there when the app starts) is reported once as 'found', so the
+  // app can connect without anyone pressing Connect.
+  Timer? _detect;
+  Set<String> _seen = const {};
+  final _offered = <String>{};
+  bool _looking = false, _opening = false;
+
+  Future<void> _lookForBoards() async {
+    if (_looking || _opening || _busy || _job != null) return;
+    _looking = true;
+    try {
+      final now = await _comPorts();
+      _offered.removeWhere((a) => !now.contains(a)); // gone: report it again when it comes back
+      final fresh = now.difference(_seen);
+      _seen = now;
+      // Nothing new, or a board is already in use (or the selected one is being waited for after a restart).
+      if (fresh.isEmpty || _monitor != null || (_watch?.isActive ?? false)) return;
+      final p = _pick(await _ports(), espressifOnly: true);
+      if (p == null) return;
+      final a = p.address.toUpperCase();
+      if (!fresh.contains(a) || !_offered.add(a)) return;
+      onEvent?.call('found', jsonEncode({'label': p.display, 'address': p.address}));
+    } catch (_) {
+      // arduino-cli not ready yet, or the registry read failed: try again on the next tick
+    } finally {
+      _looking = false;
+    }
+  }
 
   @override
   bool get supported => _cli.supported;
@@ -114,6 +148,7 @@ class _NativeUsb extends UsbLink {
 
   Future<UsbResult> _open({required int baud, bool espressifOnly = false, bool quiet = false}) async {
     if (!supported) return UsbResult.unsupported;
+    _opening = true;
     try {
       final port = _pick(await _ports(), espressifOnly: espressifOnly) ?? await _catchPort(espressifOnly: espressifOnly);
       if (port == null) {
@@ -142,6 +177,9 @@ class _NativeUsb extends UsbLink {
       return UsbResult(false, code: 'helper', message: e.message);
     } catch (e) {
       return UsbResult(false, code: 'helper', message: 'Could not open the board’s port: $e');
+    } finally {
+      _opening = false;
+      _seen = await _comPorts(); // ports seen while opening are not news to the auto-detect
     }
   }
 

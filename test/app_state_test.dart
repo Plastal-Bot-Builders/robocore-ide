@@ -375,6 +375,20 @@ void main() {
       expect(s.log.last.text, contains('crashes as it starts'));
     });
 
+    test('a board found on USB is connected without pressing Connect', () async {
+      await s.disconnectUsb(quiet: true);
+      expect(s.usbOpen, isFalse);
+      usb.onEvent!('found', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
+      await Future<void>.delayed(Duration.zero);
+      expect(s.usbOpen, isTrue);
+      expect(s.log.last.text, contains('Found and connected to'));
+      // Already connected: another 'found' changes nothing.
+      final before = s.log.length;
+      usb.onEvent!('found', jsonEncode({'label': 'COM6 · Espressif', 'address': 'COM6'}));
+      await Future<void>.delayed(Duration.zero);
+      expect(s.log.length, before);
+    });
+
     test('serial text goes to the board; unplug and replug are reported', () async {
       s.sendSerial('led on');
       expect(usb.written, ['led on\n']);
