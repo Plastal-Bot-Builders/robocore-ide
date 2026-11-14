@@ -1239,6 +1239,31 @@
   }
 
   function zoomBy(dir) { if (ws) ws.zoomCenter(dir); }
+
+  // Touchpad gestures in the Windows app. Its WebView only gets the larger direction of a two-finger move as a plain
+  // wheel, and no pinch at all, so the app hands the gestures over here (web_editors_windows.dart): rcPan(dx, dy)
+  // with the fingers' movement, rcPinch(ratio). They become one wheel event at the pointer, so the blocks, the block
+  // list or the code under it scrolls in any direction, and a pinch zooms the blocks; the WebView's own wheel events
+  // for the same gesture are dropped meanwhile. (Browsers already send touchpads as wheel events, with pinch as
+  // Ctrl + wheel, which Blockly and Monaco handle themselves.)
+  let gestureX = window.innerWidth / 2, gestureY = window.innerHeight / 2, gestureUntil = 0;
+  const notePointer = (e) => { gestureX = e.clientX; gestureY = e.clientY; };
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('pointermove', notePointer, true);
+    document.addEventListener('mousemove', notePointer, true);
+    document.addEventListener('wheel', (e) => {
+      if (e.isTrusted && !e.ctrlKey && Date.now() < gestureUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
+    }, { capture: true, passive: false });
+  }
+  function gestureWheel(init) {
+    gestureUntil = Date.now() + 160;
+    const target = (document.elementFromPoint && document.elementFromPoint(gestureX, gestureY)) || document.body;
+    target.dispatchEvent(new WheelEvent('wheel', Object.assign({ deltaMode: 0, clientX: gestureX, clientY: gestureY, bubbles: true, cancelable: true }, init)));
+  }
+  // The content follows the fingers (as a touchpad scrolls everywhere else in Windows).
+  window.rcPan = (dx, dy) => { if (dx || dy) gestureWheel({ deltaX: -dx, deltaY: -dy }); };
+  // Spread the fingers to zoom in, pinch to zoom out: only the blocks zoom (the code keeps its text size).
+  window.rcPinch = (ratio) => { if (ws && ratio > 0) gestureWheel({ deltaY: -Math.log(ratio) * 400, ctrlKey: true }); };
   function resetZoom() { if (ws) { ws.setScale(START_SCALE * ZOOM); ws.scrollCenter(); } }
 
   // Blocks a student placed: not on start / forever, or the number fields inside other blocks.

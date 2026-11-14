@@ -192,9 +192,11 @@ class _EditorPageState extends State<EditorPage> {
         right: 24,
         child: const FrameShield(child: _ConnectButton()),
       ),
+      // The view tools: a column on the right edge, above the run buttons, where the block list (which opens on the
+      // left) never reaches.
       Positioned(
-        left: blocks && !phone ? 176 : 16,
-        bottom: 16,
+        right: phone ? 21 : 33, // centred over the Upload button
+        bottom: phone ? 104 : 130,
         child: FrameShield(child: _viewTools(s, c, p, width)),
       ),
       Positioned(right: 20, bottom: 14, child: FrameShield(child: _RunButtons(compact: phone))),
@@ -251,24 +253,27 @@ class _EditorPageState extends State<EditorPage> {
     ]);
   }
 
-  /// Bottom left of the workspace. Blocks: fit, zoom out, zoom in · undo, redo · delete all · the C++ beside the
-  /// blocks. Code: text size, undo, redo.
+  /// A column on the right of the workspace, above the run buttons. Blocks: fit, zoom in, zoom out · undo, redo ·
+  /// delete all · the C++ beside the blocks. Code: text size, undo, redo.
   Widget _viewTools(AppState s, RC c, Project p, double width) {
     final blocks = p.mode == 'blocks';
     final code = _monaco.currentState;
     void font(int size) => s.updateSettings((st) => st.fontSize = size.clamp(10, 24));
-    Widget sep() => Container(width: 1, height: 26, margin: const EdgeInsets.symmetric(horizontal: 4), color: c.line);
+    // Short windows (a laptop with the update banner showing) get smaller buttons, so the column clears Connect.
+    final small = MediaQuery.sizeOf(context).height < 760;
+    final size = small ? 34.0 : 40.0;
+    Widget sep() => Container(width: 26, height: 1, margin: EdgeInsets.symmetric(vertical: small ? 3 : 4), color: c.line);
     Widget b(String icon, String tip, VoidCallback? onTap, {bool active = false}) =>
-        IconBtn(icon, onTap: onTap, tip: tip, size: 40, iconSize: 20, active: active);
+        IconBtn(icon, onTap: onTap, tip: tip, size: size, iconSize: small ? 18 : 20, active: active);
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(14), boxShadow: popShadow),
-      child: Row(mainAxisSize: MainAxisSize.min, children: blocks
+      child: Column(mainAxisSize: MainAxisSize.min, children: blocks
           ? [
               if (kWebEditors) ...[
                 b('fit', 'Fit the blocks to the screen', () => _blockly.currentState?.zoomToFit()),
-                b('zout', 'Zoom out ($kMod+−)', () => _blockly.currentState?.zoom(-1)),
                 b('zin', 'Zoom in ($kMod+=)', () => _blockly.currentState?.zoom(1)),
+                b('zout', 'Zoom out ($kMod+−)', () => _blockly.currentState?.zoom(-1)),
                 sep(),
               ],
               b('undo', 'Undo ($kMod+Z)', kWebEditors ? (_canUndo ? () => _blockly.currentState?.undo() : null) : s.undo),
@@ -281,8 +286,8 @@ class _EditorPageState extends State<EditorPage> {
                     active: s.settings.showCpp),
             ]
           : [
-              b('zout', 'Smaller text', () => font(s.settings.fontSize - 1)),
               b('zin', 'Larger text', () => font(s.settings.fontSize + 1)),
+              b('zout', 'Smaller text', () => font(s.settings.fontSize - 1)),
               sep(),
               b('undo', 'Undo ($kMod+Z)', kWebEditors ? () => code?.action('undo') : null),
               b('redo', 'Redo ($kMod+Shift+Z)', kWebEditors ? () => code?.action('redo') : null),
