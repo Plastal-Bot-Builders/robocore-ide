@@ -1,0 +1,201 @@
+00:00 +0: loading /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart
+00:00 +0: /home/runner/work/robocore-ide/robocore-ide/test/local_compiler_test.dart: compiler messages become problems in the sketch’s files, or in a library
+00:00 +1: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: blocklyFromLists setup and loop become on start and forever stacks
+00:00 +2: /home/runner/work/robocore-ide/robocore-ide/test/local_compiler_test.dart: a missing setup() or loop() is explained
+00:00 +3: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: blocklyFromLists variables are declared once and shared by set, change and print
+00:00 +4: /home/runner/work/robocore-ide/robocore-ide/test/local_compiler_test.dart: sizes, and the JSON after anything arduino-cli printed first
+00:00 +5: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: blocklyFromLists old blocks become the hardware-first blocks that mean the same
+00:00 +6: /home/runner/work/robocore-ide/robocore-ide/test/local_compiler_test.dart: structured diagnostics come first, and the text log does not repeat them
+00:00 +7: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: blocklyFromLists an empty project still has both hats
+00:00 +8: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: blocklyFromLists every example converts without losing a block
+00:00 +9: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: projects with a Blockly workspace the workspace and its C++ are saved, and the C++ is what the project generates
+00:00 +10: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: projects with a Blockly workspace setBlockly updates the main file until it is edited by hand
+00:00 +11: /home/runner/work/robocore-ide/robocore-ide/test/blockly_test.dart: projects with a Blockly workspace an edit in the old block editor makes the lists the blocks again
+00:00 +12: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +13: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +14: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +15: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +16: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +17: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +18: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +19: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +20: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +21: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +22: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +23: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +24: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +25: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +26: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +27: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:01 +28: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +29: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +30: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +31: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +32: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +33: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +34: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:02 +35: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: every toolbox block: the generated sketch checks and runs, with no unsupported calls
+00:03 +36: /home/runner/work/robocore-ide/robocore-ide/test/top_bar_test.dart: in the editor the top-bar buttons stay at the right edge, as on Home
+00:03 +37: /home/runner/work/robocore-ide/robocore-ide/test/top_bar_test.dart: in the editor the top-bar buttons stay at the right edge, as on Home
+00:04 +38: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: move, turn and distance in the preview board
+00:04 +39: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: move, turn and distance in the preview board
+00:05 +40: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example blink compiles and runs
+00:05 +41: /home/runner/work/robocore-ide/robocore-ide/test/blocks_sim_test.dart: RoboCore helpers: timer, battery %, LED brightness, edges, stop program
+00:05 +42: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example button compiles and runs
+00:05 +43: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example traffic compiles and runs
+00:06 +44: /home/runner/work/robocore-ide/robocore-ide/test/widget_test.dart: first start asks for a name, then Home greets that user
+00:06 +45: /home/runner/work/robocore-ide/robocore-ide/test/widget_test.dart: first start asks for a name, then Home greets that user
+00:07 +46: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example tones compiles and runs
+00:07 +47: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example motors compiles and runs
+00:07 +48: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +49: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +50: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +51: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +52: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +53: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +54: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +55: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +56: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +57: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:07 +58: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example imu compiles and runs
+00:08 +59: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example obstacle compiles and runs
+00:08 +60: /home/runner/work/robocore-ide/robocore-ide/test/splash_test.dart: the splash plays while the app loads, then fades into Welcome
+00:08 +61: /home/runner/work/robocore-ide/robocore-ide/test/splash_test.dart: the splash plays while the app loads, then fades into Welcome
+00:09 +62: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example melody compiles and runs
+00:09 +63: /home/runner/work/robocore-ide/robocore-ide/test/splash_test.dart: a quick load still shows the whole animation, about 4 s in all
+00:09 +64: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example rgb compiles and runs
+00:09 +65: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example rgb compiles and runs
+00:09 +66: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example rgb compiles and runs
+00:09 +67: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:09 +68: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:09 +69: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:09 +70: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:09 +71: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:09 +72: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example line compiles and runs
+00:10 +73: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example servo compiles and runs
+00:10 +74: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example servo compiles and runs
+00:10 +75: /home/runner/work/robocore-ide/robocore-ide/test/logo_intro_test.dart: plays once, then calls onDone
+00:10 +76: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example distance compiles and runs
+00:10 +77: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example distance compiles and runs
+00:10 +78: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example distance compiles and runs
+00:10 +79: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example distance compiles and runs
+00:10 +80: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example distance compiles and runs
+00:10 +81: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example logger compiles and runs
+00:11 +82: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +83: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +84: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +85: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +86: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +87: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +88: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +89: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +90: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +91: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: example echo compiles and runs
+00:11 +92: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: reports a missing loop()
+00:11 +93: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: rgbLedWrite is ESP32-only
+00:11 +94: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: blink toggles the LED
+00:12 +95: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: an HC-SR04 read by hand (the distance blocks on an Uno) runs on the preview board
+00:12 +96: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: an HC-SR04 read by hand (the distance blocks on an Uno) runs on the preview board
+00:12 +97: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: search has a Help group: pages and dialogs by name or by a word (G-11)
+00:12 +98: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: search has a Help group: pages and dialogs by name or by a word (G-11)
+00:13 +99: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every library example except the board test passes the preview check and runs
+00:13 +100: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every library example except the board test passes the preview check and runs
+00:13 +101: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every library example except the board test passes the preview check and runs
+00:14 +102: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every library example except the board test passes the preview check and runs
+00:14 +103: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 every library example except the board test passes the preview check and runs
+00:14 +104: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +105: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +106: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +107: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +108: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +109: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +110: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +111: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +112: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +113: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +114: /home/runner/work/robocore-ide/robocore-ide/test/design_gaps_test.dart: the Problems tab has a trash button that clears the list
+00:14 +115: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 RoboCore:: helpers need RoboCore.h and run in the preview
+00:14 +116: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 RoboCore:: helpers need RoboCore.h and run in the preview
+00:14 +117: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 RoboCore:: helpers need RoboCore.h and run in the preview
+00:14 +118: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 const char * parameters keep their text
+00:14 +119: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: RoboCore V2 USER on IO42 reads HIGH until pressed
+00:15 +120: /home/runner/work/robocore-ide/robocore-ide/test/projects_ui_test.dart: card menu: Duplicate, Rename…, Delete… (with its confirm dialog)
+00:15 +121: /home/runner/work/robocore-ide/robocore-ide/test/projects_ui_test.dart: card menu: Duplicate, Rename…, Delete… (with its confirm dialog)
+00:15 +122: /home/runner/work/robocore-ide/robocore-ide/test/projects_ui_test.dart: card menu: Duplicate, Rename…, Delete… (with its confirm dialog)
+00:16 +123: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: runaway recursion stops with a clear message instead of hanging
+00:16 +124: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: runaway recursion stops with a clear message instead of hanging
+00:17 +125: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: runaway recursion stops with a clear message instead of hanging
+00:17 +126: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: runaway recursion stops with a clear message instead of hanging
+00:17 +127: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: runaway recursion stops with a clear message instead of hanging
+00:17 +128: /home/runner/work/robocore-ide/robocore-ide/test/engine_test.dart: bounded recursion still works
+00:18 +129: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: one damaged project does not throw away the others
+00:18 +130: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: unreadable saved data is kept aside before the samples are restored
+00:18 +131: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: old port names become the preview board
+00:18 +132: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Open from computer a RoboCore project brought from another computer comes back with its blocks
+00:18 +133: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Open from computer a plain Arduino sketch opens as a code project
+00:18 +134: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Leaving a project opened and not changed: nothing to ask
+00:18 +135: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Leaving a project Save keeps the changes and is the new starting point
+00:18 +136: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Leaving a project Don't save puts the project back as it was when opened, and closes it
+00:18 +137: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile a new device has no name until the welcome screen is filled in
+00:18 +138: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile saves from before profiles (sample name "Fredrick") ask for a name once, and keep the projects
+00:18 +139: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile no name at all is fine: the welcome screen is done, and the avatar shows an icon
+00:18 +140: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Profile one-word names give one initial
+00:18 +141: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board reconnects to the allowed board at start-up
+00:18 +142: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board an Arduino Uno on USB stops an upload for the RoboCore V2 before building, and examples open for it
+00:18 +143: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board a USB bridge used by several boards (CH340) does not stop an upload
+00:18 +144: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board compiles on the server, flashes every part and reopens the monitor
+00:18 +145: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +146: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +147: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +148: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +149: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +150: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +151: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +152: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +153: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +154: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +155: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +156: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +157: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +158: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +159: /home/runner/work/robocore-ide/robocore-ide/test/keyboard_test.dart: Tab reaches a button, Enter and Space press it, and a ring shows where the focus is
+00:18 +160: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board text without a newline still shows up
+00:18 +161: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board text without a newline still shows up
+00:19 +162: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board text without a newline still shows up
+00:19 +163: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board text without a newline still shows up
+00:19 +164: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board text without a newline still shows up
+00:19 +165: /home/runner/work/robocore-ide/robocore-ide/test/app_state_test.dart: Upload to a real board text without a newline still shows up
+00:19 +166: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: project names are required, plain and unique (except the project being renamed)
+00:19 +167: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: rename and duplicate
+00:19 +168: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: deleting another project keeps the open one open
+00:19 +169: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: the Projects list follows the chips and the filter
+00:19 +170: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: Reset all data: projects, profile and settings go; a new profile gets the starter projects
+00:19 +171: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: Reset also removes the copies of damaged saves set aside and the other preferences
+00:19 +172: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:19 +173: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:19 +174: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:19 +175: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:21 +176: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:21 +177: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:21 +178: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:21 +179: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +180: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +181: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +182: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +183: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +184: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +185: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +186: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +187: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +188: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +189: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +190: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +191: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +192: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +193: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +194: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:22 +195: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: success toasts hide after 4 s; errors stay until closed
+00:27 +196: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: the explanation level is saved and defaults to Beginner
+00:27 +197: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: zip crc32 matches the standard check value
+00:27 +198: /home/runner/work/robocore-ide/robocore-ide/test/projects_test.dart: zip a sketch folder with its tabs, readable from the central directory
+00:27 +199: All tests passed!
