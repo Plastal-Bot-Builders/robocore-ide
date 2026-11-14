@@ -25,13 +25,43 @@ $p = Start-Process $Exe -PassThru
 Start-Sleep 35
 Shot 'win-1-first-start'
 
-# Enter presses the question's main button: Use Documents\RoboCore.
-$ws = New-Object -ComObject WScript.Shell
-$null = $ws.AppActivate($p.Id)
-Start-Sleep 1
-$ws.SendKeys('{ENTER}')
+# Press a button by its name through Windows UI Automation (Flutter's accessibility tree), else click it at [x, y].
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public static class Mouse {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);
+  public static void Click(int x, int y) { SetCursorPos(x, y); mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
+}
+'@
+function Press([string]$name, [int]$x, [int]$y) {
+  try {
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $name)
+    $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    if ($el) {
+      $r = $el.Current.BoundingRectangle
+      [Mouse]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+      Write-Host "pressed '$name' (found)"
+      return
+    }
+  } catch {}
+  [Mouse]::Click($x, $y)
+  Write-Host "pressed '$name' at $x,$y"
+}
+
+Press 'Use Documents\RoboCore' 654 483
 Start-Sleep 8
 Shot 'win-2-home'
+
+# Open from computer: Windows' own file dialog.
+Press 'Open from computer' 637 315
+Start-Sleep 5
+Shot 'win-4-open-dialog'
+$ws = New-Object -ComObject WScript.Shell
+$ws.SendKeys('{ESC}')
+Start-Sleep 2
 
 $docs = [Environment]::GetFolderPath('MyDocuments')
 Get-ChildItem -Recurse -Force (Join-Path $docs 'RoboCore') | ForEach-Object { $_.FullName.Substring($docs.Length) } | Out-File -Encoding utf8 (Join-Path $Out 'win-files.txt')
