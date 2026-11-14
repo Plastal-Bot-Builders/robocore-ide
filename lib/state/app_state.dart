@@ -14,7 +14,7 @@ import '../engine/zip.dart';
 import '../hw/cog_client.dart';
 import '../hw/compile_client.dart';
 import '../hw/download.dart';
-import '../hw/update_check.dart' show isNewerVersion;
+import '../hw/update_check.dart' show isNewerVersion, kReleasesPage;
 import '../hw/usb_link.dart';
 import 'cog.dart';
 import 'models.dart';
@@ -613,13 +613,107 @@ class AppState extends ChangeNotifier {
   /// Asks [latest] for the newest release and, when it is newer than [current], keeps it for the status bar and says
   /// so once in a toast. Any failure is silent.
   Future<void> checkForUpdate(String current, Future<({String version, String url})?> Function() latest) async {
+    appVersion = current;
     final r = await latest();
     if (r == null || !isNewerVersion(r.version, current)) return;
     updateVersion = r.version;
     updateUrl = r.url;
-    showToast('RoboCore ${r.version} is out',
-        body: 'You have $current. Download the new version from the link in the status bar.', info: true);
+    updateDismissed = false;
+    notifyListeners(); // the update banner shows under the top bar
   }
+
+  // ---------- the update banner and the one-click update (the Windows app; others open the release page) ----------
+  /// This app's version (set by checkForUpdate).
+  String? appVersion;
+
+  /// "Later": the banner hides until the next start; a small "Update to …" button stays in the top bar.
+  bool updateDismissed = false;
+
+  /// '' (offer), 'downloading', 'ready' (downloaded, waiting for "Restart and update") or 'failed'.
+  String updatePhase = '';
+  double? updateProgress; // 0–1 while downloading, when the size is known
+  String? _installer;
+  bool _cancelDownload = false;
+
+  /// Set by main.dart where the app can update itself: download the installer (null if it failed) and run it.
+  Future<String?> Function(String version, void Function(int got, int total) onProgress, {bool Function()? cancelled})? downloadUpdate;
+  Future<void> Function(String installer)? installUpdate;
+
+  /// After an in-app update, the version it installed (shown once: "You're up to date").
+  String? justUpdated;
+
+  void dismissUpdate() {
+    updateDismissed = true;
+    notifyListeners();
+  }
+
+  void showUpdate() {
+    updateDismissed = false;
+    notifyListeners();
+  }
+
+  /// "Update now": downloads the new installer where the app can update itself, else opens the release page.
+  Future<void> updateNow() async {
+    final v = updateVersion, dl = downloadUpdate;
+    if (v == null) return;
+    if (dl == null) return openUpdate();
+    if (updatePhase == 'downloading') return;
+    updatePhase = 'downloading';
+    updateProgress = null;
+    _cancelDownload = false;
+    updateDismissed = false;
+    notifyListeners();
+    var last = 0;
+    final path = await dl(v, (got, total) {
+      final p = total > 0 ? got / total : null;
+      final pct = p == null ? -1 : (p * 100).floor();
+      if (pct == last) return;
+      last = pct;
+      updateProgress = p;
+      notifyListeners();
+    }, cancelled: () => _cancelDownload);
+    if (_cancelDownload) {
+      updatePhase = '';
+    } else if (path == null) {
+      updatePhase = 'failed';
+    } else {
+      _installer = path;
+      updatePhase = 'ready';
+    }
+    notifyListeners();
+  }
+
+  void cancelUpdate() {
+    _cancelDownload = true;
+    updatePhase = '';
+    notifyListeners();
+  }
+
+  /// "Restart and update": saves everything, remembers which version is being installed, and runs the installer
+  /// (which closes RoboCore and opens the new version).
+  Future<void> restartAndUpdate() async {
+    final path = _installer, install = installUpdate, v = updateVersion;
+    if (path == null || install == null || v == null) return;
+    final p = cur;
+    if (p != null) saveNow(p);
+    persist(now: true);
+    await _prefs?.setString('rc-updating-to', v);
+    await install(path);
+  }
+
+  /// At start: was this version just installed from inside the app? Then say so, once.
+  void checkJustUpdated(String current) {
+    final to = _prefs?.getString('rc-updating-to');
+    if (to == null) return;
+    _prefs?.remove('rc-updating-to');
+    if (to == current) {
+      justUpdated = current;
+      notifyListeners();
+    }
+  }
+
+  /// The installed version's release page ("What's new").
+  String get whatsNewUrl => appVersion == null ? kReleasesPage : kReleasesPage.replaceFirst('/latest', '/tag/v$appVersion');
 
   /// Opens the new release's download page.
   Future<void> openUpdate() async {
@@ -660,8 +754,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// A link's `open=N` (the Nth newest project), `mode=blocks|code` and `panel=1|0`. Nothing else is read.
+  /// A link's `open=N` (the Nth newest project), `mode=blocks|code`, `panel=1|0` and `update=<version>`. Nothing else
+  /// is read.
   void openFromLink(Map<String, String> q) {
+    // update=1.0.7: show the update banner as if that version were out (the build's screenshots of it).
+    final u = q['update'];
+    if (u != null && isNewerVersion(u, '0.0.0')) {
+      updateVersion = u;
+      updateUrl = kReleasesPage;
+      appVersion ??= 'an older version';
+    }
     final n = int.tryParse(q['open'] ?? '');
     final list = sortedProjects;
     if (needsProfile || n == null || n < 1 || n > list.length) return;

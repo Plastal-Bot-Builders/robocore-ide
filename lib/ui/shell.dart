@@ -42,6 +42,30 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   final _scaffold = GlobalKey<ScaffoldState>();
   var _askingFolder = false;
+  var _toldUpdated = false;
+
+  /// After an in-app update, once: "You're up to date".
+  Future<void> _tellUpdated(AppState s) async {
+    final v = s.justUpdated;
+    if (v == null) return;
+    await showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x521B2A41),
+      builder: (dctx) => DialogFrame(
+        title: 'You’re up to date',
+        subtitle: 'RoboCore $v is installed. Your projects and settings are just as you left them.',
+        onSubmit: () => Navigator.of(dctx).pop(),
+        actions: [
+          Btn('What’s new', kind: BtnKind.plain, onTap: () {
+            Navigator.of(dctx).pop();
+            s.openUrl?.call(s.whatsNewUrl);
+          }),
+          Btn('Got it', icon: 'check', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop()),
+        ],
+      ),
+    );
+    s.justUpdated = null;
+  }
 
   /// The Mac app, once: keep the projects as files in a folder? (Later: Settings → Projects folder.)
   Future<void> _askFolder(AppState s) async {
@@ -195,6 +219,10 @@ class _ShellState extends State<Shell> {
     // First start on this device: ask who is using it before anything else.
     if (s.needsProfile) return const WelcomePage();
     _updateMenuBar(s);
+    if (s.justUpdated != null && !_toldUpdated) {
+      _toldUpdated = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tellUpdated(s));
+    }
     if (s.shouldAskFolder && !_askingFolder) {
       _askingFolder = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _askFolder(s));
@@ -236,6 +264,8 @@ class _ShellState extends State<Shell> {
                   // The editor is an open workspace: its own top bar (Home, the project, Blocks | Code) and no sidebar.
                   // The sidebar's slot stays (empty), so the editor below keeps its place in the tree.
                   onEditor && !phone ? const EditorTopBar() : TopBar(phone: phone, onMenu: () => _scaffold.currentState?.openDrawer()),
+                  // A newer version: a banner under the top bar on every screen (until updated, or "Later").
+                  if (s.updateVersion != null && !s.updateDismissed) UpdateBanner(phone: phone),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -426,6 +456,7 @@ class TopBar extends StatelessWidget {
               ] else
                 const Spacer(),
               const SizedBox(width: 12),
+              if (s.updateVersion != null && s.updateDismissed) ...[UpdatePill(compact: phone), const SizedBox(width: 12)],
               BoardChip(compact: phone || (narrow && p != null)),
               const SizedBox(width: 12),
               // Editor: Verify · Upload · (Stop) · Ask Cog, as in the design's Top Bar.
@@ -498,6 +529,161 @@ class TopBar extends StatelessWidget {
   }
 }
 
+/// A newer version is out: navy, full width, under the top bar. Offer → downloading → ready to restart (the Windows
+/// app updates itself) or, elsewhere, Update now opens the release page.
+class UpdateBanner extends StatelessWidget {
+  const UpdateBanner({super.key, this.phone = false});
+  final bool phone;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final v = s.updateVersion!;
+    final phase = s.updatePhase;
+    const fg = kCream, soft = Color(0xFFE6DFCE);
+    final (String title, String body) = switch (phase) {
+      'downloading' => (
+          'Downloading RoboCore $v',
+          s.updateProgress == null ? 'You can keep working while it downloads.' : '${(s.updateProgress! * 100).floor()} % · you can keep working while it downloads.'
+        ),
+      'ready' => ('Ready to update', 'RoboCore will close, install $v and open again by itself. Your projects are saved first.'),
+      'failed' => ('The download didn’t finish', 'Check the internet connection and try again, or get it from the download page.'),
+      _ => (
+          'RoboCore $v is ready',
+          'You have ${s.appVersion ?? 'an older version'}. Update now to get the newest fixes. Your projects and settings stay as they are.'
+        ),
+    };
+
+    Widget button(String label, VoidCallback onTap, {bool primary = false, String? icon}) => Hover(
+          onTap: onTap,
+          radius: 12,
+          builder: (context, h) => Container(
+            height: phone ? 40 : 48,
+            padding: EdgeInsets.symmetric(horizontal: primary ? 22 : 18),
+            decoration: BoxDecoration(
+              color: primary ? (h ? kBrandPressed : kBrand) : (h ? Colors.white.withValues(alpha: .08) : Colors.transparent),
+              border: primary ? null : Border.all(color: const Color(0xFF5B6577), width: 2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (icon != null) ...[RcIcon(icon, size: 18, color: primary ? kNavy : fg), const SizedBox(width: 8)],
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: fBody, fontSize: primary ? 16 : 15, height: 1, fontWeight: primary ? FontWeight.w700 : FontWeight.w600, color: primary ? kNavy : fg)),
+            ]),
+          ),
+        );
+
+    final actions = <Widget>[
+      if (phase == '') ...[
+        Hover(
+          onTap: () => s.openUrl?.call(s.updateUrl ?? ''),
+          builder: (context, h) => Text('What’s new',
+              style: TextStyle(fontFamily: fBody, fontSize: 15, fontWeight: FontWeight.w600, color: kBrand, decoration: TextDecoration.underline, decorationColor: kBrand)),
+        ),
+        button('Later', s.dismissUpdate),
+        button('Update now', s.updateNow, primary: true, icon: 'download'),
+      ],
+      if (phase == 'downloading') button('Cancel', s.cancelUpdate),
+      if (phase == 'ready') ...[
+        button('Not now', s.dismissUpdate),
+        button('Restart and update', s.restartAndUpdate, primary: true, icon: 'swap'),
+      ],
+      if (phase == 'failed') ...[
+        button('Download page', s.openUpdate),
+        button('Try again', s.updateNow, primary: true, icon: 'download'),
+      ],
+    ];
+
+    return Semantics(
+      container: true,
+      label: 'New version available',
+      child: Container(
+        width: double.infinity,
+        color: kNavy,
+        padding: EdgeInsets.symmetric(horizontal: phone ? 16 : 28, vertical: phone ? 12 : 16),
+        child: Wrap(
+          spacing: 20,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.spaceBetween,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 820),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: phone ? 40 : 50,
+                  height: phone ? 40 : 50,
+                  decoration: const BoxDecoration(color: kBrand, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: phase == 'downloading'
+                      ? const Spinner(size: 22, color: kNavy)
+                      : RcIcon(phase == 'ready' ? 'swap' : (phase == 'failed' ? 'alert' : 'download'), size: phone ? 20 : 26, color: kNavy),
+                ),
+                const SizedBox(width: 16),
+                Flexible(
+                  child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontFamily: fDisplay, fontSize: phone ? 21 : 27, height: 1.15, fontWeight: FontWeight.w700, letterSpacing: .3, color: Colors.white)),
+                    const SizedBox(height: 3),
+                    Text(body, style: TextStyle(fontFamily: fBody, fontSize: phone ? 14 : 15.5, height: 1.4, color: soft)),
+                    if (phase == 'downloading') ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: 360,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(value: s.updateProgress, minHeight: 10, color: kBrand, backgroundColor: const Color(0xFF364357)),
+                        ),
+                      ),
+                    ],
+                  ]),
+                ),
+              ]),
+            ),
+            Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: actions),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// After "Later": a navy "Update to …" button in the top bar that brings the banner back.
+class UpdatePill extends StatelessWidget {
+  const UpdatePill({super.key, this.compact = false});
+  final bool compact;
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return Hover(
+      onTap: s.showUpdate,
+      tooltip: 'RoboCore ${s.updateVersion} is ready',
+      radius: 999,
+      builder: (context, h) => Container(
+        height: 36,
+        padding: EdgeInsets.only(left: 7, right: compact ? 7 : 14),
+        decoration: BoxDecoration(color: h ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: const BoxDecoration(color: kBrand, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: const RcIcon('download', size: 14, color: kNavy),
+          ),
+          if (!compact) ...[
+            const SizedBox(width: 8),
+            Text('Update to ${s.updateVersion}',
+                style: const TextStyle(fontFamily: fBody, fontSize: 14, height: 1, fontWeight: FontWeight.w700, color: kCream)),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
 /// The editor's top bar: Home, Save, the open project (its menu, saved state, close), New project, the
 /// Blocks | Code switch in the middle, then the board, Ask Cog, Settings and the account. Verify, Upload and Stop
 /// are on the workspace itself (editor_page.dart's run buttons).
@@ -556,6 +742,7 @@ class EditorTopBar extends StatelessWidget {
               },
             ),
             const Expanded(child: Center(child: _ModeSwitch())),
+            if (s.updateVersion != null && s.updateDismissed) ...[UpdatePill(compact: narrow), const SizedBox(width: 10)],
             BoardChip(compact: narrow),
             const SizedBox(width: 10),
             CogButton(compact: narrow),

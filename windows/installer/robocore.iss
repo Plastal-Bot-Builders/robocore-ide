@@ -55,3 +55,5 @@ Name: "{autodesktop}\RoboCore"; Filename: "{app}\RoboCore.exe"; Tasks: desktopic
 
 [Run]
 Filename: "{app}\RoboCore.exe"; Description: "{cm:LaunchProgram,RoboCore}"; Flags: nowait postinstall skipifsilent
+; An update from inside the app (RoboCore runs this installer silently and quits): open the new version.
+Filename: "{app}\RoboCore.exe"; Flags: nowait; Check: WizardSilent

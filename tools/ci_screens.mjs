@@ -15,6 +15,8 @@ const shots = [
   ['editor-blocks-serial', '?open=1&mode=blocks&panel=1', 1440, 900],
   ['editor-blocks-small', '?open=1&mode=blocks&panel=0', 1100, 700],
   ['home', '', 1440, 900],
+  ['update-banner-home', '?update=1.0.7', 1440, 900],
+  ['update-banner-editor', '?open=1&mode=blocks&panel=0&update=1.0.7', 1440, 900],
 ];
 
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--lang=en-US'], env: { ...process.env, LANG: 'en_US.UTF-8' } });
