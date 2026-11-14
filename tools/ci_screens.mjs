@@ -17,14 +17,15 @@ const shots = [
   ['home', '', 1440, 900],
 ];
 
-const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--lang=en-US'], env: { ...process.env, LANG: 'en_US.UTF-8' } });
 for (const [name, query, width, height] of shots) {
-  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'Africa/Johannesburg' });
   await ctx.addInitScript((s) => localStorage.setItem('flutter.robocore-ide-v1', JSON.stringify(s)), JSON.stringify(store));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${name}] page error: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') console.log(`[${name}] console: ${m.text().slice(0, 300)}`); });
   await page.goto(base + query, { waitUntil: 'load', timeout: 60000 });
-  await page.waitForTimeout(14000); // the launch animation, then Blockly and Monaco loading in their frames
+  await page.waitForTimeout(20000); // the launch animation, then Blockly and Monaco loading in their frames
   await page.screenshot({ path: `${out}/${name}.png` });
   console.log(`saved ${name}.png`);
   await ctx.close();
