@@ -6,6 +6,7 @@
 // iframe guards. A PC without the WebView2 runtime keeps the Flutter BlocksView and CodeView.
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show PointerPanZoomUpdateEvent;
 import 'package:flutter/widgets.dart';
 import 'package:webview_windows/webview_windows.dart';
 
@@ -53,8 +54,29 @@ class WindowsEditorPage {
   }
 
   /// The WebView once it is up (it sizes the page, so it is in the window as soon as it can be).
+  ///
+  /// Touchpad gestures go to the page as well (robocore_editors.js, rcPan and rcPinch): the WebView on its own only
+  /// scrolls in the larger direction of a two-finger move and ignores a pinch.
   Widget view() => ValueListenableBuilder<WebviewValue>(
         valueListenable: controller,
-        builder: (context, v, _) => v.isInitialized ? Webview(controller) : const SizedBox.expand(),
+        builder: (context, v, _) => v.isInitialized
+            ? Listener(
+                onPointerPanZoomStart: (_) => _pinch = 1,
+                onPointerPanZoomUpdate: _gesture,
+                child: Webview(controller),
+              )
+            : const SizedBox.expand(),
       );
+
+  double _pinch = 1;
+
+  void _gesture(PointerPanZoomUpdateEvent e) {
+    final d = e.panDelta;
+    if (d.dx != 0 || d.dy != 0) run('window.rcPan && rcPan(${d.dx.toStringAsFixed(2)}, ${d.dy.toStringAsFixed(2)})');
+    final ratio = e.scale / _pinch;
+    if ((ratio - 1).abs() > .015) {
+      _pinch = e.scale;
+      run('window.rcPinch && rcPinch(${ratio.toStringAsFixed(4)})');
+    }
+  }
 }
