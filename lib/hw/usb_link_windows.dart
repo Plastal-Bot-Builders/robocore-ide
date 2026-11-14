@@ -46,7 +46,81 @@ class _Port {
 }
 
 class _NativeUsb extends UsbLink {
+  _NativeUsb() {
+    if (_cli.supported) _detect = Timer.periodic(const Duration(milliseconds: 1500), (_) => _lookForBoards());
+  }
+
   final _cli = ArduinoCli.instance;
+
+  // Board detection, as the Arduino IDE and the LEGO app do: the COM ports are checked all the time (a fast registry
+  // read). A board that appears (or is there when the app starts) is reported as 'found', and 'gone' once it has
+  // been away for a few seconds, so the app shows a board only while one is plugged in. Connecting stays a click.
+  Timer? _detect;
+  final _boards = <String, _Port>{}; // COM port -> the board on it
+  final _notBoards = <String>{}; // COM ports checked that are something else (Bluetooth, a modem)
+  final _lastSeen = <String, DateTime>{};
+  final _flips = <String, List<DateTime>>{}; // a COM port coming and going: a board restarting in a loop
+  Set<String> _seen = const {};
+  bool _looking = false, _opening = false;
+
+  @override
+  bool get detects => true;
+
+  Future<void> _lookForBoards() async {
+    if (_looking || _opening || _busy || _job != null) return;
+    _looking = true;
+    try {
+      final now = await _comPorts();
+      final t = DateTime.now();
+      for (final a in {..._seen, ...now}) {
+        if (_seen.contains(a) != now.contains(a)) (_flips[a] ??= []).add(t);
+      }
+      for (final l in _flips.values) {
+        l.removeWhere((x) => t.difference(x) > const Duration(seconds: 8));
+      }
+      _seen = now;
+      for (final a in now) {
+        _lastSeen[a] = t;
+      }
+      _notBoards.removeWhere((a) => !now.contains(a));
+      // Gone only after a few seconds away: a restarting board drops off USB for a moment.
+      for (final a in _boards.keys.toList()) {
+        if (now.contains(a) || t.difference(_lastSeen[a] ?? t) < const Duration(milliseconds: 3500)) continue;
+        final b = _boards.remove(a)!;
+        onEvent?.call('gone', jsonEncode({'label': b.display, 'address': b.address}));
+      }
+      final unknown = [for (final a in now) if (!_boards.containsKey(a) && !_notBoards.contains(a)) a];
+      final flickering = [
+        for (final e in _flips.entries)
+          if (e.value.length >= 3 && !_boards.containsKey(e.key) && !_notBoards.contains(e.key)) e.key
+      ];
+      if (unknown.isEmpty && flickering.isEmpty) return;
+      final ports = unknown.isEmpty ? const <_Port>[] : await _ports();
+      for (final a in unknown) {
+        final here = [for (final q in ports) if (q.address.toUpperCase() == a) q];
+        if (here.isEmpty) continue; // not in arduino-cli's list yet: look again next time
+        final p = _pick(here);
+        if (p == null) {
+          _notBoards.add(a);
+          continue;
+        }
+        _found(a, p);
+      }
+      // Up, down and up again within seconds and never identified: an ESP32 restarting over and over.
+      for (final a in flickering) {
+        if (!_boards.containsKey(a)) _found(a, _Port(a, a, '0x303a', '', null));
+      }
+    } catch (_) {
+      // arduino-cli not ready yet, or the registry read failed: try again on the next tick
+    } finally {
+      _looking = false;
+    }
+  }
+
+  void _found(String address, _Port p) {
+    _boards[address] = p;
+    onEvent?.call('found', jsonEncode({'label': p.display, 'address': p.address}));
+  }
 
   @override
   bool get supported => _cli.supported;
@@ -114,8 +188,9 @@ class _NativeUsb extends UsbLink {
 
   Future<UsbResult> _open({required int baud, bool espressifOnly = false, bool quiet = false}) async {
     if (!supported) return UsbResult.unsupported;
+    _opening = true;
     try {
-      final port = _pick(await _ports(), espressifOnly: espressifOnly);
+      final port = _pick(await _ports(), espressifOnly: espressifOnly) ?? await _catchPort(espressifOnly: espressifOnly);
       if (port == null) {
         return const UsbResult(false,
             code: 'no-port', message: 'No board found on USB. Plug it in with a data USB cable (some cables only charge) and press Connect.');
@@ -142,16 +217,66 @@ class _NativeUsb extends UsbLink {
       return UsbResult(false, code: 'helper', message: e.message);
     } catch (e) {
       return UsbResult(false, code: 'helper', message: 'Could not open the board’s port: $e');
+    } finally {
+      _opening = false;
     }
+  }
+
+  /// No board in one scan: a board restarting in a loop is only on USB for moments at a time, so watch the COM ports
+  /// for a few seconds. A port that comes up is checked with arduino-cli; one that keeps coming and going is a
+  /// restarting board (counted as drops, so the restart-loop message appears) and is used even unidentified.
+  Future<_Port?> _catchPort({bool espressifOnly = false, Duration limit = const Duration(seconds: 8)}) async {
+    final end = DateTime.now().add(limit);
+    var last = await _comPorts();
+    final flips = <String, int>{};
+    while (DateTime.now().isBefore(end)) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      final now = await _comPorts();
+      for (final a in {...last, ...now}) {
+        if (last.contains(a) != now.contains(a)) flips[a] = (flips[a] ?? 0) + 1;
+      }
+      final appeared = now.difference(last);
+      last = now;
+      if (appeared.isNotEmpty) {
+        final p = _pick(await _ports(), espressifOnly: espressifOnly);
+        if (p != null) return p;
+      }
+      for (final e in flips.entries) {
+        if (e.value >= 3) {
+          // Up, down, up again within seconds: the board keeps restarting.
+          final port = _Port(e.key, e.key, '0x303a', '', null);
+          _port = port;
+          for (var i = 0; i < e.value ~/ 2; i++) {
+            _loop.onDrop();
+          }
+          if (_loop.looping) _announceLoop(_loop.reason);
+          return port;
+        }
+      }
+    }
+    return null;
   }
 
   // ---------- Serial Monitor ----------
 
-  Future<void> _startMonitor() async {
+  // Opening the port happens one at a time: two at once (the start-up reconnect and a Connect click, say) would leave
+  // one monitor holding the port and the other failing with "Serial port busy" over and over.
+  Future<void> _monitorLock = Future.value();
+  final _liveMonitors = <Process>{};
+
+  Future<void> _startMonitor() {
+    final run = _monitorLock.then((_) => _startMonitorNow());
+    _monitorLock = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<void> _startMonitorNow() async {
     await _stopMonitor();
     final port = _port!;
     final p = await _cli.start(['monitor', '-p', port.address, '--config', 'baudrate=$_baud', '--quiet']);
     _monitor = p;
+    _liveMonitors.add(p);
+    unawaited(p.exitCode.then((_) => _liveMonitors.remove(p)));
     _closing = false;
     p.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen((t) {
       final r = _loop.onText(t);
@@ -261,13 +386,16 @@ class _NativeUsb extends UsbLink {
     }
   }
 
+  /// Ends the monitor, and any other monitor process of ours still alive, so the port is free.
   Future<void> _stopMonitor() async {
-    final p = _monitor;
-    if (p == null) return;
+    final all = {..._liveMonitors, if (_monitor != null) _monitor!};
+    if (all.isEmpty) return;
     _closing = true;
     _monitor = null;
-    await killTree(p.pid);
-    await p.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => -1);
+    for (final p in all) {
+      await killTree(p.pid);
+      await p.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => -1);
+    }
     // Windows frees the COM port a moment after the process ends.
     await Future<void>.delayed(const Duration(milliseconds: 300));
   }

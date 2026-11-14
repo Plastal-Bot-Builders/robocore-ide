@@ -27,6 +27,9 @@ class FakeUsb extends UsbLink {
   bool get supported => true;
   @override
   bool get isOpen => open;
+  bool detecting = false;
+  @override
+  bool get detects => detecting;
 
   @override
   Future<UsbResult> connect({required int baud, bool espressifOnly = false}) async {
@@ -373,6 +376,20 @@ void main() {
       expect(s.stateLabel, 'Ready');
       usb.onEvent!('bootloop', jsonEncode({'reason': 'crash', 'label': 'COM5 · Espressif'}));
       expect(s.log.last.text, contains('crashes as it starts'));
+    });
+
+    test('a board shows only while it is plugged in, and connecting is a click', () async {
+      await s.disconnectUsb(quiet: true);
+      usb.detecting = true;
+      expect(s.canConnectUsb, isFalse);
+      usb.onEvent!('found', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
+      expect(s.detectedBoard, 'COM5 · Espressif');
+      expect(s.canConnectUsb, isTrue);
+      expect(s.usbOpen, isFalse); // not connected by itself
+      expect(s.conn!.text, contains('Press Connect'));
+      usb.onEvent!('gone', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
+      expect(s.detectedBoard, isNull);
+      expect(s.canConnectUsb, isFalse);
     });
 
     test('serial text goes to the board; unplug and replug are reported', () async {

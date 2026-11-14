@@ -141,7 +141,8 @@ class BoardPage extends StatelessWidget {
           Btn(s.busy == 'test' ? 'Testing…' : 'Test connection', onTap: s.busy == null ? s.testConnection : null),
           s.linked
               ? Btn('Disconnect', kind: BtnKind.plain, onTap: s.busy == 'test' ? null : s.disconnect)
-              : Btn(s.onUsb ? 'Connect ${s.usbName}' : 'Connect', kind: BtnKind.primary, onTap: s.connect),
+              : Btn(s.onUsb ? 'Connect ${s.usbName}' : 'Connect',
+                  kind: BtnKind.primary, onTap: !s.onUsb || s.canConnectUsb ? s.connect : null),
           if (s.onUsb && s.usbOpen) Btn('Reset board', kind: BtnKind.plain, onTap: s.busy == null ? s.resetUsbBoard : null),
           if (!s.onUsb) Btn('Use a real board (${s.usbName})', kind: BtnKind.plain, onTap: () => s.setPort(kPortUsb)),
         ]),
@@ -149,7 +150,11 @@ class BoardPage extends StatelessWidget {
         Text(
           !s.usb.supported
               ? 'Real boards connect through Web Serial: open the web app in Chrome or Edge on a computer.'
-              : s.onUsb
+              : s.onUsb && s.detectsBoards && !s.usbOpen
+                  ? (s.detectedBoard == null
+                      ? 'Waiting for the ${kBoards[s.board]!.name}… Plug it in with a data USB-C cable and it shows up here.'
+                      : '${kBoards[s.board]!.name} found on ${s.detectedBoard}. Press Connect.')
+                  : s.onUsb
                   ? 'Plug the ${kBoards[s.board]!.name} into ${s.usbName}, press Connect and pick ${kBoards[s.board]!.pickAs}. '
                       'It reconnects by itself after an upload or if you unplug it.'
                   : 'Sketches run on the preview board. Pick ${s.usbName} to use the real ${kBoards[s.board]!.name}.',

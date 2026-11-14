@@ -50,6 +50,10 @@ abstract class UsbLink {
   /// True while a port is open.
   bool get isOpen;
 
+  /// True when this link reports boards being plugged in and out by itself ('found' and 'gone' events, with
+  /// `{label, address}`), so the app can show a board only while one is there. The Windows app does.
+  bool get detects => false;
+
   /// Shows the browser's port chooser (must run from a click).
   Future<UsbResult> connect({required int baud, bool espressifOnly = false});
 

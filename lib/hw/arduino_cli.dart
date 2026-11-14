@@ -51,22 +51,24 @@ List<String> missingEsp32Files(String dataDir, String board, {String version = '
     if (!File(j([pkg, ...rel])).existsSync()) missing.add(j(rel));
   }
 
-  /// [rel] under any installed version of tool [tool].
-  void toolFile(String tool, List<String> rel) {
-    final d = Directory(j([pkg, 'tools', tool]));
-    final ok = d.existsSync() &&
-        d.listSync().whereType<Directory>().any((v) => File(j([v.path, ...rel])).existsSync());
-    if (!ok) missing.add(j(['tools', tool, '<version>', ...rel]));
+  /// [rel] under any installed version of a tool named one of [tools] (a tool can be renamed between releases).
+  void toolFile(List<String> tools, List<String> rel) {
+    final ok = tools.any((tool) {
+      final d = Directory(j([pkg, 'tools', tool]));
+      return d.existsSync() && d.listSync().whereType<Directory>().any((v) => File(j([v.path, ...rel])).existsSync());
+    });
+    if (!ok) missing.add(j(['tools', tools.first, '<version>', ...rel]));
   }
 
   file(['hardware', 'esp32', version, 'platform.txt']);
   file(['hardware', 'esp32', version, 'boards.txt']);
   file(['hardware', 'esp32', version, 'cores', 'esp32', 'Arduino.h']);
   file(['hardware', 'esp32', version, 'tools', 'partitions', 'boot_app0.bin']);
-  toolFile('$chip-libs', ['include', 'esp_common', 'include', 'esp_attr.h']);
-  toolFile('$chip-libs', ['flags', 'defines']);
-  toolFile('xtensa-esp-elf-gcc', ['bin', 'xtensa-$chip-elf-g++$exe']);
-  toolFile('esptool_py', ['esptool$exe']);
+  // The SDK per chip (esp32s3-libs) in the released index, one esp32-arduino-libs folder in older ones.
+  toolFile(['$chip-libs', 'esp32-arduino-libs'], ['include', 'esp_common', 'include', 'esp_attr.h']);
+  // The compiler: esp-x32 in the released 3.3 index (what arduino-cli installs), xtensa-esp-elf-gcc in the template.
+  toolFile(['esp-x32', 'xtensa-esp-elf-gcc'], ['bin', 'xtensa-$chip-elf-g++$exe']);
+  toolFile(['esptool_py'], ['esptool$exe']);
   return missing;
 }
 
@@ -241,9 +243,9 @@ class ArduinoCli {
       }
     }
 
-    await remove(Directory('$dataDir\packages\esp32'));
+    await remove(Directory('$dataDir\\packages\\esp32'));
     // arduino-cli keeps each download in staging and reuses it; a cut-off one would be unpacked broken again.
-    final staging = Directory('$dataDir\staging\packages');
+    final staging = Directory('$dataDir\\staging\\packages');
     if (staging.existsSync()) {
       final esp = RegExp(r'esp32|esp-|xtensa|riscv32|esptool|mklittlefs|mkspiffs|openocd|-libs-', caseSensitive: false);
       for (final f in staging.listSync().whereType<File>()) {

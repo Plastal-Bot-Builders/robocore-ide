@@ -192,6 +192,24 @@ jobs:
         with:
           name: robocore-ide-windows-installer
           path: build/windows/installer/*.exe
+      # Test channel: each pull request's installer as a pre-release ("RoboCore test build – PR #10"), downloadable
+      # without signing in, to try on a real board before merging. Pre-releases are never "latest", so the website's
+      # download button keeps the real release. release-test-cleanup.yml deletes it when the PR is closed.
+      - name: Publish the test build (pull requests)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          tag="test-pr-$PR"
+          exe="build/windows/installer/RoboCore-Setup-test-PR$PR.exe"
+          cp build/windows/installer/RoboCore-Setup-*.exe "$exe"
+          gh release delete "$tag" --cleanup-tag -y >/dev/null 2>&1 || true
+          notes="Test build of #$PR ($TITLE), commit ${SHA:0:7}. Not a release: install it to try the change, then merge."
+          gh release create "$tag" "$exe" --prerelease --target "$SHA" --title "RoboCore test build – PR #$PR" --notes "$notes"
       - name: Publish the GitHub Release
         if: needs.check.outputs.release_tag != ''
         shell: bash

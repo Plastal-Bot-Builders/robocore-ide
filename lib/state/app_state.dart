@@ -1130,6 +1130,23 @@ class AppState extends ChangeNotifier {
         serialPush('The board has stopped restarting and is running normally.', 'sys');
         setStatus('Ready');
         break;
+      case 'found':
+        // The Windows app saw a board appear on USB (or there at start). Show it; connecting stays a click.
+        final label = _labelOf(msg);
+        detectedBoard = label;
+        if (!usbOpen) {
+          conn = ConnMsg('', '${kBoards[boardId]!.name} found on $label. Press Connect.');
+          setStatus('Board found');
+          showToast('Board plugged in', body: '$label. Press Connect to use it.', info: true);
+        }
+        break;
+      case 'gone':
+        detectedBoard = null;
+        if (!usbOpen) {
+          conn = null;
+          setStatus('Not connected');
+        }
+        break;
       case 'plugged':
         if (!usbOpen) showToast('A board was plugged in', body: '$msg. Press Connect in Board Setup to use it.', info: true);
         break;
@@ -1161,6 +1178,25 @@ class AppState extends ChangeNotifier {
         break;
     }
     notifyListeners();
+  }
+
+  /// The board the Windows app sees on USB right now (its label, e.g. "COM5 · Espressif"), or null: Board Setup
+  /// offers Connect only while one is plugged in. Null on platforms that don't detect boards (see [detectsBoards]).
+  String? detectedBoard;
+
+  /// True when this app sees boards come and go by itself (the Windows app).
+  bool get detectsBoards => usb.detects;
+
+  /// Connect can be pressed: always where boards aren't detected (a browser shows its own chooser), else only while
+  /// a board is plugged in.
+  bool get canConnectUsb => !detectsBoards || detectedBoard != null;
+
+  String _labelOf(String json) {
+    try {
+      return '${(jsonDecode(json) as Map)['label'] ?? 'USB board'}';
+    } catch (_) {
+      return json.isEmpty ? 'USB board' : json;
+    }
   }
 
   void _onBootLoop(String json) {

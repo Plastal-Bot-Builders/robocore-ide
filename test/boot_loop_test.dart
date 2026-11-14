@@ -87,7 +87,7 @@ void main() {
         'hardware/esp32/3.3.12/tools/partitions/boot_app0.bin',
         'tools/esp32s3-libs/3.3.12/include/esp_common/include/esp_attr.h',
         'tools/esp32s3-libs/3.3.12/flags/defines',
-        'tools/xtensa-esp-elf-gcc/esp-14.2.0_20260121/bin/xtensa-esp32s3-elf-g++.exe',
+        'tools/esp-x32/2601/bin/xtensa-esp32s3-elf-g++.exe', // as arduino-cli installs 3.3.12 on Windows
         'tools/esptool_py/5.3.1/esptool.exe',
       ]) {
         touch(f);
@@ -99,6 +99,14 @@ void main() {
       expect(missingEsp32Files(data.path, 'v2', sep: '/'), isEmpty);
     });
 
+    test('the compiler under its older name (xtensa-esp-elf-gcc) counts too', () {
+      complete();
+      Directory('${data.path}/packages/esp32/tools/esp-x32').deleteSync(recursive: true);
+      expect(missingEsp32Files(data.path, 'v2', sep: '/').single, contains('esp-x32'));
+      touch('tools/xtensa-esp-elf-gcc/esp-14.2.0_20260121/bin/xtensa-esp32s3-elf-g++.exe');
+      expect(missingEsp32Files(data.path, 'v2', sep: '/'), isEmpty);
+    });
+
     test('a missing esp_attr.h is found', () {
       complete();
       File('${data.path}/packages/esp32/tools/esp32s3-libs/3.3.12/include/esp_common/include/esp_attr.h').deleteSync();
@@ -106,7 +114,7 @@ void main() {
     });
 
     test('nothing installed: everything is missing', () {
-      expect(missingEsp32Files(data.path, 'v2', sep: '/'), hasLength(8));
+      expect(missingEsp32Files(data.path, 'v2', sep: '/'), hasLength(7));
     });
 
     test('the ESP32 DevKit needs the esp32 libraries, not the S3 ones', () {
