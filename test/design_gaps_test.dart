@@ -11,7 +11,7 @@ import 'package:robocore_ide/main.dart';
 import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/sim_board.dart';
 import 'package:robocore_ide/theme.dart' show RC, kBrand;
-import 'package:robocore_ide/ui/shell.dart' show SearchBox, TopBar, kHelpTopics;
+import 'package:robocore_ide/ui/shell.dart' show SearchBox, kHelpTopics;
 import 'package:robocore_ide/ui/widgets/common.dart' show tipped;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -149,7 +149,7 @@ void main() {
     await _stop(tester, state);
   });
 
-  testWidgets('Stop shows only while something runs: it stops the sketch, or cancels Verify (E-07)', (tester) async {
+  testWidgets('Stop works only while something runs: it stops the sketch, or cancels Verify (E-07)', (tester) async {
     final state = await _start(tester);
     state.openProject(state.sortedProjects.firstWhere((p) => p.mode == 'code' && p.board == 'v2').id);
     await tester.pump(const Duration(milliseconds: 100));
@@ -163,14 +163,17 @@ void main() {
     await tester.tap(find.byTooltip('Stop the sketch'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.sim.running, isFalse);
-    expect(find.byTooltip('Stop the sketch'), findsNothing);
+    // The Stop button stays on the workspace, greyed out: tapping it now does nothing.
+    expect(state.canStop, isFalse);
+    await tester.tap(find.byTooltip('Stop the sketch'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(state.sim.running, isFalse);
 
     // Verify runs for a moment (the preview check): Stop cancels it.
     state.verify();
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.busy, 'verify');
-    expect(find.descendant(of: find.byType(TopBar), matching: find.text('Verifying…')), findsOneWidget,
-        reason: 'the Verify button shows it is working');
+    expect(find.text('Verifying…'), findsOneWidget, reason: 'the Verify button shows it is working');
     await tester.tap(find.byTooltip('Cancel Verify'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.busy, isNull);

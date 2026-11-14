@@ -530,8 +530,10 @@ class EditorTopBar extends StatelessWidget {
               },
             ),
             const SizedBox(width: 8),
-            // The project, as a tab: its name opens the project menu; × closes it.
-            Flexible(
+            // The project, as a tab: its name opens the project menu; × closes it. A fixed maximum, not a Flexible: a
+            // Flexible beside Spacers keeps its unused share, which would push the right-hand buttons off the edge.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: narrow ? 240 : 380),
               child: Container(
                 height: 44,
                 padding: const EdgeInsets.only(left: 8, right: 4),
@@ -545,11 +547,7 @@ class EditorTopBar extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             _BarButton(icon: 'plus', tip: 'New project', onTap: () => showNewProjectDialog(context)),
-            const SizedBox(width: 12),
-            const Spacer(),
-            const _ModeSwitch(),
-            const Spacer(),
-            const SizedBox(width: 12),
+            const Expanded(child: Center(child: _ModeSwitch())),
             BoardChip(compact: narrow),
             const SizedBox(width: 10),
             CogButton(compact: narrow),
