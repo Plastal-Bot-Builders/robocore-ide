@@ -1,20 +1,34 @@
 name: Remove a test build
 
 # A pull request's test build (build.yml's "Publish the test build") is deleted when the PR is merged or closed.
+# Each push to main also sweeps up test builds of PRs that are already closed (one whose cleanup didn't run).
 on:
   pull_request:
     types: [closed]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete the test-pr pre-release and its tag
+      - name: Delete the test builds of closed pull requests
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-        run: gh release delete "test-pr-$PR" --cleanup-tag -y || echo "No test build for #$PR."
+        run: |
+          for tag in $(gh release list --limit 200 --json tagName --jq '.[].tagName | select(startswith("test-pr-"))'); do
+            pr="${tag#test-pr-}"
+            state=$(gh pr view "$pr" --json state --jq .state 2>/dev/null || echo UNKNOWN)
+            if [ "$state" = "MERGED" ] || [ "$state" = "CLOSED" ]; then
+              echo "Deleting $tag (PR $pr is $state)"
+              gh release delete "$tag" --cleanup-tag -y
+            else
+              echo "Keeping $tag (PR $pr is $state)"
+            fi
+          done
