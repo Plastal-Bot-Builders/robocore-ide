@@ -660,6 +660,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A link's `open=N` (the Nth newest project), `mode=blocks|code` and `panel=1|0`. Nothing else is read.
+  void openFromLink(Map<String, String> q) {
+    final n = int.tryParse(q['open'] ?? '');
+    final list = sortedProjects;
+    if (needsProfile || n == null || n < 1 || n > list.length) return;
+    openProject(list[n - 1].id);
+    final m = q['mode'];
+    if (m == 'blocks' || m == 'code') setMode(m!);
+    if (q['panel'] == '1' && !panelOpen || q['panel'] == '0' && panelOpen) togglePanel();
+  }
+
+  /// The editor's close button: back to Home with no project open.
+  void closeProject() {
+    final p = cur;
+    if (p != null) saveNow(p);
+    pid = null;
+    go(Screen.home);
+  }
+
   void toggleSidebar() {
     sideCollapsed = !sideCollapsed;
     _prefs?.setBool('rc-side', sideCollapsed);

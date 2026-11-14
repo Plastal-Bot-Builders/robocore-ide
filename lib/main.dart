@@ -35,6 +35,8 @@ Future<void> main() async {
       state.folder = await restoreProjectsFolder();
     }
     await state.load();
+    // The web app's ?open=1 (&mode=code, &panel=1|0): opens a project straight away (the build's screenshots).
+    if (kIsWeb) state.openFromLink(Uri.base.queryParameters);
     await initWebEditors();
     // The Mac app's messages go to Notification Centre.
     if (isMacApp) state.systemToast = showMacNotification;

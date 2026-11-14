@@ -10,7 +10,7 @@ import 'widgets/common.dart';
 import 'widgets/menu.dart';
 
 /// Keep in step with `version:` in pubspec.yaml.
-const kAppVersion = '1.0.4';
+const kAppVersion = '1.0.5';
 
 class AccountButton extends StatelessWidget {
   const AccountButton({super.key});

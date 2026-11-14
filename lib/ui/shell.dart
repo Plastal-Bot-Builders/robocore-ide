@@ -191,6 +191,7 @@ class _ShellState extends State<Shell> {
     final c = RC.of(context);
     final w = MediaQuery.sizeOf(context).width;
     final phone = w < kPhone;
+    final onEditor = s.view == Screen.editor && s.cur != null;
     // First start on this device: ask who is using it before anything else.
     if (s.needsProfile) return const WelcomePage();
     _updateMenuBar(s);
@@ -232,12 +233,14 @@ class _ShellState extends State<Shell> {
               if (s.usb.hostView != null) Positioned(left: 0, bottom: 0, width: 1, height: 1, child: s.usb.hostView!),
               Column(
                 children: [
-                  TopBar(phone: phone, onMenu: () => _scaffold.currentState?.openDrawer()),
+                  // The editor is an open workspace: its own top bar (Home, the project, Blocks | Code) and no sidebar.
+                  // The sidebar's slot stays (empty), so the editor below keeps its place in the tree.
+                  onEditor && !phone ? const EditorTopBar() : TopBar(phone: phone, onMenu: () => _scaffold.currentState?.openDrawer()),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (!phone) SideBar(collapsed: s.sideCollapsed),
+                        if (!phone) onEditor ? const SizedBox.shrink() : SideBar(collapsed: s.sideCollapsed),
                         Expanded(child: _pages(s, phone)),
                       ],
                     ),
@@ -491,6 +494,141 @@ class TopBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The editor's top bar: Home, Save, the open project (its menu, saved state, close), New project, the
+/// Blocks | Code switch in the middle, then the board, Ask Cog, Settings and the account. Verify, Upload and Stop
+/// are on the workspace itself (editor_page.dart's run buttons).
+class EditorTopBar extends StatelessWidget {
+  const EditorTopBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = RC.of(context);
+    final p = s.cur!;
+    final narrow = MediaQuery.sizeOf(context).width < 1180;
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.only(left: 12, right: 16), // the right edge lines up with Home's top bar
+      color: c.top,
+      child: FocusRing(
+        color: kNavy,
+        child: SafeArea(
+          bottom: false,
+          child: Row(children: [
+            _BarButton(icon: 'home', tip: 'Home', filled: true, onTap: () => s.go(Screen.home)),
+            const SizedBox(width: 4),
+            _BarButton(
+              icon: 'save',
+              tip: 'Save ($kMod+S)',
+              onTap: () {
+                s.saveNow(p);
+                s.showToast('Saved', body: 'Kept on this device.');
+              },
+            ),
+            const SizedBox(width: 8),
+            // The project, as a tab: its name opens the project menu; × closes it. A fixed maximum, not a Flexible: a
+            // Flexible beside Spacers keeps its unused share, which would push the right-hand buttons off the edge.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: narrow ? 240 : 380),
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.only(left: 8, right: 4),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(child: _ProjectName(p: p)),
+                  if (!narrow) ...[const SizedBox(width: 4), _SavePill(p: p), const SizedBox(width: 6)],
+                  IconBtn('x', onTap: s.closeProject, tip: 'Close project', color: kNavy, size: 32, iconSize: 15),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 4),
+            _BarButton(icon: 'plus', tip: 'New project', onTap: () => showNewProjectDialog(context)),
+            const Expanded(child: Center(child: _ModeSwitch())),
+            BoardChip(compact: narrow),
+            const SizedBox(width: 10),
+            CogButton(compact: narrow),
+            const SizedBox(width: 6),
+            Hover(
+              onTap: () => s.go(Screen.settings),
+              tooltip: 'Settings',
+              builder: (context, h) => Container(
+                width: 36, // with the 6 px gap, the gear sits where it is on Home's top bar
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
+                child: SvgPicture.string(_gearSvg,
+                    width: 18, height: 18, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn), excludeFromSemantics: true),
+              ),
+            ),
+            const SizedBox(width: 6),
+            const AccountButton(),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// A 44 px square button on the yellow bar ([filled]: a light square behind it, for Home).
+class _BarButton extends StatelessWidget {
+  const _BarButton({required this.icon, required this.tip, this.onTap, this.filled = false});
+  final String icon, tip;
+  final VoidCallback? onTap;
+  final bool filled;
+  @override
+  Widget build(BuildContext context) => Hover(
+        onTap: onTap,
+        tooltip: tip,
+        radius: 12,
+        builder: (context, h) => Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: filled ? (h ? .75 : .55) : (h ? .3 : 0)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: RcIcon(icon, size: 22, color: kNavy),
+        ),
+      );
+}
+
+/// Blocks | Code, in the middle of the editor's top bar.
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch();
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final mode = s.cur?.mode ?? 'blocks';
+    Widget seg(String m, String label) {
+      final on = mode == m;
+      return Hover(
+        onTap: () => s.setMode(m),
+        radius: 9,
+        builder: (context, h) => Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: on ? kNavy : (h ? Colors.white.withValues(alpha: .6) : Colors.transparent),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            RcIcon(m == 'blocks' ? 'blocks' : 'code', size: 16, color: on ? kCream : kNavy),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontFamily: fBody, fontSize: 14, height: 1, fontWeight: FontWeight.w600, color: on ? kCream : kNavy)),
+          ]),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .55), borderRadius: BorderRadius.circular(12)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [seg('blocks', 'Blocks'), const SizedBox(width: 4), seg('code', 'Code')]),
     );
   }
 }

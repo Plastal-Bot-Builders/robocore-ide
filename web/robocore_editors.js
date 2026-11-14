@@ -1315,10 +1315,10 @@
         media: 'vendor/blockly/media/',
         grid: { spacing: 24, length: 1, colour: 'rgba(27,42,65,.4)', snap: true },
         // Ctrl/⌘ + wheel and trackpad pinch zoom; the plain wheel scrolls (move.wheel).
-        zoom: { controls: true, wheel: true, pinch: true, startScale: START_SCALE * ZOOM, minScale: 0.4, maxScale: 3.75, scaleSpeed: 1.15 },
+        zoom: { controls: false, wheel: true, pinch: true, startScale: START_SCALE * ZOOM, minScale: 0.4, maxScale: 3.75, scaleSpeed: 1.15 },
         move: { scrollbars: true, drag: true, wheel: true },
-        trashcan: true,
-        maxTrashcanContents: 32,
+        // Zoom and delete are the app's floating view tools (editor_page.dart), so Blockly draws neither control.
+        trashcan: false,
         sounds: false,
         plugins: { flyoutsVerticalToolbox: 'rcFlyout' },
       });
@@ -1578,7 +1578,7 @@
         guides: { bracketPairs: false, indentation: true },
         scrollBeyondLastLine: false,
         fixedOverflowWidgets: true,
-        padding: { top: 8 },
+        padding: { top: 8, bottom: 120 }, // the last lines can scroll clear of the floating Upload buttons
       }, opts));
       document.fonts.addEventListener('loadingdone', () => monaco.editor.remeasureFonts());
       document.fonts.ready.then(() => monaco.editor.remeasureFonts());
