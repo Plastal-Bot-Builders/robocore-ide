@@ -259,11 +259,24 @@ class _NativeUsb extends UsbLink {
 
   // ---------- Serial Monitor ----------
 
-  Future<void> _startMonitor() async {
+  // Opening the port happens one at a time: two at once (the start-up reconnect and a Connect click, say) would leave
+  // one monitor holding the port and the other failing with "Serial port busy" over and over.
+  Future<void> _monitorLock = Future.value();
+  final _liveMonitors = <Process>{};
+
+  Future<void> _startMonitor() {
+    final run = _monitorLock.then((_) => _startMonitorNow());
+    _monitorLock = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<void> _startMonitorNow() async {
     await _stopMonitor();
     final port = _port!;
     final p = await _cli.start(['monitor', '-p', port.address, '--config', 'baudrate=$_baud', '--quiet']);
     _monitor = p;
+    _liveMonitors.add(p);
+    unawaited(p.exitCode.then((_) => _liveMonitors.remove(p)));
     _closing = false;
     p.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen((t) {
       final r = _loop.onText(t);
@@ -373,13 +386,16 @@ class _NativeUsb extends UsbLink {
     }
   }
 
+  /// Ends the monitor, and any other monitor process of ours still alive, so the port is free.
   Future<void> _stopMonitor() async {
-    final p = _monitor;
-    if (p == null) return;
+    final all = {..._liveMonitors, if (_monitor != null) _monitor!};
+    if (all.isEmpty) return;
     _closing = true;
     _monitor = null;
-    await killTree(p.pid);
-    await p.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => -1);
+    for (final p in all) {
+      await killTree(p.pid);
+      await p.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => -1);
+    }
     // Windows frees the COM port a moment after the process ends.
     await Future<void>.delayed(const Duration(milliseconds: 300));
   }

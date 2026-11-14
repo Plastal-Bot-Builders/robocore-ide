@@ -287,8 +287,8 @@ class _CompileServerRowState extends State<_CompileServerRow> {
         const SizedBox(height: 2),
         Text(
           AppScope.of(context).local != null
-              ? 'This Mac compiles for its boards itself, with no internet. The compile server is only used for a board '
-                  'this Mac can’t build. server/README.md shows how to run one (Docker, Render or Cloud Run).'
+              ? 'This computer compiles for its boards itself. The compile server is only used for a board '
+                  'it can’t build. server/README.md shows how to run one (Docker, Render or Cloud Run).'
               : 'Verify and Upload use it to compile your C++ with arduino-cli and the esp32 core, then the IDE flashes '
                   'the board over USB-C. Without it, Verify uses the built-in preview check and Upload runs the preview board. '
                   'server/README.md shows how to run one (Docker, Render or Cloud Run).',
