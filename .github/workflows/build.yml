@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches: [main]
-    # A version tag (v1.0.0) also publishes a GitHub Release with the Windows installer (the windows job).
+    # A version tag (v1.0.0), or a push to main with a new pubspec version, also publishes a GitHub Release.
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -25,8 +25,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      # The release this run publishes, or empty: a version tag (v1.0.3) pushed, or a push to main whose
+      # pubspec.yaml version has no release yet (bump the version, merge, and the release is made from main).
+      release_tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Release to publish
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag=""
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+          elif [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            v=$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' pubspec.yaml)
+            if [ -n "$v" ] && ! gh release view "v$v" >/dev/null 2>&1; then tag="v$v"; fi
+          fi
+          echo "Release: ${tag:-none}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
@@ -174,15 +193,16 @@ jobs:
           name: robocore-ide-windows-installer
           path: build/windows/installer/*.exe
       - name: Publish the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.check.outputs.release_tag != ''
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.release_tag }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" build/windows/installer/*.exe --clobber
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/windows/installer/*.exe --clobber
           else
-            gh release create "$tag" build/windows/installer/*.exe --title "RoboCore $tag" --generate-notes
+            gh release create "$TAG" build/windows/installer/*.exe --target "$GITHUB_SHA" --title "RoboCore $TAG" --generate-notes
           fi
 
   linux:
@@ -267,8 +287,8 @@ jobs:
   # app is also attached without its version in the name, for links that always fetch the newest version.
   release-assets:
     name: Attach apps to the release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, android, linux, macos]
+    if: needs.check.outputs.release_tag != ''
+    needs: [check, windows, android, linux, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -282,8 +302,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.check.outputs.release_tag }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${TAG}"
           v="${tag#v}"
           mkdir -p out
           cp apps/robocore-ide-android/app-release.apk "out/RoboCore-$v-android.apk"
@@ -293,7 +314,7 @@ jobs:
           cp apps/robocore-ide-macos/robocore-ide-macos-intel.dmg "out/RoboCore-$v-mac-intel.dmg"
           ls -la out
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --title "RoboCore $tag" --generate-notes
+            gh release create "$tag" --target "$GITHUB_SHA" --title "RoboCore $tag" --generate-notes
           fi
           gh release upload "$tag" out/* --clobber
       # RoboCore-mac-intel.dmg, RoboCore-Setup.exe and so on: the website's download buttons link to
@@ -302,6 +323,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.check.outputs.release_tag }}
         run: |
           cp apps/robocore-ide-windows-installer/*.exe out/
-          bash tools/release_latest_names.sh "${GITHUB_REF_NAME}" out
+          bash tools/release_latest_names.sh "${TAG}" out
