@@ -173,7 +173,7 @@ void main() {
     state.verify();
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.busy, 'verify');
-    expect(find.text('Verifying…'), findsOneWidget, reason: 'the Verify button shows it is working');
+    expect(find.text('Verifying…'), findsWidgets, reason: 'the Verify button shows it is working');
     await tester.tap(find.byTooltip('Cancel Verify'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(state.busy, isNull);

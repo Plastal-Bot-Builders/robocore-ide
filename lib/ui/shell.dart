@@ -512,7 +512,7 @@ class EditorTopBar extends StatelessWidget {
     final narrow = MediaQuery.sizeOf(context).width < 1180;
     return Container(
       height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.only(left: 12, right: 16), // the right edge lines up with Home's top bar
       color: c.top,
       child: FocusRing(
         color: kNavy,
