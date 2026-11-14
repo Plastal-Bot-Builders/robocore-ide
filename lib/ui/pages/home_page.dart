@@ -117,6 +117,8 @@ class HomePage extends StatelessWidget {
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   _HeroBtn(label: 'New project', icon: 'plus', primary: true, onTap: () => showNewProjectDialog(context)),
                   if (first != null) _HeroBtn(label: 'Open ${first.name}', onTap: () => s.openProject(first.id)),
+                  // The desktop apps: a sketch or a RoboCore project folder from this computer, a USB stick, another PC…
+                  if (s.pickSketch != null) _HeroBtn(label: 'Open from computer', icon: 'folder', onTap: s.openFromComputer),
                 ]),
               ],
             ),

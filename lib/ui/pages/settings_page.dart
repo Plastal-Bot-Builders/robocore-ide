@@ -145,15 +145,20 @@ class SettingsPage extends StatelessWidget {
               'question. When off, Cog gets only what you type.'),
       const _CogStatusRow(),
     ]);
-    // The Mac app: where the projects are kept (Settings → Projects folder).
+    // The desktop apps: where the projects are kept (Settings → Projects folder).
     final f = s.folder;
+    final explorer = s.defaultFolder != null ? 'File Explorer' : 'Finder';
     final projectsFolder = s.chooseFolder == null
         ? null
         : card('Projects folder', [
             row(
               f != null ? 'Projects are files' : 'Projects are kept in the app',
               Row(mainAxisSize: MainAxisSize.min, children: [
-                if (f != null) ...[Btn('Show in Finder', icon: 'open', onTap: () => f.reveal()), const SizedBox(width: 8)],
+                if (f != null) ...[Btn('Show in $explorer', icon: 'open', onTap: () => f.reveal()), const SizedBox(width: 8)],
+                if (f == null && s.defaultFolder != null) ...[
+                  Btn('Use Documents\\RoboCore', icon: 'check', onTap: () => s.chooseProjectsFolder(suggested: true)),
+                  const SizedBox(width: 8),
+                ],
                 Btn(f != null ? 'Change…' : 'Choose folder…', icon: 'folder', onTap: () => s.chooseProjectsFolder()),
               ]),
               hint: f != null
@@ -161,7 +166,7 @@ class SettingsPage extends StatelessWidget {
                   : s.missingFolder != null
                       ? '${s.missingFolder} can’t be opened. Choose it again, or another folder.'
                       : 'Choose a folder (Documents is a good place) to keep each project as a folder of .ino files you '
-                          'can see in Finder, back up and open in the Arduino IDE.',
+                          'can see in $explorer, back up, copy to another computer and open in the Arduino IDE.',
             ),
           ]);
     final general = card('General', [

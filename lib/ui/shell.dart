@@ -12,7 +12,6 @@ import 'app_scope.dart';
 import 'dialogs.dart';
 import 'editor/editor_page.dart';
 import 'editor/web_editors.dart' show setEditorShortcutHandler;
-import '../hw/sketchbook.dart' show pickSketch;
 import 'mac_app.dart';
 import 'pages/board_page.dart';
 import 'pages/examples_page.dart';
@@ -67,26 +66,38 @@ class _ShellState extends State<Shell> {
     s.justUpdated = null;
   }
 
-  /// The Mac app, once: keep the projects as files in a folder? (Later: Settings → Projects folder.)
+  /// The desktop apps, once: keep the projects as files in a folder? (Later: Settings → Projects folder.) Windows
+  /// suggests Documents\RoboCore; the Mac asks for a folder.
   Future<void> _askFolder(AppState s) async {
     s.folderAsked();
     final n = s.projects.length;
-    final choose = await showDialog<bool>(
+    final windows = s.defaultFolder != null;
+    final moves = '$n project${n == 1 ? '' : 's'} move${n == 1 ? 's' : ''}';
+    final choice = await showDialog<String>(
       context: context,
       barrierColor: const Color(0x521B2A41),
       builder: (dctx) => DialogFrame(
         title: 'Keep your projects as files?',
-        subtitle: 'RoboCore can keep each project as a folder of .ino files, like the Arduino IDE, in a folder you '
-            'choose (Documents is a good place). You can see them in Finder, back them up and open them in the Arduino '
-            'IDE. Your $n project${n == 1 ? '' : 's'} move${n == 1 ? 's' : ''} there too.',
-        onSubmit: () => Navigator.of(dctx).pop(true),
+        subtitle: windows
+            ? 'RoboCore can save each project as a folder on this computer, in Documents\\RoboCore (or a folder you '
+                'choose). You can see them in File Explorer, back them up, copy them to another computer and open them '
+                'again with Open from computer. Your $moves there too.'
+            : 'RoboCore can keep each project as a folder of .ino files, like the Arduino IDE, in a folder you '
+                'choose (Documents is a good place). You can see them in Finder, back them up and open them in the Arduino '
+                'IDE. Your $moves there too.',
+        onSubmit: () => Navigator.of(dctx).pop(windows ? 'documents' : 'choose'),
         actions: [
-          Btn('Not now', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop(false)),
-          Btn('Choose folder…', icon: 'folder', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop(true)),
+          Btn('Not now', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+          if (windows) ...[
+            Btn('Choose folder…', icon: 'folder', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop('choose')),
+            Btn('Use Documents\\RoboCore', icon: 'check', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop('documents')),
+          ] else
+            Btn('Choose folder…', icon: 'folder', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop('choose')),
         ],
       ),
     );
-    if (choose == true) await s.chooseProjectsFolder();
+    if (choice == 'documents') await s.chooseProjectsFolder(suggested: true);
+    if (choice == 'choose') await s.chooseProjectsFolder();
   }
 
   @override
@@ -129,9 +140,7 @@ class _ShellState extends State<Shell> {
       case 'openProject':
         s.go(Screen.projects);
       case 'openSketch':
-        pickSketch().then((r) {
-          if (r != null) s.importSketch(r.$1, r.$2);
-        });
+        s.openFromComputer();
       case 'reveal':
         s.folder?.reveal(s.view == Screen.editor ? p : null);
       case 'examples':
