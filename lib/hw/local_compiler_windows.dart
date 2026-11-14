@@ -23,7 +23,11 @@ class WindowsBuilder implements LocalBuilder {
   Future<String?> licences() async => null;
 
   @override
-  Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog}) async {
+  Future<ServerBuild> compile({required String board, required List<SourceFile> files, void Function(String line)? onLog}) =>
+      _compile(board: board, files: files, onLog: onLog, repairOnce: true);
+
+  Future<ServerBuild> _compile(
+      {required String board, required List<SourceFile> files, void Function(String line)? onLog, required bool repairOnce}) async {
     final log = onLog ?? (String _) {};
     final fqbn = kFqbn[board];
     if (fqbn == null) return ServerBuild.failed('This board can’t be compiled on this computer yet.');
@@ -70,6 +74,16 @@ class WindowsBuilder implements LocalBuilder {
       final elapsed = DateTime.now().difference(started).inMilliseconds;
 
       if (result['success'] != true) {
+        // A file of the esp32 package itself is missing: repair the install and build once more, instead of showing
+        // "No such file or directory" as if the sketch were wrong.
+        if (repairOnce && board != 'uno' && isBrokenEsp32Install('${result['compiler_err'] ?? ''}\n${result['compiler_out'] ?? ''}\n${result['error'] ?? ''}\n${r.stderr}')) {
+          try {
+            await _cli.repairEsp32(board, log);
+          } on CliError catch (e) {
+            return ServerBuild.failed(e.message, retry: true);
+          }
+          return _compile(board: board, files: files, onLog: onLog, repairOnce: false);
+        }
         if (!problems.any((p) => p['severity'] == 'error')) {
           problems = [
             {'severity': 'error', 'file': main, 'line': 1, 'message': clean(result['error'] ?? 'Compilation failed.')},

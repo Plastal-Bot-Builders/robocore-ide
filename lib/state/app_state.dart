@@ -1120,6 +1120,16 @@ class AppState extends ChangeNotifier {
         usbOpen = true;
         serialPush('— board restarted —', 'sys');
         break;
+      case 'bootloop':
+        // One message for a board that keeps restarting (the USB link stops reporting each unplug and replug).
+        // The port stays selected, so Upload can catch the board between restarts.
+        _onBootLoop(msg);
+        break;
+      case 'bootloop-ended':
+        usbOpen = true;
+        serialPush('The board has stopped restarting and is running normally.', 'sys');
+        setStatus('Ready');
+        break;
       case 'plugged':
         if (!usbOpen) showToast('A board was plugged in', body: '$msg. Press Connect in Board Setup to use it.', info: true);
         break;
@@ -1151,6 +1161,28 @@ class AppState extends ChangeNotifier {
         break;
     }
     notifyListeners();
+  }
+
+  void _onBootLoop(String json) {
+    var reason = 'crash', label = usbLabel ?? 'USB board';
+    try {
+      final m = (jsonDecode(json) as Map).cast<String, dynamic>();
+      reason = '${m['reason'] ?? reason}';
+      label = '${m['label'] ?? label}';
+    } catch (_) {}
+    usbOpen = true;
+    usbLabel = label;
+    final empty = reason == 'empty';
+    final text = empty
+        ? 'The board keeps restarting because it has no sketch yet (normal for a brand-new board). '
+            'Press Upload: RoboCore catches it between restarts, no BOOT or RESET needed.'
+        : 'The board keeps restarting: the sketch on it crashes as it starts. Fix the sketch and press Upload; '
+            'RoboCore catches the board between restarts, no BOOT or RESET needed.';
+    serialPush(text, 'err');
+    conn = ConnMsg('err', text);
+    setStatus(empty ? 'Board is empty' : 'Board keeps restarting', 'err');
+    showToast(empty ? 'This board has no sketch yet' : 'The board keeps restarting',
+        body: 'Press Upload to put a sketch on it. No buttons needed.', error: !empty, info: empty);
   }
 
   void _onProgress(String json) {

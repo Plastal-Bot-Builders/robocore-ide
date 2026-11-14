@@ -361,6 +361,20 @@ void main() {
       expect(s.stateLabel, 'Verified');
     });
 
+    test('a board that keeps restarting gets one message and stays connected for Upload', () async {
+      final before = s.log.length;
+      usb.onEvent!('bootloop', jsonEncode({'reason': 'empty', 'label': 'COM5 · Espressif'}));
+      expect(s.usbOpen, isTrue);
+      expect(s.log.length, before + 1);
+      expect(s.log.last.text, allOf(contains('no sketch yet'), contains('no BOOT or RESET')));
+      expect(s.stateLabel, 'Board is empty');
+      usb.onEvent!('bootloop-ended', 'COM5 · Espressif');
+      expect(s.log.last.text, contains('stopped restarting'));
+      expect(s.stateLabel, 'Ready');
+      usb.onEvent!('bootloop', jsonEncode({'reason': 'crash', 'label': 'COM5 · Espressif'}));
+      expect(s.log.last.text, contains('crashes as it starts'));
+    });
+
     test('serial text goes to the board; unplug and replug are reported', () async {
       s.sendSerial('led on');
       expect(usb.written, ['led on\n']);

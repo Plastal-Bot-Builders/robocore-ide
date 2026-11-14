@@ -33,6 +33,57 @@ List<(String, int)> esp32Parts(String board) => [
 
 typedef LogFn = void Function(String line);
 
+/// Files an ESP32 build for [board] needs from the esp32 package under [dataDir] (Arduino15). Returns the ones that
+/// are missing, as paths under packages\esp32. An empty list means the install looks complete.
+///
+/// An interrupted download or unpack (a dropped connection, an antivirus holding a file, a full disk) leaves arduino-cli
+/// believing the core is installed while files are gone; the first compile then fails with "No such file or
+/// directory". [sep] is the path separator (the tests run on Linux).
+List<String> missingEsp32Files(String dataDir, String board, {String version = '3.3.12', String? sep, bool windows = true}) {
+  final s = sep ?? Platform.pathSeparator;
+  String j(List<String> parts) => parts.join(s);
+  final pkg = j([dataDir, 'packages', 'esp32']);
+  final chip = board == 'v2' ? 'esp32s3' : 'esp32';
+  final exe = windows ? '.exe' : '';
+  final missing = <String>[];
+
+  void file(List<String> rel) {
+    if (!File(j([pkg, ...rel])).existsSync()) missing.add(j(rel));
+  }
+
+  /// [rel] under any installed version of tool [tool].
+  void toolFile(String tool, List<String> rel) {
+    final d = Directory(j([pkg, 'tools', tool]));
+    final ok = d.existsSync() &&
+        d.listSync().whereType<Directory>().any((v) => File(j([v.path, ...rel])).existsSync());
+    if (!ok) missing.add(j(['tools', tool, '<version>', ...rel]));
+  }
+
+  file(['hardware', 'esp32', version, 'platform.txt']);
+  file(['hardware', 'esp32', version, 'boards.txt']);
+  file(['hardware', 'esp32', version, 'cores', 'esp32', 'Arduino.h']);
+  file(['hardware', 'esp32', version, 'tools', 'partitions', 'boot_app0.bin']);
+  toolFile('$chip-libs', ['include', 'esp_common', 'include', 'esp_attr.h']);
+  toolFile('$chip-libs', ['flags', 'defines']);
+  toolFile('xtensa-esp-elf-gcc', ['bin', 'xtensa-$chip-elf-g++$exe']);
+  toolFile('esptool_py', ['esptool$exe']);
+  return missing;
+}
+
+/// True when [compilerText] says a file of the esp32 package itself is missing (a broken install, not a sketch problem):
+/// a line that both points into packages/esp32 and says the file or program isn't there. A sketch that includes a
+/// header it doesn't have fails on its own file, so it is not mistaken for this.
+bool isBrokenEsp32Install(String compilerText) {
+  final missing = RegExp(
+      r'No such file or directory|file does not exist|cannot find the (file|path)|not recognized as an internal or external command',
+      caseSensitive: false);
+  for (final line in compilerText.split(RegExp(r'\r?\n'))) {
+    final t = line.replaceAll('\\', '/');
+    if (missing.hasMatch(t) && t.toLowerCase().contains('packages/esp32/')) return true;
+  }
+  return false;
+}
+
 class CliError implements Exception {
   CliError(this.message);
   final String message;
@@ -157,13 +208,59 @@ class ArduinoCli {
     return (m?.group(1) ?? '').replaceAll(' ', '').toLowerCase();
   }
 
-  /// Installs the core for [board] once: arduino:avr for the Uno, the esp32 core for the others.
-  Future<void> ensureCore(String board, LogFn log) {
+  /// Installs the core for [board] once: arduino:avr for the Uno, the esp32 core for the others. For the esp32 core it
+  /// then checks that the files a build needs are really there, and repairs the install if not (see [repairEsp32]).
+  Future<void> ensureCore(String board, LogFn log) async {
     final core = board == 'uno' ? kAvrCore : kEsp32Core;
-    return _coresReady[core] ??= _installCore(core, log).catchError((Object e) {
-      _coresReady.remove(core);
-      throw e;
-    });
+    await _install(core, log);
+    if (core != kEsp32Core) return;
+    final missing = missingEsp32Files(dataDir, board, version: kEsp32Core.split('@').last);
+    if (missing.isEmpty) return;
+    await repairEsp32(board, log, missing: missing);
+  }
+
+  Future<void> _install(String core, LogFn log) => _coresReady[core] ??= _installCore(core, log).catchError((Object e) {
+        _coresReady.remove(core);
+        throw e;
+      });
+
+  /// Deletes a broken esp32 package (and the downloads arduino-cli staged for it, which may be the cut-off ones) and
+  /// installs it again. Throws [CliError] if files are still missing afterwards.
+  Future<void> repairEsp32(String board, LogFn log, {List<String>? missing}) async {
+    final gone = missing ?? missingEsp32Files(dataDir, board, version: kEsp32Core.split('@').last);
+    log('The ESP32 board files on this computer are incomplete'
+        '${gone.isEmpty ? '' : ' (missing ${gone.first}${gone.length > 1 ? ' and ${gone.length - 1} more' : ''})'}. '
+        'Removing them and installing them again…');
+    _coresReady.remove(kEsp32Core);
+    final failed = <String>[];
+    Future<void> remove(FileSystemEntity e) async {
+      try {
+        if (e.existsSync()) await e.delete(recursive: true);
+      } catch (_) {
+        failed.add(e.path);
+      }
+    }
+
+    await remove(Directory('$dataDir\packages\esp32'));
+    // arduino-cli keeps each download in staging and reuses it; a cut-off one would be unpacked broken again.
+    final staging = Directory('$dataDir\staging\packages');
+    if (staging.existsSync()) {
+      final esp = RegExp(r'esp32|esp-|xtensa|riscv32|esptool|mklittlefs|mkspiffs|openocd|-libs-', caseSensitive: false);
+      for (final f in staging.listSync().whereType<File>()) {
+        if (esp.hasMatch(f.uri.pathSegments.last)) await remove(f);
+      }
+    }
+    if (failed.isNotEmpty) {
+      throw CliError('Could not remove the broken ESP32 board files (${failed.first}). Close the Arduino IDE and any '
+          'other app using them, then try again.');
+    }
+    await _install(kEsp32Core, log);
+    final still = missingEsp32Files(dataDir, board, version: kEsp32Core.split('@').last);
+    if (still.isNotEmpty) {
+      throw CliError('The ESP32 board files are still incomplete after reinstalling (missing ${still.first}). An '
+          'antivirus may be removing files from %LOCALAPPDATA%\\Arduino15; allow that folder, then try again.');
+    }
+    log('ESP32 board files repaired.');
   }
 
   Future<void> _installCore(String core, LogFn log) async {
