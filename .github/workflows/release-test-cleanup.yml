@@ -27,7 +27,7 @@ jobs:
             state=$(gh pr view "$pr" --json state --jq .state 2>/dev/null || echo UNKNOWN)
             if [ "$state" = "MERGED" ] || [ "$state" = "CLOSED" ]; then
               echo "Deleting $tag (PR $pr is $state)"
-              gh release delete "$tag" --cleanup-tag -y
+              gh release delete "$tag" --cleanup-tag -y || echo "Already gone (another cleanup run took it)."
             else
               echo "Keeping $tag (PR $pr is $state)"
             fi
