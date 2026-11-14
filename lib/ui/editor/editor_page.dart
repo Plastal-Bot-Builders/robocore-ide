@@ -104,25 +104,6 @@ class _EditorPageState extends State<EditorPage> {
     final fi = s.file.clamp(0, p.files.length - 1).toInt();
     final f = p.files[fi];
 
-    Widget seg(String m, String label) {
-      final on = p.mode == m;
-      return Hover(
-        onTap: () => s.setMode(m),
-        builder: (context, h) => Container(
-          height: 30,
-          padding: EdgeInsets.only(left: 12, right: phone ? 12 : 14),
-          decoration: BoxDecoration(color: on ? c.ink : (h ? c.surface : Colors.transparent), borderRadius: BorderRadius.circular(6)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            RcIcon(m == 'blocks' ? 'blocks' : 'code', size: 16, color: on ? c.bg : c.muted),
-            if (!phone || on) ...[
-              const SizedBox(width: 8),
-              Text(label, style: tLabel(c, color: on ? c.bg : c.muted)),
-            ],
-          ]),
-        ),
-      );
-    }
-
     final openTabs = [for (var i = 0; i < p.files.length; i++) if (!s.closedTabs.contains(i)) i];
     final tabs = p.mode == 'code'
         ? Flexible(
@@ -162,36 +143,20 @@ class _EditorPageState extends State<EditorPage> {
           )
         : null;
 
-    final toolbar = Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      color: c.surface,
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
-          child: Row(children: [seg('blocks', 'Blocks'), const SizedBox(width: 2), seg('code', 'Code')]),
-        ),
-        const SizedBox(width: 12),
-        if (tabs != null) tabs else const Spacer(),
-        if (tabs != null) const SizedBox(width: 8),
-        if (p.mode == 'code')
-          IconBtn('search',
-              onTap: () => kWebEditors ? _monaco.currentState?.find() : _active?.currentState?.toggleFind(), tip: 'Find')
-        else ...[
-          // Zoom is on the canvas (Blockly's buttons, Ctrl/Cmd + wheel, pinch, Ctrl +/−/0), as in the design.
-          if (kWebEditors && width >= 900)
-            IconBtn('code',
-                onTap: () => s.updateSettings((st) => st.showCpp = !st.showCpp),
-                active: s.settings.showCpp,
-                tip: s.settings.showCpp ? 'Hide the C++ from the blocks' : 'Show the C++ from the blocks'),
-          // Greyed out when there is nothing to undo or redo (BK-09).
-          IconBtn('undo', onTap: kWebEditors ? (_canUndo ? () => _blockly.currentState?.undo() : null) : s.undo, tip: 'Undo ($kMod+Z)'),
-          IconBtn('redo', onTap: kWebEditors ? (_canRedo ? () => _blockly.currentState?.redo() : null) : s.redo, tip: 'Redo ($kMod+Shift+Z)'),
-          IconBtn('trash', tip: 'Delete all blocks', onTap: () => _confirmClear(context, s, p)),
-        ],
-      ]),
-    );
+    // Code: the file tabs and Find above the code. Blocks: nothing, the canvas starts at the top (its view tools
+    // float bottom left, see _ViewTools).
+    final Widget toolbar = p.mode == 'code'
+        ? Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: c.surface, border: Border(bottom: BorderSide(color: c.line))),
+            child: Row(children: [
+              if (tabs != null) tabs,
+              const Spacer(),
+              IconBtn('search', onTap: () => kWebEditors ? _monaco.currentState?.find() : _active?.currentState?.toggleFind(), tip: 'Find'),
+            ]),
+          )
+        : const SizedBox.shrink();
 
     final errLines = {for (final e in s.problems) if (e.file == f.name && e.isError) e.line};
     final Widget main;
@@ -217,24 +182,39 @@ class _EditorPageState extends State<EditorPage> {
       _takeGotoLine(s, p);
     }
 
-    final edCard = RcCard(child: Column(children: [toolbar, Expanded(child: main)]));
+    // An open workspace, edge to edge (no card). The floating controls sit over it; the editor stays the first
+    // child of the Stack, so showing or hiding them never moves (and reloads) the Blockly or Monaco frame.
+    final blocks = p.mode == 'blocks';
+    final workspace = Stack(children: [
+      Positioned.fill(child: ColoredBox(color: c.surface, child: Column(children: [toolbar, Expanded(child: main)]))),
+      Positioned(
+        top: blocks ? 18 : 62,
+        right: 24,
+        child: const FrameShield(child: _ConnectButton()),
+      ),
+      Positioned(
+        left: blocks && !phone ? 176 : 16,
+        bottom: 16,
+        child: FrameShield(child: _viewTools(s, c, p, width)),
+      ),
+      Positioned(right: 20, bottom: 14, child: FrameShield(child: _RunButtons(compact: phone))),
+    ]);
     final panel = ConsolePanel(boardTab: !showBoard);
-    final pad = phone ? 8.0 : 12.0;
     final cogBeside = width >= 1000;
 
-    final content = Padding(
-      padding: EdgeInsets.all(pad),
-      child: LayoutBuilder(builder: (context, box) {
-        // The console keeps 120 px at least and leaves the editor 200 px at least (also in a short window,
-        // e.g. a Mac window tiled to a quarter of the screen).
-        final maxConsole = (box.maxHeight - pad - 200).clamp(120.0, double.infinity);
-        final consoleHeight = (phone ? 220.0 : _consoleHeight ?? s.settings.consoleHeight).clamp(120.0, maxConsole);
-        return Column(children: [
-          Expanded(child: edCard),
-          if (s.panelOpen && !phone)
+    final content = LayoutBuilder(builder: (context, box) {
+      // The Serial Monitor is a drawer under the workspace, opened from the run buttons (or Ctrl/⌘+J). It keeps
+      // 120 px at least and leaves the workspace 200 px at least.
+      final maxConsole = (box.maxHeight - 200).clamp(120.0, double.infinity);
+      final consoleHeight = (phone ? 220.0 : _consoleHeight ?? s.settings.consoleHeight).clamp(120.0, maxConsole);
+      return Column(children: [
+        Expanded(child: workspace),
+        if (s.panelOpen) ...[
+          if (!phone)
             SplitHandle(
               axis: Axis.vertical,
-              thickness: pad,
+              thickness: 7,
+              line: true,
               onDrag: (dy) => setState(() => _consoleHeight = consoleHeight - dy),
               onEnd: () {
                 final h = consoleHeight;
@@ -242,25 +222,20 @@ class _EditorPageState extends State<EditorPage> {
                 s.updateSettings((st) => st.consoleHeight = h);
               },
               onReset: () => s.updateSettings((st) => st.consoleHeight = Settings.defaultConsoleHeight),
-            )
-          else
-            SizedBox(height: pad),
-          if (!s.panelOpen)
-            SizedBox(height: 42, child: panel)
-          else
-            SizedBox(
-              height: consoleHeight,
-              child: showBoard
-                  ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Expanded(child: panel),
-                      const SizedBox(width: 12),
-                      SizedBox(width: 280, child: RcCard(child: SingleChildScrollView(child: BoardCard(boardId: p.board)))),
-                    ])
-                  : panel,
             ),
-        ]);
-      }),
-    );
+          SizedBox(
+            height: consoleHeight,
+            child: showBoard
+                ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Expanded(child: panel),
+                    Container(width: 1, color: c.line),
+                    SizedBox(width: 280, child: ColoredBox(color: c.surface, child: SingleChildScrollView(child: BoardCard(boardId: p.board)))),
+                  ])
+                : panel,
+          ),
+        ],
+      ]);
+    });
 
     // The editor stays the first child in the same place whether Cog is open or not, so the
     // Blockly and Monaco frames are never moved (moving them would reload them).
@@ -268,12 +243,51 @@ class _EditorPageState extends State<EditorPage> {
       Positioned.fill(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(child: content),
-          if (s.cog.open && cogBeside) Padding(padding: EdgeInsets.fromLTRB(0, pad, pad, pad), child: const SizedBox(width: 352, child: CogPanel())),
+          if (s.cog.open && cogBeside) const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 352, child: CogPanel())),
         ]),
       ),
       if (s.cog.open && !cogBeside)
-        Positioned(top: pad, right: pad, bottom: pad, width: math.min(400, width - 2 * pad), child: const FrameShield(child: CogPanel())),
+        Positioned(top: 12, right: 12, bottom: 12, width: math.min(400, width - 24), child: const FrameShield(child: CogPanel())),
     ]);
+  }
+
+  /// Bottom left of the workspace. Blocks: fit, zoom out, zoom in · undo, redo · delete all · the C++ beside the
+  /// blocks. Code: text size, undo, redo.
+  Widget _viewTools(AppState s, RC c, Project p, double width) {
+    final blocks = p.mode == 'blocks';
+    final code = _monaco.currentState;
+    void font(int size) => s.updateSettings((st) => st.fontSize = size.clamp(10, 24));
+    Widget sep() => Container(width: 1, height: 26, margin: const EdgeInsets.symmetric(horizontal: 4), color: c.line);
+    Widget b(String icon, String tip, VoidCallback? onTap, {bool active = false}) =>
+        IconBtn(icon, onTap: onTap, tip: tip, size: 40, iconSize: 20, active: active);
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(14), boxShadow: popShadow),
+      child: Row(mainAxisSize: MainAxisSize.min, children: blocks
+          ? [
+              if (kWebEditors) ...[
+                b('fit', 'Fit the blocks to the screen', () => _blockly.currentState?.zoomToFit()),
+                b('zout', 'Zoom out ($kMod+−)', () => _blockly.currentState?.zoom(-1)),
+                b('zin', 'Zoom in ($kMod+=)', () => _blockly.currentState?.zoom(1)),
+                sep(),
+              ],
+              b('undo', 'Undo ($kMod+Z)', kWebEditors ? (_canUndo ? () => _blockly.currentState?.undo() : null) : s.undo),
+              b('redo', 'Redo ($kMod+Shift+Z)', kWebEditors ? (_canRedo ? () => _blockly.currentState?.redo() : null) : s.redo),
+              sep(),
+              b('trash', 'Delete all blocks', () => _confirmClear(context, s, p)),
+              if (kWebEditors && width >= 900)
+                b('code', s.settings.showCpp ? 'Hide the C++ from the blocks' : 'Show the C++ from the blocks',
+                    () => s.updateSettings((st) => st.showCpp = !st.showCpp),
+                    active: s.settings.showCpp),
+            ]
+          : [
+              b('zout', 'Smaller text', () => font(s.settings.fontSize - 1)),
+              b('zin', 'Larger text', () => font(s.settings.fontSize + 1)),
+              sep(),
+              b('undo', 'Undo ($kMod+Z)', kWebEditors ? () => code?.action('undo') : null),
+              b('redo', 'Redo ($kMod+Shift+Z)', kWebEditors ? () => code?.action('redo') : null),
+            ]),
+    );
   }
 
   /// "Explain with Cog" on a line of code: the problem on (or nearest to) that line, else the line itself.
@@ -993,6 +1007,162 @@ class _NewTabDialogState extends State<_NewTabDialog> {
         Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(context).pop()),
         Btn('Add tab', icon: 'plus', kind: BtnKind.primary, onTap: _add),
       ],
+    );
+  }
+}
+
+/// The board's Connect button, floating top right of the workspace: yellow with a plug, a green dot once connected.
+/// Not connected, it connects (in the Windows app only while a board is plugged in); connected, it disconnects.
+class _ConnectButton extends StatelessWidget {
+  const _ConnectButton();
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = RC.of(context);
+    final on = s.linked;
+    final found = s.onUsb && s.detectedBoard != null;
+    final canConnect = !s.onUsb || s.canConnectUsb;
+    final label = on ? 'Connected' : (found ? 'Board found' : 'Connect');
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: c.raised.withValues(alpha: .9), borderRadius: BorderRadius.circular(999)),
+        child: Text(label, style: tLabel(c, w: FontWeight.w600)),
+      ),
+      const SizedBox(width: 8),
+      Hover(
+        onTap: on ? s.disconnect : (canConnect ? s.connect : null),
+        tooltip: on
+            ? 'Disconnect ${s.onUsb ? (s.usbLabel ?? 'the board') : 'the preview board'}'
+            : (canConnect ? 'Connect the board' : 'Plug in the ${kBoards[s.board]!.name} to connect it'),
+        radius: 999,
+        builder: (context, h) => Opacity(
+          opacity: on || canConnect ? 1 : .55,
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: h ? kBrandPressed : kBrand,
+              shape: BoxShape.circle,
+              boxShadow: const [BoxShadow(color: Color(0x2E1B2A41), blurRadius: 16, offset: Offset(0, 6))],
+            ),
+            child: Stack(children: [
+              const Center(child: RcIcon('plug', size: 26, color: kNavy)),
+              if (on)
+                Positioned(
+                  right: 1,
+                  bottom: 3,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(color: c.ok, shape: BoxShape.circle, border: Border.all(color: c.surface, width: 3)),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+/// Bottom right of the workspace: Serial Monitor, Verify, Stop and the big Upload button.
+class _RunButtons extends StatelessWidget {
+  const _RunButtons({this.compact = false});
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = RC.of(context);
+    final uploading = s.busy == 'upload';
+    final small = compact ? 44.0 : 52.0, stop = compact ? 52.0 : 64.0, big = compact ? 64.0 : 76.0;
+
+    Widget round(
+      String label, {
+      required double size,
+      required Widget icon,
+      required Color bg,
+      Color? hover,
+      VoidCallback? onTap,
+      String? tip,
+      Border? border,
+      double? progress,
+    }) =>
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          Hover(
+            onTap: onTap,
+            tooltip: tip,
+            radius: 999,
+            builder: (context, h) => Opacity(
+              opacity: onTap == null && progress == null ? .45 : 1,
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: Stack(alignment: Alignment.center, children: [
+                  Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      color: h && onTap != null ? (hover ?? bg) : bg,
+                      shape: BoxShape.circle,
+                      border: border,
+                      boxShadow: const [BoxShadow(color: Color(0x241B2A41), blurRadius: 14, offset: Offset(0, 5))],
+                    ),
+                  ),
+                  if (progress != null)
+                    SizedBox(
+                      width: size - 6,
+                      height: size - 6,
+                      child: CircularProgressIndicator(value: progress, strokeWidth: 4, color: kBrand, backgroundColor: kNavyHover),
+                    ),
+                  icon,
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(color: c.raised.withValues(alpha: .85), borderRadius: BorderRadius.circular(6)),
+            child: Text(label, style: tCaption(c, color: c.ink, w: FontWeight.w600)),
+          ),
+        ]);
+
+    return ListenableBuilder(
+      listenable: s.sim,
+      builder: (context, _) => Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+        round('Serial',
+            size: small,
+            bg: s.panelOpen ? c.brandSoft : c.raised,
+            border: s.panelOpen ? Border.all(color: c.ink, width: 2) : null,
+            icon: RcIcon('term', size: 22, color: c.ink),
+            tip: s.panelOpen ? 'Hide the Serial Monitor ($kMod+J)' : 'Show the Serial Monitor ($kMod+J)',
+            onTap: s.togglePanel),
+        SizedBox(width: compact ? 8 : 12),
+        round(s.busy == 'verify' ? 'Verifying…' : 'Verify',
+            size: small,
+            bg: c.raised,
+            icon: s.busy == 'verify' ? Spinner(size: 20, color: c.ink) : RcIcon('check', size: 24, color: c.ink),
+            tip: 'Verify ($kMod+R)',
+            onTap: s.busy == null ? s.verify : null),
+        SizedBox(width: compact ? 8 : 12),
+        round('Stop',
+            size: stop,
+            bg: c.sunk,
+            icon: RcIcon('stop', size: 22, color: c.ink),
+            tip: uploading ? 'Cancel the upload' : (s.busy == 'verify' ? 'Cancel Verify' : 'Stop the sketch'),
+            onTap: s.canStop ? s.stop : null),
+        SizedBox(width: compact ? 8 : 12),
+        round(uploading ? (s.uploadPct == null ? 'Uploading…' : 'Uploading ${s.uploadPct} %') : 'Upload',
+            size: big,
+            bg: kNavy,
+            hover: kNavyHover,
+            icon: uploading && s.uploadPct == null ? const Spinner(size: 26, color: kBrand) : const RcIcon('arrow', size: 30, color: kBrand),
+            tip: 'Upload ($kMod+U)',
+            progress: uploading && s.uploadPct != null ? s.uploadPct! / 100 : null,
+            onTap: s.busy == null ? s.upload : null),
+      ]),
     );
   }
 }

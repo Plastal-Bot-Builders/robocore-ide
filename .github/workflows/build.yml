@@ -100,6 +100,21 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: build/web
+      # Pull requests: screenshots of the editor and Home from this build, on the ci-shots branch (pr-<N>/), so a
+      # layout change can be looked at before merging.
+      - name: Screenshots (pull requests)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/site && cp -r build/web "/tmp/site/${{ github.event.repository.name }}"
+          (cd /tmp/site && python3 -m http.server 8080 >/dev/null 2>&1 &)
+          mkdir -p /tmp/shots-tool && cp tools/ci_screens.mjs /tmp/shots-tool/ && cd /tmp/shots-tool
+          npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.49.1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          node ci_screens.mjs "http://localhost:8080/${{ github.event.repository.name }}/" "/tmp/shots/pr-${{ github.event.pull_request.number }}"
+          cd /tmp/shots && git init -q && git checkout -q -b ci-shots && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "shots ${{ github.event.pull_request.head.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-shots
       - name: Save the web build to the web-build branch
         if: github.event_name != 'pull_request'
         run: |
