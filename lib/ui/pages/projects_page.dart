@@ -63,16 +63,24 @@ class ProjectsPage extends StatelessWidget {
     final c = RC.of(context);
     final phone = MediaQuery.sizeOf(context).width < 760;
     final newProject = Btn('New project', icon: 'plus', kind: BtnKind.primary, onTap: () => showNewProjectDialog(context));
-    if (s.projects.isEmpty) return PageBody(children: [PageTop(title: 'Projects', trailing: newProject), const _NoProjects()]);
+    // The desktop apps: open a sketch or a RoboCore project folder from the computer.
+    final fromComputer = s.pickSketch == null ? null : Btn(phone ? 'Open' : 'Open from computer', icon: 'folder', onTap: s.openFromComputer);
+    final actions = Row(mainAxisSize: MainAxisSize.min, children: [
+      if (fromComputer != null) ...[fromComputer, const SizedBox(width: 8)],
+      newProject,
+    ]);
+    if (s.projects.isEmpty) return PageBody(children: [PageTop(title: 'Projects', trailing: actions), const _NoProjects()]);
     final list = s.filteredProjects;
     final filter = FilterBox(hint: 'Filter projects', value: s.pfilter, onChanged: (v) => s.setFilter(pfilter: v));
     return PageBody(children: [
       PageTop(
         title: 'Projects',
-        subtitle: 'Saved on this device. Each computer or browser has its own projects.',
+        subtitle: s.folder != null
+            ? 'Saved as files in ${s.folder!.path}. Copy a project’s folder to take it to another computer.'
+            : 'Saved on this device. Each computer or browser has its own projects.',
         trailing: phone
-            ? Row(children: [Expanded(child: filter), const SizedBox(width: 8), newProject])
-            : Row(mainAxisSize: MainAxisSize.min, children: [filter, const SizedBox(width: 12), newProject]),
+            ? Row(children: [Expanded(child: filter), const SizedBox(width: 8), actions])
+            : Row(mainAxisSize: MainAxisSize.min, children: [filter, const SizedBox(width: 12), actions]),
       ),
       Pills(
         items: const [('all', 'All'), ('blocks', 'Blocks'), ('code', 'Code')],
@@ -107,6 +115,7 @@ class _NoProjects extends StatelessWidget {
         Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
           Btn('New project', icon: 'plus', kind: BtnKind.primary, onTap: () => showNewProjectDialog(context)),
           Btn('Browse examples', onTap: () => s.go(Screen.examples)),
+          if (s.pickSketch != null) Btn('Open from computer', icon: 'folder', onTap: s.openFromComputer),
         ]),
       ]),
     );

@@ -7,7 +7,11 @@ Future<ProjectFolder?> restoreProjectsFolder() async => null;
 
 Future<ProjectFolder?> chooseProjectsFolder() async => null;
 
+Future<ProjectFolder?> defaultProjectsFolder() async => null;
+
 ProjectFolder? projectsFolderAt(String path) => null;
 
-/// File > Open Sketch… (the macOS app only).
-Future<(String, Map<String, String>)?> pickSketch() async => null;
+/// Open from computer (the desktop apps only).
+bool get canOpenSketch => false;
+
+Future<(String, Map<String, String>, String?)?> pickSketch() async => null;

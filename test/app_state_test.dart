@@ -10,6 +10,7 @@ import 'package:robocore_ide/hw/compile_client.dart';
 import 'package:robocore_ide/hw/usb_link.dart';
 import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/models.dart';
+import 'package:robocore_ide/state/project_folder.dart' show projectMeta;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeUsb extends UsbLink {
@@ -189,6 +190,45 @@ void main() {
     s.sim.stop();
     expect(s.port, kPortSim);
     expect(s.linked, isTrue);
+  });
+
+  group('Open from computer', () {
+    test('a RoboCore project brought from another computer comes back with its blocks', () async {
+      SharedPreferences.setMockInitialValues({'robocore-ide-v1': _store([])});
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      final there = projectFrom(exampleById('blink'), name: 'Robot dance')
+        ..blockly = '{"blocks":{"languageVersion":0,"blocks":[]}}'
+        ..blocklyCode = 'void setup() {}\nvoid loop() {}\n';
+      final files = {for (final f in there.files) f.name: f.content};
+      s.pickSketch = () async => ('Blink', files, projectMeta(there));
+      await s.openFromComputer();
+      final p = s.cur!;
+      expect(p.name, 'Robot dance');
+      expect(p.mode, there.mode);
+      expect(p.blockly, there.blockly, reason: 'the blocks come back, not only the code');
+      expect(p.id, isNot(there.id), reason: 'a copy of its own');
+
+      // The same project picked again, unchanged: it opens, no second copy.
+      final n = s.projects.length;
+      s.pickSketch = () async => ('Blink', {for (final f in p.files) f.name: f.content}, projectMeta(p));
+      await s.openFromComputer();
+      expect(s.projects.length, n);
+      expect(s.cur!.id, p.id);
+    });
+
+    test('a plain Arduino sketch opens as a code project', () async {
+      SharedPreferences.setMockInitialValues({'robocore-ide-v1': _store([])});
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      s.pickSketch = () async => ('Fade', {'Fade.ino': 'void setup() {}\nvoid loop() {}\n'}, null);
+      await s.openFromComputer();
+      expect(s.cur!.name, 'Fade');
+      expect(s.cur!.mode, 'code');
+      expect(s.cur!.files.single.name, 'Fade.ino');
+    });
   });
 
   group('Leaving a project', () {

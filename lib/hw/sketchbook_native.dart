@@ -1,8 +1,11 @@
-// The macOS app's projects folder: the folder itself comes from macos/Runner/Sketchbook.swift (the user picks it,
-// a bookmark keeps the permission); the project files are read and written here.
+// The desktop apps' projects folder and Open from computer. macOS: the folder comes from
+// macos/Runner/Sketchbook.swift (the user picks it, a bookmark keeps the permission). Windows: Documents\RoboCore by
+// default, or a folder picked with Windows' own dialog (package:file_selector); Recycle Bin and File Explorer for
+// delete and reveal. The project files are read and written here.
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart' as fs;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -11,11 +14,27 @@ import '../state/project_folder.dart';
 
 const _channel = MethodChannel('robocore/sketchbook');
 
-bool get projectsFolderSupported => defaultTargetPlatform == TargetPlatform.macOS;
+bool get _windows => defaultTargetPlatform == TargetPlatform.windows;
 
-/// The folder the user chose before, or null (none yet, or it can't be found).
+bool get projectsFolderSupported => defaultTargetPlatform == TargetPlatform.macOS || _windows;
+
+/// Windows: the user's Documents folder (wherever Windows keeps it, OneDrive too), else %USERPROFILE%\Documents.
+Future<String> _documents() async {
+  try {
+    final r = await Process.run('powershell', ['-NoProfile', '-Command', "[Environment]::GetFolderPath('MyDocuments')"]);
+    final d = '${r.stdout}'.trim();
+    if (d.isNotEmpty && Directory(d).existsSync()) return d;
+  } catch (_) {}
+  return '${Platform.environment['USERPROFILE'] ?? ''}\\Documents';
+}
+
+/// Windows: the suggested projects folder, Documents\RoboCore (made when first used).
+Future<ProjectFolder?> defaultProjectsFolder() async => _windows ? FolderStore('${await _documents()}\\RoboCore') : null;
+
+/// The folder the user chose before, or null (none yet, or it can't be found). Windows keeps only its path, in the
+/// settings ([projectsFolderAt]).
 Future<ProjectFolder?> restoreProjectsFolder() async {
-  if (!projectsFolderSupported) return null;
+  if (!projectsFolderSupported || _windows) return null;
   try {
     final path = await _channel.invokeMethod<String>('restore');
     return path == null ? null : FolderStore(path);
@@ -32,31 +51,53 @@ ProjectFolder? projectsFolderAt(String path) =>
 /// Asks the user where to keep the projects; null when they cancel.
 Future<ProjectFolder?> chooseProjectsFolder() async {
   if (!projectsFolderSupported) return null;
-  final path = await _channel.invokeMethod<String>('choose');
+  final path = _windows
+      ? await fs.getDirectoryPath(initialDirectory: await _documents(), confirmButtonText: 'Keep projects here')
+      : await _channel.invokeMethod<String>('choose');
   return path == null ? null : FolderStore(path);
 }
 
-/// File > Open Sketch…: an Arduino sketch's name and files (name → text): the .ino picked and the sketch files
-/// beside it, or every sketch file in the folder picked. Null when cancelled.
-Future<(String, Map<String, String>)?> pickSketch() async {
-  final paths = await _channel.invokeListMethod<String>('pickSketch');
+/// Open from computer is offered (the desktop apps).
+bool get canOpenSketch => projectsFolderSupported;
+
+/// Open from computer (File > Open Sketch… on the Mac): a sketch's name, its files (name → text) and, when it is a
+/// RoboCore project (its folder has $kProjectMetaFile), that file too, so its blocks come back. The .ino picked and
+/// the sketch files beside it, or every sketch file in the folder picked. Null when cancelled.
+Future<(String, Map<String, String>, String?)?> pickSketch() async {
+  final List<String>? paths;
+  if (_windows) {
+    final f = await fs.openFile(
+      acceptedTypeGroups: const [fs.XTypeGroup(label: 'Arduino sketch or RoboCore project', extensions: ['ino'])],
+      initialDirectory: _lastOpened ?? await _documents(),
+      confirmButtonText: 'Open',
+    );
+    paths = f == null ? null : [f.path];
+  } else {
+    paths = await _channel.invokeListMethod<String>('pickSketch');
+  }
   if (paths == null || paths.isEmpty) return null;
   final picked = paths.first;
   final isFolder = FileSystemEntity.isDirectorySync(picked);
   final dir = Directory(isFolder ? picked : File(picked).parent.path);
+  _lastOpened = dir.parent.path;
   final files = <String, String>{};
   if (!isFolder) files[_name(picked)] = await _read(File(picked));
+  String? meta;
   try {
-    // With an .ino picked, the sandbox may not let the app read the files beside it: then it is the .ino alone.
+    // With an .ino picked, the macOS sandbox may not let the app read the files beside it: then it is the .ino alone.
     await for (final e in dir.list()) {
       if (e is File && isSketchFile(_name(e.path)) && !files.containsKey(_name(e.path))) files[_name(e.path)] = await _read(e);
     }
+    final m = File('${dir.path}${Platform.pathSeparator}$kProjectMetaFile');
+    if (await m.exists()) meta = await m.readAsString();
   } catch (_) {}
   final name = isFolder ? _name(picked) : _name(picked).replaceAll(RegExp(r'\.ino$', caseSensitive: false), '');
-  return (name, files);
+  return (name, files, meta);
 }
 
-String _name(String path) => path.split(Platform.pathSeparator).last;
+String? _lastOpened;
+
+String _name(String path) => path.split(RegExp(r'[/\\\\]')).last;
 
 Future<String> _read(File f) async => utf8.decode(await f.readAsBytes(), allowMalformed: true);
 
@@ -193,6 +234,16 @@ class FolderStore implements ProjectFolder {
     final s = _saved.remove(p.id);
     if (s == null) return;
     try {
+      if (_windows) {
+        // To the Recycle Bin, so it can be got back.
+        final dir = _dir(s.folder).replaceAll('/', '\\').replaceAll("'", "''");
+        await Process.run('powershell', [
+          '-NoProfile',
+          '-Command',
+          "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('$dir', 'OnlyErrorDialogs', 'SendToRecycleBin')",
+        ]);
+        return;
+      }
       await _channel.invokeMethod<bool>('trash', {'path': _dir(s.folder)});
     } catch (e) {
       debugPrint('RoboCore: could not move ${s.folder} to the Trash: $e');
@@ -203,12 +254,18 @@ class FolderStore implements ProjectFolder {
   Future<void> reveal([Project? p]) async {
     await _queue;
     final s = p == null ? null : _saved[p.id];
-    await _channel.invokeMethod<void>('reveal', {'path': s == null ? path : _dir(s.folder)});
+    final target = s == null ? path : _dir(s.folder);
+    if (_windows) {
+      await Process.start('explorer.exe', [target.replaceAll('/', '\\')], mode: ProcessStartMode.detached);
+      return;
+    }
+    await _channel.invokeMethod<void>('reveal', {'path': target});
   }
 
   @override
   Future<void> forget() async {
     await _queue;
+    if (_windows) return; // only the path was kept, in the settings
     try {
       await _channel.invokeMethod<void>('forget');
     } catch (_) {}

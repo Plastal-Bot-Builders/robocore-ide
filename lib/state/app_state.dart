@@ -185,6 +185,21 @@ class AppState extends ChangeNotifier {
   /// Set in the macOS app: asks the user for a projects folder (null when they cancel).
   Future<ProjectFolder?> Function()? chooseFolder;
 
+  /// Set in the Windows app: the suggested projects folder (Documents\RoboCore).
+  Future<ProjectFolder?> Function()? defaultFolder;
+
+  /// Set in the desktop apps: Open from computer, a sketch or RoboCore project picked in the file dialog (its name, its
+  /// files, and the project's .robocore.json when there is one). Null when cancelled.
+  Future<(String, Map<String, String>, String?)?> Function()? pickSketch;
+
+  /// Open from computer: picks a sketch or project with the computer's file dialog and opens a copy of it.
+  Future<void> openFromComputer() async {
+    final pick = pickSketch;
+    if (pick == null) return;
+    final r = await pick();
+    if (r != null) importSketch(r.$1, r.$2, meta: r.$3);
+  }
+
   /// Set in the macOS app: the projects folder at a saved path, if it is there.
   ProjectFolder? Function(String path)? folderAt;
 
@@ -478,8 +493,8 @@ class AppState extends ChangeNotifier {
 
   /// Settings → Projects folder: from now on the projects are files in the folder the user picks. The app's
   /// projects go there too, and sketches already in that folder join them. False when the user cancels.
-  Future<bool> chooseProjectsFolder() async {
-    final f = await chooseFolder?.call();
+  Future<bool> chooseProjectsFolder({bool suggested = false}) async {
+    final f = suggested ? await defaultFolder?.call() : await chooseFolder?.call();
     if (f == null) return false;
     final mine = projects;
     try {
@@ -498,8 +513,33 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// File → Open Sketch… (macOS): a copy of an Arduino sketch as a new code project.
-  void importSketch(String name, Map<String, String> files) {
+  /// Open from computer: a copy of an Arduino sketch as a new code project, or of a RoboCore project ([meta], its
+  /// .robocore.json) with its blocks, board and settings, e.g. one brought from another computer.
+  void importSketch(String name, Map<String, String> files, {String? meta}) {
+    if (meta != null) {
+      try {
+        final p = projectFromMeta(meta, files);
+        // The same project, unchanged (e.g. picked from the projects folder itself): open it, no copy.
+        final same = projects.where((x) => x.id == p.id).firstOrNull;
+        String text(Project x) => jsonEncode([for (final f in x.files) [f.name, f.content]]);
+        if (same != null && text(same) == text(p)) {
+          openProject(same.id);
+          return;
+        }
+        p
+          ..id = uid()
+          ..updated = DateTime.now().millisecondsSinceEpoch;
+        p.name = _freeName(p.name);
+        _uniqueMain(p);
+        projects.add(p);
+        persist(now: true);
+        openProject(p.id);
+        showToast('Opened ${p.name}', body: folder != null ? 'A copy is in your projects folder.' : 'A copy is in Projects.');
+        return;
+      } catch (_) {
+        // Not a project file RoboCore can read: open the sketch files as code instead.
+      }
+    }
     final main = files.keys.where((n) => n.toLowerCase().endsWith('.ino')).toList()
       ..sort((a, b) => (b.toLowerCase() == '${name.toLowerCase()}.ino' ? 1 : 0) - (a.toLowerCase() == '${name.toLowerCase()}.ino' ? 1 : 0));
     if (main.isEmpty) return showToast('There is no .ino file there', error: true);
