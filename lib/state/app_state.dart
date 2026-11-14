@@ -1131,8 +1131,21 @@ class AppState extends ChangeNotifier {
         setStatus('Ready');
         break;
       case 'found':
-        // The Windows app saw a board appear on USB (or there at start): connect to it, no button needed.
-        unawaited(_onBoardFound(msg));
+        // The Windows app saw a board appear on USB (or there at start). Show it; connecting stays a click.
+        final label = _labelOf(msg);
+        detectedBoard = label;
+        if (!usbOpen) {
+          conn = ConnMsg('', '${kBoards[boardId]!.name} found on $label. Press Connect.');
+          setStatus('Board found');
+          showToast('Board plugged in', body: '$label. Press Connect to use it.', info: true);
+        }
+        break;
+      case 'gone':
+        detectedBoard = null;
+        if (!usbOpen) {
+          conn = null;
+          setStatus('Not connected');
+        }
         break;
       case 'plugged':
         if (!usbOpen) showToast('A board was plugged in', body: '$msg. Press Connect in Board Setup to use it.', info: true);
@@ -1167,29 +1180,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _autoConnecting = false;
+  /// The board the Windows app sees on USB right now (its label, e.g. "COM5 · Espressif"), or null: Board Setup
+  /// offers Connect only while one is plugged in. Null on platforms that don't detect boards (see [detectsBoards]).
+  String? detectedBoard;
 
-  Future<void> _onBoardFound(String json) async {
-    if (usbOpen || busy != null || _autoConnecting) return;
-    var label = 'a board';
+  /// True when this app sees boards come and go by itself (the Windows app).
+  bool get detectsBoards => usb.detects;
+
+  /// Connect can be pressed: always where boards aren't detected (a browser shows its own chooser), else only while
+  /// a board is plugged in.
+  bool get canConnectUsb => !detectsBoards || detectedBoard != null;
+
+  String _labelOf(String json) {
     try {
-      label = '${(jsonDecode(json) as Map)['label'] ?? label}';
-    } catch (_) {}
-    _autoConnecting = true;
-    conn = ConnMsg('', 'Found $label on USB. Connecting…');
-    notifyListeners();
-    try {
-      final r = await usb.connect(baud: baud);
-      if (usbOpen) return; // a 'bootloop' event already took it
-      if (r.ok) {
-        _usbUp(r.data['label'] as String?, 'Found and connected to');
-        showToast('Board found', body: 'Connected to $usbLabel.');
-      } else {
-        conn = ConnMsg('err', r.message); // shown in Board Setup; Connect there tries again
-      }
-    } finally {
-      _autoConnecting = false;
-      notifyListeners();
+      return '${(jsonDecode(json) as Map)['label'] ?? 'USB board'}';
+    } catch (_) {
+      return json.isEmpty ? 'USB board' : json;
     }
   }
 

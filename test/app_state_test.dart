@@ -27,6 +27,9 @@ class FakeUsb extends UsbLink {
   bool get supported => true;
   @override
   bool get isOpen => open;
+  bool detecting = false;
+  @override
+  bool get detects => detecting;
 
   @override
   Future<UsbResult> connect({required int baud, bool espressifOnly = false}) async {
@@ -375,18 +378,18 @@ void main() {
       expect(s.log.last.text, contains('crashes as it starts'));
     });
 
-    test('a board found on USB is connected without pressing Connect', () async {
+    test('a board shows only while it is plugged in, and connecting is a click', () async {
       await s.disconnectUsb(quiet: true);
-      expect(s.usbOpen, isFalse);
+      usb.detecting = true;
+      expect(s.canConnectUsb, isFalse);
       usb.onEvent!('found', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
-      await Future<void>.delayed(Duration.zero);
-      expect(s.usbOpen, isTrue);
-      expect(s.log.last.text, contains('Found and connected to'));
-      // Already connected: another 'found' changes nothing.
-      final before = s.log.length;
-      usb.onEvent!('found', jsonEncode({'label': 'COM6 · Espressif', 'address': 'COM6'}));
-      await Future<void>.delayed(Duration.zero);
-      expect(s.log.length, before);
+      expect(s.detectedBoard, 'COM5 · Espressif');
+      expect(s.canConnectUsb, isTrue);
+      expect(s.usbOpen, isFalse); // not connected by itself
+      expect(s.conn!.text, contains('Press Connect'));
+      usb.onEvent!('gone', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
+      expect(s.detectedBoard, isNull);
+      expect(s.canConnectUsb, isFalse);
     });
 
     test('serial text goes to the board; unplug and replug are reported', () async {

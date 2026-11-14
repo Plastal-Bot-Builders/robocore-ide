@@ -673,7 +673,7 @@ class _BoardChipState extends State<BoardChip> {
             Dot(color: kNavy, ring: !s.linked),
             if (!widget.compact) ...[
               const SizedBox(width: 6),
-              Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : 'Not connected',
+              Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : (s.onUsb && s.detectedBoard != null ? 'Board found' : 'Not connected'),
                   style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: kNavy)),
             ],
             const SizedBox(width: 10),
@@ -750,7 +750,7 @@ class BoardMenu extends StatelessWidget {
                 onDone();
               },
             ),
-            if (s.onUsb && !s.usbOpen) ...[
+            if (s.onUsb && !s.usbOpen && s.canConnectUsb) ...[
               const SizedBox(height: 8),
               Btn('Connect ${s.usbName} board', icon: 'chip', kind: BtnKind.primary, small: true, onTap: () {
                 s.connectUsb();
