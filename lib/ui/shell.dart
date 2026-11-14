@@ -556,7 +556,7 @@ class EditorTopBar extends StatelessWidget {
               onTap: () => s.go(Screen.settings),
               tooltip: 'Settings',
               builder: (context, h) => Container(
-                width: 40,
+                width: 36, // with the 6 px gap, the gear sits where it is on Home's top bar
                 height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
