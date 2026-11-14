@@ -676,6 +676,7 @@ class AppState extends ChangeNotifier {
     final p = cur;
     if (p != null) saveNow(p);
     pid = null;
+    _opened = null;
     go(Screen.home);
   }
 
@@ -699,7 +700,55 @@ class AppState extends ChangeNotifier {
     }
     pid = id;
     p.syncCode();
+    if (_opened?.$1 != id) _markOpened(p);
     go(Screen.editor);
+  }
+
+  // ---------- leaving the editor ----------
+  // The project as it was when opened (its JSON, and the fingerprint of what counts as a change), so leaving can
+  // ask "Save changes?" and "Don't save" can put it back, even though autosave has already written the changes.
+  (String, String, String)? _opened; // (project id, full JSON, fingerprint)
+
+  /// What counts as a change: the name, board, code and settings, not where blocks sit, the Blocks/Code view
+  /// or the time.
+  String _fingerprint(Project p) {
+    final j = p.toJson()
+      ..remove('updated')
+      ..remove('mode')
+      ..remove('blockly')
+      ..remove('blocks')
+      ..remove('learned');
+    return jsonEncode(j);
+  }
+
+  void _markOpened(Project p) => _opened = (p.id, jsonEncode(p.toJson()), _fingerprint(p));
+
+  /// True when [p] changed since it was opened (or last saved from the leave question).
+  bool changedSinceOpened(Project p) {
+    final o = _opened;
+    return o != null && o.$1 == p.id && o.$3 != _fingerprint(p);
+  }
+
+  /// "Save" in the leave question: the project as it is now is the new starting point.
+  void keepChanges(Project p) {
+    saveNow(p);
+    _markOpened(p);
+  }
+
+  /// "Don't save": the project goes back to how it was when opened, and is closed (the editor reloads it next time).
+  void discardChanges() {
+    final o = _opened;
+    final p = cur;
+    if (o == null || p == null || o.$1 != p.id) return;
+    final i = projects.indexWhere((x) => x.id == p.id);
+    if (i < 0) return;
+    final back = Project.fromJson((jsonDecode(o.$2) as Map).cast<String, dynamic>());
+    projects[i] = back;
+    _opened = null;
+    pid = null;
+    persist(now: true);
+    showToast('Changes not saved', body: '${back.name} is as it was when you opened it.', info: true);
+    go(Screen.home);
   }
 
   void openExample(String id) {
@@ -1882,12 +1931,15 @@ class AppState extends ChangeNotifier {
     }
     if (p.blockly == json && p.blocklyCode == code) return;
     final first = p.blockly == null;
+    final unchanged = first && !changedSinceOpened(p);
     p.blockly = json;
     p.blocklyCode = code;
     if (!p.codeEdited && p.files.first.content != code) {
       p.files.first.content = code;
       verified = null;
     }
+    // Blockly's first load of a project made from block lists is not a change the user made.
+    if (unchanged) _markOpened(p);
     if (first) {
       // Just opened in Blockly (converted from the old lists): saved with the next real change.
       notifyListeners();

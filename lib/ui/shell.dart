@@ -519,7 +519,7 @@ class EditorTopBar extends StatelessWidget {
         child: SafeArea(
           bottom: false,
           child: Row(children: [
-            _BarButton(icon: 'home', tip: 'Home', filled: true, onTap: () => s.go(Screen.home)),
+            _BarButton(icon: 'home', tip: 'Home', filled: true, onTap: () => leaveProject(context, then: () => s.go(Screen.home))),
             const SizedBox(width: 4),
             _BarButton(
               icon: 'save',
@@ -541,19 +541,27 @@ class EditorTopBar extends StatelessWidget {
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Flexible(child: _ProjectName(p: p)),
                   if (!narrow) ...[const SizedBox(width: 4), _SavePill(p: p), const SizedBox(width: 6)],
-                  IconBtn('x', onTap: s.closeProject, tip: 'Close project', color: kNavy, size: 32, iconSize: 15),
+                  IconBtn('x', onTap: () => leaveProject(context, then: s.closeProject), tip: 'Close project', color: kNavy, size: 32, iconSize: 15),
                 ]),
               ),
             ),
             const SizedBox(width: 4),
-            _BarButton(icon: 'plus', tip: 'New project', onTap: () => showNewProjectDialog(context)),
+            _BarButton(
+              icon: 'plus',
+              tip: 'New project',
+              onTap: () {
+                // The navigator's context: "Don't save" closes the editor (and this bar) before the dialog opens.
+                final root = Navigator.of(context).context;
+                leaveProject(context, then: () => showNewProjectDialog(root));
+              },
+            ),
             const Expanded(child: Center(child: _ModeSwitch())),
             BoardChip(compact: narrow),
             const SizedBox(width: 10),
             CogButton(compact: narrow),
             const SizedBox(width: 6),
             Hover(
-              onTap: () => s.go(Screen.settings),
+              onTap: () => leaveProject(context, then: () => s.go(Screen.settings)),
               tooltip: 'Settings',
               builder: (context, h) => Container(
                 width: 36, // with the 6 px gap, the gear sits where it is on Home's top bar

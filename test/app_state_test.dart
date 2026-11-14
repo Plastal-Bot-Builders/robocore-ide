@@ -191,6 +191,53 @@ void main() {
     expect(s.linked, isTrue);
   });
 
+  group('Leaving a project', () {
+    Future<AppState> open() async {
+      SharedPreferences.setMockInitialValues({
+        'robocore-ide-v1': _store([projectFrom(exampleById('blink'), name: 'Blink LED').toJson()]),
+      });
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      s.openProject(s.projects.first.id);
+      return s;
+    }
+
+    test('opened and not changed: nothing to ask', () async {
+      final s = await open();
+      expect(s.changedSinceOpened(s.cur!), isFalse);
+      s.setMode(s.cur!.mode == 'code' ? 'blocks' : 'code'); // switching the view is not a change
+      expect(s.changedSinceOpened(s.cur!), isFalse);
+    });
+
+    test('Save keeps the changes and is the new starting point', () async {
+      final s = await open();
+      final p = s.cur!;
+      p.name = 'Blink LED 2';
+      s.touch(p, immediate: true);
+      expect(s.changedSinceOpened(p), isTrue);
+      s.keepChanges(p);
+      expect(s.changedSinceOpened(p), isFalse);
+      expect(s.cur!.name, 'Blink LED 2');
+    });
+
+    test('Don\'t save puts the project back as it was when opened, and closes it', () async {
+      final s = await open();
+      final p = s.cur!;
+      final before = p.files.first.content;
+      p.name = 'Renamed';
+      p.board = 'uno';
+      s.touch(p, immediate: true); // autosave has written it already
+      expect(s.changedSinceOpened(p), isTrue);
+      s.discardChanges();
+      expect(s.cur, isNull);
+      expect(s.view, Screen.home);
+      expect(s.projects.single.name, 'Blink LED');
+      expect(s.projects.single.board, isNot('uno'));
+      expect(s.projects.single.files.first.content, before);
+    });
+  });
+
   group('Profile', () {
     test('a new device has no name until the welcome screen is filled in', () async {
       SharedPreferences.setMockInitialValues({});

@@ -51,6 +51,40 @@ Future<void> showDeleteProjectDialog(BuildContext context, Project p) => showDia
       },
     );
 
+/// Before leaving the editor (Home, the project's ×, New project, Settings): if the project changed since it was
+/// opened, ask whether to save the changes. Save keeps them; Don't save puts the project back as it was when
+/// opened; Cancel stays. Unchanged, [then] runs straight away.
+Future<void> leaveProject(BuildContext context, {required VoidCallback then}) async {
+  final s = AppScope.read(context);
+  final p = s.cur;
+  if (p == null || !s.changedSinceOpened(p)) {
+    then();
+    return;
+  }
+  final answer = await showDialog<String>(
+    context: context,
+    barrierColor: const Color(0x521B2A41),
+    builder: (dctx) => DialogFrame(
+      title: 'Save changes to ${p.name}?',
+      subtitle: 'You changed this project since you opened it. Save keeps your changes. Don’t save puts the project '
+          'back the way it was when you opened it.',
+      onSubmit: () => Navigator.of(dctx).pop('save'),
+      actions: [
+        Btn('Cancel', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
+        Btn('Don’t save', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop('discard')),
+        Btn('Save', icon: 'save', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop('save')),
+      ],
+    ),
+  );
+  if (answer == 'save') {
+    s.keepChanges(p);
+    then();
+  } else if (answer == 'discard') {
+    s.discardChanges();
+    then();
+  }
+}
+
 class DialogFrame extends StatelessWidget {
   const DialogFrame({super.key, required this.title, this.subtitle, this.body, required this.actions, this.onSubmit});
   final String title;
