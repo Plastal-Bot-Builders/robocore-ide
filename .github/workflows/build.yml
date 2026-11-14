@@ -199,6 +199,19 @@ jobs:
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
           ./tools/package_windows.ps1 -NoBuild
+      # Pull requests: screenshots of the Windows app itself (first start, the projects folder, Home), on the
+      # ci-shots-win branch (pr-<N>/), so a change can be looked at before merging.
+      - name: Screenshots of the Windows app (pull requests)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $out = "$env:RUNNER_TEMP\shots\pr-${{ github.event.pull_request.number }}"
+          ./tools/ci_windows_shots.ps1 -Exe "$PWD\build\windows\x64\runner\Release\RoboCore.exe" -Out $out
+          Set-Location "$env:RUNNER_TEMP\shots"
+          git init -q; git checkout -q -b ci-shots-win; git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "win shots ${{ github.event.pull_request.head.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-shots-win
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: robocore-ide-windows

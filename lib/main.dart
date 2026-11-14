@@ -30,12 +30,15 @@ Future<void> main() async {
   // The window opens on the launch animation straight away; projects and settings load behind it.
   Future<void> load() async {
     if (projectsFolderSupported) {
-      // The Mac app keeps the projects as files in a folder the user picks (Settings → Projects folder).
+      // The desktop apps keep the projects as files in a folder (Settings → Projects folder): one the user picks on
+      // the Mac, Documents\RoboCore by default on Windows.
       state.chooseFolder = chooseProjectsFolder;
+      state.defaultFolder = defaultProjectsFolder;
       state.folderAt = projectsFolderAt;
       state.folder = await restoreProjectsFolder();
     }
     await state.load();
+    if (canOpenSketch) state.pickSketch = pickSketch;
     // The web app's ?open=1 (&mode=code, &panel=1|0): opens a project straight away (the build's screenshots).
     if (kIsWeb) state.openFromLink(Uri.base.queryParameters);
     await initWebEditors();
