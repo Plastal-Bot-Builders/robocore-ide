@@ -95,15 +95,8 @@ class HomePage extends StatelessWidget {
             top: 0,
             child: Image.asset('assets/images/contours.png', width: 1168, height: 264, fit: BoxFit.fill, excludeFromSemantics: true),
           ),
-          // The RoboCore V2 render. Its edges fade into the banner's yellow (the same colour), so it can be taller than
-          // the banner and be clipped without a visible edge.
           if (width >= 980)
-            Positioned(
-              right: width >= 1200 ? 24 : 0,
-              top: width >= 1200 ? -30 : -8,
-              child: Image.asset('assets/images/robot_render.webp',
-                  height: width >= 1200 ? 324 : 280, filterQuality: FilterQuality.medium, excludeFromSemantics: true),
-            ),
+            Positioned(right: 60, top: 6, child: Image.asset('assets/images/robot.webp', width: 340, filterQuality: FilterQuality.medium, excludeFromSemantics: true)),
           Padding(
             padding: phone ? const EdgeInsets.fromLTRB(22, 28, 22, 28) : const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
             child: Column(
