@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
 import 'hw/local_compiler.dart';
 import 'hw/sketchbook.dart';
 import 'hw/update_check.dart' show fetchLatestRelease;
+import 'hw/updater.dart' as updater;
 import 'licences.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
@@ -42,6 +43,12 @@ Future<void> main() async {
     if (isMacApp) state.systemToast = showMacNotification;
     // The installed apps say when a newer release is out (the web app is always the latest).
     if (!kIsWeb) {
+      // The Windows app updates itself in one click (lib/hw/updater.dart); the others open the release page.
+      if (updater.kCanSelfUpdate) {
+        state.downloadUpdate = updater.downloadUpdate;
+        state.installUpdate = updater.installUpdate;
+      }
+      state.checkJustUpdated(kAppVersion);
       state.openUrl = (url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication).catchError((Object _) => false);
       // A few seconds in, so the notice doesn't land on top of the launch animation.
       Future<void>.delayed(const Duration(seconds: 4), () => state.checkForUpdate(kAppVersion, fetchLatestRelease));
