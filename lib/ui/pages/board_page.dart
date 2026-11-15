@@ -57,7 +57,20 @@ class BoardPage extends StatelessWidget {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(kBoards[id]!.name, style: tLabel(c)),
                       const SizedBox(height: 2),
-                      Text(kBoards[id]!.spec, style: tCaption(c), overflow: TextOverflow.ellipsis),
+                      // What the board is, in plain words, and a few tags; the chip and memory are in the details
+                      // beside the list.
+                      Text(kBoards[id]!.blurb, style: tCaption(c, color: c.ink), overflow: TextOverflow.ellipsis),
+                      if (kBoards[id]!.tags.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(spacing: 6, runSpacing: 4, children: [
+                          for (final t in kBoards[id]!.tags)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: id == sel ? c.raised : c.sunk, borderRadius: BorderRadius.circular(999)),
+                              child: Text(t, style: tCaption(c, color: c.ink, w: FontWeight.w600).copyWith(fontSize: 12)),
+                            ),
+                        ]),
+                      ],
                     ]),
                   ),
                   if (id == s.board && id != sel)
@@ -152,8 +165,8 @@ class BoardPage extends StatelessWidget {
               ? 'Real boards connect through Web Serial: open the web app in Chrome or Edge on a computer.'
               : s.onUsb && s.detectsBoards && !s.usbOpen
                   ? (s.detectedBoard == null
-                      ? 'Waiting for the ${kBoards[s.board]!.name}… Plug it in with a data USB-C cable and it shows up here.'
-                      : '${kBoards[s.board]!.name} found on ${s.detectedBoard}. Press Connect.')
+                      ? 'Plug in the robot and switch it on. Connect lights up when it’s found.'
+                      : 'Found on ${s.detectedBoard}. Press Connect.')
                   : s.onUsb
                   ? 'Plug the ${kBoards[s.board]!.name} into ${s.usbName}, press Connect and pick ${kBoards[s.board]!.pickAs}. '
                       'It reconnects by itself after an upload or if you unplug it.'

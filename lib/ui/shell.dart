@@ -21,6 +21,7 @@ import 'pages/projects_page.dart';
 import 'pages/serial_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/welcome_page.dart';
+import 'pages/who_page.dart';
 import 'pins_dialog.dart';
 import 'port_chooser.dart';
 import 'cog/cog_panel.dart' show CogButton;
@@ -79,7 +80,7 @@ class _ShellState extends State<Shell> {
       builder: (dctx) => DialogFrame(
         title: 'Keep your projects as files?',
         subtitle: windows
-            ? 'RoboCore can save each project as a folder on this computer, in Documents\\RoboCore (or a folder you '
+            ? 'RoboCore can save each project as a folder on this computer, in ${s.suggestedFolder} (or a folder you '
                 'choose). You can see them in File Explorer, back them up, copy them to another computer and open them '
                 'again with Open from computer. Your $moves there too.'
             : 'RoboCore can keep each project as a folder of .ino files, like the Arduino IDE, in a folder you '
@@ -90,7 +91,7 @@ class _ShellState extends State<Shell> {
           Btn('Not now', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop()),
           if (windows) ...[
             Btn('Choose folder…', icon: 'folder', kind: BtnKind.plain, onTap: () => Navigator.of(dctx).pop('choose')),
-            Btn('Use Documents\\RoboCore', icon: 'check', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop('documents')),
+            Btn('Use ${s.suggestedFolder}', icon: 'check', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop('documents')),
           ] else
             Btn('Choose folder…', icon: 'folder', kind: BtnKind.primary, onTap: () => Navigator.of(dctx).pop('choose')),
         ],
@@ -226,6 +227,8 @@ class _ShellState extends State<Shell> {
     final phone = w < kPhone;
     final onEditor = s.view == Screen.editor && s.cur != null;
     // First start on this device: ask who is using it before anything else.
+    // A shared computer: who is coding (at start with several people, or from Switch person).
+    if (s.choosingPerson) return const WhoPage();
     if (s.needsProfile) return const WelcomePage();
     _updateMenuBar(s);
     if (s.justUpdated != null && !_toldUpdated) {
@@ -305,7 +308,7 @@ class _ShellState extends State<Shell> {
     final p = s.cur;
     if (s.view == Screen.editor && p != null) {
       s.saveNow(p);
-      s.showToast('Saved', body: 'Kept on this device.');
+      s.showToast('Saved');
     }
   }
 
@@ -559,7 +562,7 @@ class UpdateBanner extends StatelessWidget {
       'failed' => ('The download didn’t finish', 'Check the internet connection and try again, or get it from the download page.'),
       _ => (
           'RoboCore $v is ready',
-          'You have ${s.appVersion ?? 'an older version'}. Update now to get the newest fixes. Your projects and settings stay as they are.'
+          'You have ${s.appVersion ?? 'an older version'}. Your projects stay as they are.'
         ),
     };
 
@@ -721,7 +724,7 @@ class EditorTopBar extends StatelessWidget {
               tip: 'Save ($kMod+S)',
               onTap: () {
                 s.saveNow(p);
-                s.showToast('Saved', body: 'Kept on this device.');
+                s.showToast('Saved');
               },
             ),
             const SizedBox(width: 8),
@@ -1005,7 +1008,7 @@ class _BoardChipState extends State<BoardChip> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(b.name, style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: kNavy)),
-                  Text('${b.chip} · $portShort',
+                  Text(s.onUsb && !s.usbOpen ? (s.detectedBoard != null ? 'Plugged in' : 'Not plugged in') : '${b.chip} · $portShort',
                       style: const TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, color: Color(0xFF6A7380))),
                 ],
               ),
@@ -1064,7 +1067,7 @@ class BoardMenu extends StatelessWidget {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(kBoards[id]!.name, style: tLabel(c)),
-                      Text(kBoards[id]!.spec, style: tCaption(c)),
+                      Text(kBoards[id]!.blurb, style: tCaption(c)),
                     ]),
                   ),
                   if (id == cur) RcIcon('check', size: 16, color: c.ink),

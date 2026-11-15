@@ -17,9 +17,16 @@ class BoardDef {
 
   /// How the browser's port chooser lists the board.
   final String pickAs;
+
+  /// What the board is, in plain words, and a few tags anyone can understand (Board Setup's list). The chip and
+  /// memory figures are [spec] and [details].
+  final String blurb;
+  final List<String> tags;
   const BoardDef({
     this.usb = 'USB',
     this.pickAs = 'the board',
+    this.blurb = '',
+    this.tags = const [],
     required this.id,
     required this.name,
     required this.full,
@@ -50,6 +57,8 @@ const Map<String, BoardDef> kBoards = {
       name: 'RoboCore V2',
       full: 'RoboCore V2 (ESP32-S3)',
       chip: 'ESP32-S3',
+      blurb: 'RoboCore’s own robot board',
+      tags: ['Wi-Fi', 'Bluetooth', 'Room for big programs'],
       spec: 'ESP32-S3 · 8 MB flash · 2 MB PSRAM',
       arch: 'esp32',
       led: RoboCoreV2Pins.rgbLed,
@@ -76,6 +85,8 @@ const Map<String, BoardDef> kBoards = {
       name: 'Arduino Uno R3',
       full: 'Arduino Uno R3',
       chip: 'ATmega328P',
+      blurb: 'The classic beginner board',
+      tags: ['Small programs only', 'No Wi-Fi'],
       spec: 'ATmega328P · 32 KB flash',
       arch: 'avr',
       led: 13,
@@ -100,6 +111,8 @@ const Map<String, BoardDef> kBoards = {
       name: 'ESP32 DevKit V1',
       full: 'ESP32 DevKit V1',
       chip: 'ESP32',
+      blurb: 'A common Wi-Fi board for projects',
+      tags: ['Wi-Fi', 'Bluetooth'],
       spec: 'ESP32 · 4 MB flash',
       arch: 'esp32',
       led: 2,
@@ -124,6 +137,8 @@ const Map<String, BoardDef> kBoards = {
       name: 'NodeMCU-32S',
       full: 'NodeMCU-32S',
       chip: 'ESP32',
+      blurb: 'A Wi-Fi board in the NodeMCU shape',
+      tags: ['Wi-Fi', 'Bluetooth'],
       spec: 'ESP32 · 4 MB flash',
       arch: 'esp32',
       led: 2,

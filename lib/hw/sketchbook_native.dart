@@ -28,8 +28,10 @@ Future<String> _documents() async {
   return '${Platform.environment['USERPROFILE'] ?? ''}\\Documents';
 }
 
-/// Windows: the suggested projects folder, Documents\RoboCore (made when first used).
-Future<ProjectFolder?> defaultProjectsFolder() async => _windows ? FolderStore('${await _documents()}\\RoboCore') : null;
+/// Windows: the suggested projects folder, Documents\RoboCore, or a folder [sub] in it (someone else on a shared
+/// computer). Made when first used.
+Future<ProjectFolder?> defaultProjectsFolder({String? sub}) async =>
+    _windows ? FolderStore('${await _documents()}\\RoboCore${sub == null ? '' : '\\$sub'}') : null;
 
 /// The folder the user chose before, or null (none yet, or it can't be found). Windows keeps only its path, in the
 /// settings ([projectsFolderAt]).

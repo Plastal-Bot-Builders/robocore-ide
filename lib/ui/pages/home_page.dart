@@ -104,15 +104,17 @@ class HomePage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: phone ? MainAxisSize.min : MainAxisSize.max,
               children: [
-                // The school or class from the profile, when there is one (W-03).
-                Text('ROBOCORE · ${s.school.isEmpty ? 'CLASSROOM ROBOT' : s.school.toUpperCase()}',
-                    style: const TextStyle(fontFamily: fDisplay, fontWeight: FontWeight.w600, fontSize: 12, height: 16 / 12, letterSpacing: .96, color: kNavy)),
-                const SizedBox(height: 10),
+                // The school or class from the profile, when there is one (W-03); nothing otherwise.
+                if (s.school.isNotEmpty) ...[
+                  Text('ROBOCORE · ${s.school.toUpperCase()}',
+                      style: const TextStyle(fontFamily: fDisplay, fontWeight: FontWeight.w600, fontSize: 12, height: 16 / 12, letterSpacing: .96, color: kNavy)),
+                  const SizedBox(height: 10),
+                ],
                 Text(s.firstName.isEmpty ? 'WELCOME BACK' : 'WELCOME BACK, ${s.firstName.toUpperCase()}',
                     style: TextStyle(
                         fontFamily: fDisplay, fontWeight: FontWeight.w700, fontSize: phone ? 30 : 36, height: 40 / 36, color: kNavy)),
                 const SizedBox(height: 10),
-                const Text('Build. Code. Create.', style: TextStyle(fontFamily: fBody, fontSize: 14, height: 20 / 14, color: kNavy)),
+                const Text('Program your RoboCore.', style: TextStyle(fontFamily: fBody, fontSize: 14, height: 20 / 14, color: kNavy)),
                 const SizedBox(height: 20),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   _HeroBtn(label: 'New project', icon: 'plus', primary: true, onTap: () => showNewProjectDialog(context)),

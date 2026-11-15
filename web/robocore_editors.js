@@ -1240,6 +1240,29 @@
 
   function zoomBy(dir) { if (ws) ws.zoomCenter(dir); }
 
+  // The open project's name, large and faint at the top left of the blocks area (the editor mockup). It is drawn
+  // between Blockly's background and the blocks, so blocks go over it; it does not scroll or catch clicks.
+  function drawTitle() {
+    if (!ws || typeof document.createElementNS !== 'function') return;
+    const svg = ws.getParentSvg && ws.getParentSvg();
+    const bg = svg && svg.querySelector('.blocklyMainBackground');
+    if (!bg) return;
+    let t = svg.querySelector('.rcTitle');
+    if (!t) {
+      t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('class', 'rcTitle');
+      t.setAttribute('aria-hidden', 'true');
+      t.style.pointerEvents = 'none';
+      t.style.font = "700 84px 'Barlow Condensed', Barlow, system-ui, sans-serif";
+      bg.after(t);
+    }
+    const m = ws.getMetrics ? ws.getMetrics() : null;
+    t.setAttribute('x', String((m ? m.absoluteLeft : 0) + 28));
+    t.setAttribute('y', String((m ? m.absoluteTop : 0) + 96));
+    t.setAttribute('fill', CTX.theme === 'navy' ? 'rgba(247,241,227,0.07)' : 'rgba(27,42,65,0.08)');
+    t.textContent = CTX.name || '';
+  }
+
   // Touchpad gestures in the Windows app. Its WebView only gets the larger direction of a two-finger move as a plain
   // wheel, and no pinch at all, so the app hands the gestures over here (web_editors_windows.dart): rcPan(dx, dy)
   // with the fingers' movement, rcPinch(ratio). They become one wheel event at the pointer, so the blocks, the block
@@ -1350,7 +1373,7 @@
       registerMyBlocks(ws);
       drawControls(ws);
       // The app hides this frame while the C++ tab is open; re-measure when it shows again.
-      new ResizeObserver(() => { if (ws) Blockly.svgResize(ws); }).observe(document.getElementById('host'));
+      new ResizeObserver(() => { if (ws) { Blockly.svgResize(ws); drawTitle(); } }).observe(document.getElementById('host'));
       ws.addChangeListener(Blockly.Events.disableOrphans);
       ws.addChangeListener((e) => {
         if (e.type === Blockly.Events.VIEWPORT_CHANGE) reportZoom();
@@ -1371,6 +1394,7 @@
       loadWorkspace(json, tidy);
       reportZoom();
       setTimeout(reportHistory, 0);
+      drawTitle();
     },
     load(json, tidy) { if (ws) { loadWorkspace(json, tidy); setTimeout(reportHistory, 0); } },
     setOptions(optionsJson) {
@@ -1379,6 +1403,7 @@
       blocksOptions(o);
       if (o.theme && o.theme !== CTX.theme) { setTheme(o.theme); if (ws) ws.setTheme(CTX.theme === 'navy' ? NAVY : PAPER_THEME); }
       if (nameOrBoard) emitBlocks();
+      drawTitle();
     },
     undo() { if (ws) ws.undo(false); },
     redo() { if (ws) ws.undo(true); },
