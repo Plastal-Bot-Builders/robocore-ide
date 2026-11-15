@@ -1361,15 +1361,7 @@ class SideBar extends StatelessWidget {
         const SizedBox(height: 2),
         Container(
           padding: EdgeInsets.only(top: 10, left: collapsed ? 0 : 12, right: collapsed ? 0 : 4),
-          child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween, children: [
-            if (!collapsed)
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text('BUILD. CODE. CREATE.', style: tOverline(c), maxLines: 1),
-                ),
-              ),
+          child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.end, children: [
             if (onNavigate == null)
               IconBtn('panel', onTap: s.toggleSidebar, tip: collapsed ? 'Expand sidebar' : 'Collapse sidebar'),
           ]),
