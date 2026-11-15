@@ -190,6 +190,7 @@ void main() {
     s.sim.stop();
     expect(s.port, kPortSim);
     expect(s.linked, isTrue);
+    expect((s.connLevel, s.connLabel), ('waiting', 'Preview')); // yellow light
   });
 
   group('Shared computer', () {
@@ -495,6 +496,7 @@ void main() {
     });
 
     test('a board that keeps restarting gets one message and stays connected for Upload', () async {
+      expect((s.connLevel, s.connLabel), ('live', 'Connected')); // green light
       final before = s.log.length;
       usb.onEvent!('bootloop', jsonEncode({'reason': 'empty', 'label': 'COM5 · Espressif'}));
       expect(s.usbOpen, isTrue);
@@ -512,14 +514,17 @@ void main() {
       await s.disconnectUsb(quiet: true);
       usb.detecting = true;
       expect(s.canConnectUsb, isFalse);
+      expect((s.connLevel, s.connLabel), ('off', 'Not connected')); // hollow grey ring
       usb.onEvent!('found', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
       expect(s.detectedBoard, 'COM5 · Espressif');
       expect(s.canConnectUsb, isTrue);
       expect(s.usbOpen, isFalse); // not connected by itself
       expect(s.conn!.text, contains('Press Connect'));
+      expect((s.connLevel, s.connLabel), ('waiting', 'Board found')); // yellow light
       usb.onEvent!('gone', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
       expect(s.detectedBoard, isNull);
       expect(s.canConnectUsb, isFalse);
+      expect(s.connLevel, 'off');
     });
 
     test('serial text goes to the board; unplug and replug are reported', () async {

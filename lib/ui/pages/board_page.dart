@@ -110,7 +110,7 @@ class BoardPage extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           active
-              ? ConnStatus(connected: s.linked)
+              ? const ConnStatus()
               : Btn('Use this board', kind: BtnKind.primary, small: true, onTap: () => s.setDefaultBoard(sel)),
         ]),
         const SizedBox(height: 16),

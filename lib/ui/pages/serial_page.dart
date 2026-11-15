@@ -28,7 +28,7 @@ class SerialPage extends StatelessWidget {
           subtitle: s.onUsb
               ? 'Read and send text over the ${kBoards[s.boardId]!.name}’s ${s.usbName} port.'
               : 'Read and send text to the preview board. Pick ${s.usbName} to talk to the real one.',
-          trailing: ConnStatus(connected: s.linked),
+          trailing: const ConnStatus(),
         ),
         const SizedBox(height: 24),
         Expanded(

@@ -1015,10 +1015,10 @@ class _BoardChipState extends State<BoardChip> {
               const SizedBox(width: 21),
             ],
             if (widget.compact) const SizedBox(width: 10),
-            Dot(color: kNavy, ring: !s.linked),
+            LinkDot(level: s.connLevel),
             if (!widget.compact) ...[
               const SizedBox(width: 6),
-              Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : (s.onUsb && s.detectedBoard != null ? 'Board found' : 'Not connected'),
+              Text(s.connLabel,
                   style: const TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w500, color: kNavy)),
             ],
             const SizedBox(width: 10),
@@ -1082,7 +1082,7 @@ class BoardMenu extends StatelessWidget {
             Row(children: [
               Text('Port', style: tLabel(c, w: FontWeight.w500)),
               const Spacer(),
-              ConnStatus(connected: s.linked),
+              const ConnStatus(),
             ]),
             const SizedBox(height: 6),
             RcSelect<String>(
@@ -1118,15 +1118,15 @@ class BoardMenu extends StatelessWidget {
 }
 
 class ConnStatus extends StatelessWidget {
-  const ConnStatus({super.key, required this.connected});
-  final bool connected;
+  const ConnStatus({super.key});
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
+    final s = AppScope.of(context);
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      LinkDot(on: connected),
+      LinkDot(level: s.connLevel),
       const SizedBox(width: 6),
-      Text(connected ? 'Connected' : 'Not connected', style: tLabel(c, w: FontWeight.w500)),
+      Text(s.connLabel, style: tLabel(c, w: FontWeight.w500)),
     ]);
   }
 }
@@ -1449,7 +1449,9 @@ class StatusBar extends StatelessWidget {
         if (s.stateKind == 'err')
           RcIcon('alert', size: 13, color: c.ink)
         else
-          Dot(size: 7, color: s.stateKind == 'busy' ? kBrand : c.ink),
+          s.stateKind == 'busy'
+              ? const LinkDot(key: ValueKey('status-busy'), level: 'waiting', size: 7)
+              : Dot(key: const ValueKey('status-ready'), size: 7, color: c.ink),
         const SizedBox(width: 6),
         Text(s.stateLabel, style: tCaption(c, color: c.ink, w: FontWeight.w500)),
         const SizedBox(width: 16),

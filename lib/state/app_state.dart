@@ -399,6 +399,15 @@ class AppState extends ChangeNotifier {
   /// Something is there to talk to: the open USB port, or the preview board when it is switched on.
   bool get linked => onUsb ? usbOpen : connected;
 
+  /// The connection light: 'live' (the real board, connected), 'waiting' (the preview board, or a board found
+  /// and waiting for Connect) or 'off' (nothing connected). [connLabel] is its word.
+  String get connLevel => linked
+      ? (onUsb ? 'live' : 'waiting')
+      : (onUsb && detectedBoard != null ? 'waiting' : 'off');
+  String get connLabel => linked
+      ? (onUsb ? 'Connected' : 'Preview')
+      : (onUsb && detectedBoard != null ? 'Board found' : 'Not connected');
+
   /// The socket of the board in use, as messages name it: USB-C on the RoboCore V2, USB on the others.
   String get usbName => kBoards[boardId]!.usb;
 

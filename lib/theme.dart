@@ -11,6 +11,9 @@ const kSymbolFonts = ['NotoSansMath', 'NotoSansSymbols2'];
 const kBrand = Color(0xFFF2B01E);
 const kBrandPressed = Color(0xFFD99A0F);
 const kNavy = Color(0xFF1B2A41);
+/// The "connected to the real board" light.
+const kLive = Color(0xFF2E9B57);
+const kLiveDark = Color(0xFF4CC27A);
 const kNavyHover = Color(0xFF364357);
 const kCream = Color(0xFFF7F1E3);
 

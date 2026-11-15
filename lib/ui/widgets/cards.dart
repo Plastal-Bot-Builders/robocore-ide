@@ -364,9 +364,9 @@ class BoardSummary extends StatelessWidget {
         child: Row(children: [
           Text('BOARD', style: tH2(c)),
           const Spacer(),
-          LinkDot(on: s.linked),
+          LinkDot(level: s.connLevel),
           const SizedBox(width: 6),
-          Text(s.linked ? (s.onUsb ? 'Connected' : 'Preview') : 'Not connected', style: tLabel(c, w: FontWeight.w500)),
+          Text(s.connLabel, style: tLabel(c, w: FontWeight.w500)),
         ]),
       ),
       Padding(
