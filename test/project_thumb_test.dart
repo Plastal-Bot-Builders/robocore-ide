@@ -39,8 +39,9 @@ void main() {
 
     test('builds rows from the old block lists', () {
       final rows = ProjectThumb.rows(_p())!;
-      expect(rows.first, (0, 'on start', 'events'));
-      expect(rows.where((r) => r.$1 == 0).map((r) => r.$2), ['on start', 'forever']);
+      // Only serial set-up in "on start": left out, so the card starts at "forever".
+      expect(rows.first, (0, 'forever', 'events'));
+      expect(rows.any((r) => r.$2.startsWith('start serial')), isFalse);
       final tone = rows.firstWhere((r) => r.$2.contains('C4'));
       expect(tone.$3, 'light');
       expect(tone.$1, 1);

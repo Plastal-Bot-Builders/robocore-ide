@@ -187,6 +187,19 @@ class ProjectThumb extends StatelessWidget {
   /// The first blocks as rows (depth, text, category), or null when the project isn't blocks. From the blocks
   /// editor's saved rcPreview; for a project not yet opened in it, from its block lists ("on start" / "forever").
   static List<(int, String, String)>? rows(Project p, {int max = 8}) {
+    final r = _rawRows(p, max: max + 4);
+    if (r == null) return null;
+    // "start serial at 115200 baud" is set-up every project has: leave it out, and any hat it leaves empty.
+    final kept = [for (final row in r) if (!row.$2.startsWith('start serial')) row];
+    final out = <(int, String, String)>[];
+    for (var i = 0; i < kept.length; i++) {
+      final hatOnly = kept[i].$1 == 0 && (i + 1 >= kept.length || kept[i + 1].$1 == 0);
+      if (!hatOnly || kept.length == 1) out.add(kept[i]);
+    }
+    return out.isEmpty ? null : out.take(max).toList();
+  }
+
+  static List<(int, String, String)>? _rawRows(Project p, {int max = 8}) {
     if (p.mode != 'blocks') return null;
     final json = p.blockly;
     if (json != null) {
@@ -243,7 +256,7 @@ class ProjectThumb extends StatelessWidget {
     if (r != null) {
       body = Container(
         decoration: BoxDecoration(color: c.sunk),
-        padding: const EdgeInsets.fromLTRB(14, 38, 10, 0),
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 0),
         child: ClipRect(
           child: OverflowBox(
             alignment: Alignment.topLeft,
@@ -253,7 +266,7 @@ class ProjectThumb extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.only(left: depth * 12.0, bottom: 1),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                     decoration: BoxDecoration(
                       color: _colours[cat] ?? const Color(0xFF5B6577),
                       borderRadius: depth == 0 && cat == 'events'
@@ -280,7 +293,7 @@ class ProjectThumb extends StatelessWidget {
       if (lines.isEmpty) return Thumb(blocks: blocks);
       body = Container(
         color: c.sunk,
-        padding: const EdgeInsets.fromLTRB(14, 38, 10, 0),
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 0),
         child: ClipRect(
           child: OverflowBox(
             alignment: Alignment.topLeft,
@@ -305,8 +318,8 @@ class ProjectThumb extends StatelessWidget {
     return Stack(children: [
       Positioned.fill(child: body),
       Positioned(
-        left: 10,
-        top: 10,
+        right: 10,
+        bottom: 10,
         child: Container(
           height: 22,
           padding: const EdgeInsets.only(left: 6, right: 8),
