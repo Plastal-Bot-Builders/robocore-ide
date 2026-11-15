@@ -1292,10 +1292,40 @@
   // Blocks a student placed: not on start / forever, or the number fields inside other blocks.
   const countBlocks = (w) => w.getAllBlocks(false).filter((b) => !b.isShadow() && b.type !== 'rc_on_start' && b.type !== 'rc_forever').length;
 
+  // The start of the program as rows [depth, text, category] (e.g. [1, 'play note C4 for 0.5 s', 'light']), saved
+  // with the blocks as rcPreview so the project cards can show the real first blocks (Blockly ignores the key).
+  function previewRows(max) {
+    const rows = [];
+    const isStatement = (input) => input.type === 3; // Blockly's input type for a statement (the inside of repeat, if…)
+    const text = (b) => {
+      const parts = [];
+      for (const input of b.inputList) {
+        for (const f of input.fieldRow) { const t = f.getText ? String(f.getText()).trim() : ''; if (t) parts.push(t); }
+        const c = input.connection && input.connection.targetBlock();
+        if (c && !isStatement(input)) parts.push(c.toString(24));
+      }
+      return parts.join(' ').replace(/\s+/g, ' ').trim();
+    };
+    const cat = (b) => String((b.getStyleName && b.getStyleName()) || '').replace(/^rc_/, '');
+    const walk = (b, depth) => {
+      for (; b && rows.length < max; b = b.getNextBlock()) {
+        rows.push([depth, text(b), cat(b)]);
+        for (const input of b.inputList) {
+          if (isStatement(input) && input.connection) walk(input.connection.targetBlock(), depth + 1);
+        }
+      }
+    };
+    const tops = ws.getTopBlocks(true).filter((b) => !b.outputConnection);
+    for (const t of tops.slice(0, 2)) walk(t, 0);
+    return rows;
+  }
+
   function sendBlocks() {
     timer = 0;
     if (!ws || !onBlocksChange) return;
-    const json = JSON.stringify(Blockly.serialization.workspaces.save(ws));
+    const saved = Blockly.serialization.workspaces.save(ws);
+    try { saved.rcPreview = previewRows(8); } catch (_) { /* a preview is never worth failing a save */ }
+    const json = JSON.stringify(saved);
     onBlocksChange(json, generate(ws), countBlocks(ws));
     reportSelection();
   }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 // Project card with its mini preview, and the board summary card.
 import 'package:flutter/material.dart';
 
@@ -25,7 +27,7 @@ class ProjectCard extends StatelessWidget {
         // No edge: hovering lifts the card to the raised surface instead.
         color: h ? c.raised : c.surface,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(height: 112, child: Thumb(blocks: p.mode == 'blocks')),
+          SizedBox(height: 112, child: ProjectThumb(p: p)),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             child: Row(children: [
@@ -146,6 +148,177 @@ class Thumb extends StatelessWidget {
         ]),
       );
     });
+  }
+}
+
+/// A project card's picture: the real start of the project. Blocks: its first blocks, as the blocks editor saved
+/// them (rcPreview in its Blockly JSON: [depth, text, category] rows), in their category colours. Code, or blocks
+/// not yet opened in this version: the first lines of its main file.
+class ProjectThumb extends StatelessWidget {
+  const ProjectThumb({super.key, required this.p});
+  final Project p;
+
+  static const _colours = {
+    'events': kBrand,
+    'movement': Color(0xFF2F6BBF),
+    'motors': Color(0xFFB84A26),
+    'light': Color(0xFF7A4FB5),
+    'sensors': Color(0xFF0F7680),
+    'control': Color(0xFF8A5A00),
+    'operators': Color(0xFF2F7A4C),
+    'variables': Color(0xFFB23E7A),
+    'myblocks': Color(0xFF5B6577),
+    'pins': kNavy,
+  };
+  static final _keyword = RegExp(r'^(#include|#define|void|int|float|bool|long|const|if|else|for|while|return|unsigned|byte|char)$');
+
+  // Old block-list categories (kBlockTypes) → the Blockly editor's category colours.
+  static const _oldCats = {
+    'output': 'pins',
+    'control': 'control',
+    'input': 'sensors',
+    'math': 'operators',
+    'robotics': 'movement',
+    'sensors': 'sensors',
+    'variables': 'variables',
+    'communication': 'myblocks',
+  };
+
+  /// The first blocks as rows (depth, text, category), or null when the project isn't blocks. From the blocks
+  /// editor's saved rcPreview; for a project not yet opened in it, from its block lists ("on start" / "forever").
+  static List<(int, String, String)>? rows(Project p, {int max = 8}) {
+    if (p.mode != 'blocks') return null;
+    final json = p.blockly;
+    if (json != null) {
+      if (!json.contains('rcPreview')) return null;
+      try {
+        final list = (jsonDecode(json) as Map)['rcPreview'];
+        if (list is! List || list.isEmpty) return null;
+        return [
+          for (final r in list)
+            if (r is List && r.length >= 3) ((r[0] as num).toInt(), '${r[1]}', '${r[2]}')
+        ];
+      } catch (_) {
+        return null;
+      }
+    }
+    final out = <(int, String, String)>[];
+    void add(String hat, List<Block> list) {
+      if (out.length >= max) return;
+      out.add((0, hat, 'events'));
+      for (final b in list) {
+        if (out.length >= max) return;
+        final type = kBlockTypes[b['t']];
+        if (type == null) continue;
+        final words = [
+          for (final part in type.parts)
+            if (part is BField) '${b[part.k] ?? type.def[part.k] ?? ''}' else '$part'
+        ].join(' ');
+        out.add((1, words, b['t'] == 'tone' ? 'light' : _oldCats[type.cat] ?? 'myblocks'));
+      }
+    }
+
+    add('on start', p.setup);
+    add('forever', p.loop);
+    return out;
+  }
+
+  /// The first lines of the main file that say something (no blank or comment-only lines at the top).
+  static List<String> codeLines(Project p, {int max = 8}) {
+    final main = p.files.where((f) => f.name.toLowerCase().endsWith('.ino')).firstOrNull ?? p.files.firstOrNull;
+    final lines = (main?.content ?? '').split('\n').map((l) => l.replaceAll('\t', '  ').trimRight()).toList();
+    var i = 0;
+    while (i < lines.length && (lines[i].trim().isEmpty || lines[i].trim().startsWith('//'))) {
+      i++;
+    }
+    return lines.skip(i).take(max).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final blocks = p.mode == 'blocks';
+    final r = rows(p);
+    final Widget body;
+    if (r != null) {
+      body = Container(
+        decoration: BoxDecoration(color: c.sunk),
+        padding: const EdgeInsets.fromLTRB(14, 38, 10, 0),
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            maxHeight: double.infinity,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              for (final (depth, text, cat) in r)
+                Padding(
+                  padding: EdgeInsets.only(left: depth * 12.0, bottom: 1),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _colours[cat] ?? const Color(0xFF5B6577),
+                      borderRadius: depth == 0 && cat == 'events'
+                          ? const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(3))
+                          : BorderRadius.circular(3),
+                    ),
+                    child: Text(text.isEmpty ? ' ' : text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontFamily: fBody,
+                            fontSize: 10.5,
+                            height: 1.2,
+                            fontWeight: FontWeight.w700,
+                            color: cat == 'events' ? kNavy : Colors.white)),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      );
+    } else {
+      final lines = codeLines(p);
+      if (lines.isEmpty) return Thumb(blocks: blocks);
+      body = Container(
+        color: c.sunk,
+        padding: const EdgeInsets.fromLTRB(14, 38, 10, 0),
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            maxHeight: double.infinity,
+            maxWidth: double.infinity,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              for (final l in lines)
+                Text.rich(
+                  TextSpan(children: [
+                    for (final w in RegExp(r'(\s+|[A-Za-z_#][A-Za-z0-9_]*|.)').allMatches(l).map((m) => m.group(0)!))
+                      TextSpan(text: w, style: _keyword.hasMatch(w) ? TextStyle(color: c.dark ? kBrand : const Color(0xFF8A5A00)) : null),
+                  ]),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(fontFamily: fMono, fontSize: 9.5, height: 1.45, color: c.ink.withValues(alpha: .8)),
+                ),
+            ]),
+          ),
+        ),
+      );
+    }
+    return Stack(children: [
+      Positioned.fill(child: body),
+      Positioned(
+        left: 10,
+        top: 10,
+        child: Container(
+          height: 22,
+          padding: const EdgeInsets.only(left: 6, right: 8),
+          decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(4)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            RcIcon(blocks ? 'blocks' : 'code', size: 14, color: c.ink),
+            const SizedBox(width: 4),
+            Text(blocks ? 'Blocks' : 'Code', style: tCaption(c, color: c.ink, w: FontWeight.w500)),
+          ]),
+        ),
+      ),
+    ]);
   }
 }
 
