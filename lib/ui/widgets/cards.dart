@@ -25,7 +25,7 @@ class ProjectCard extends StatelessWidget {
         // No edge: hovering lifts the card to the raised surface instead.
         color: h ? c.raised : c.surface,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(height: 112, child: Thumb(blocks: p.mode == 'blocks')),
+          SizedBox(height: 112, child: p.mode == 'blocks' ? const Thumb(blocks: true) : CodeThumb(p: p)),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             child: Row(children: [
@@ -146,6 +146,75 @@ class Thumb extends StatelessWidget {
         ]),
       );
     });
+  }
+}
+
+/// A code project's card picture: the first lines of its C++ (the main .ino), with the Code badge.
+class CodeThumb extends StatelessWidget {
+  const CodeThumb({super.key, required this.p});
+  final Project p;
+
+  static final _keyword = RegExp(r'^(#include|#define|void|int|float|bool|long|const|if|else|for|while|return|unsigned|byte|char)$');
+
+  /// The first lines of the main file that say something (no blank or comment-only lines at the top).
+  static List<String> codeLines(Project p, {int max = 8}) {
+    final main = p.files.where((f) => f.name.toLowerCase().endsWith('.ino')).firstOrNull ?? p.files.firstOrNull;
+    final lines = (main?.content ?? '').split('\n').map((l) => l.replaceAll('\t', '  ').trimRight()).toList();
+    var i = 0;
+    while (i < lines.length && (lines[i].trim().isEmpty || lines[i].trim().startsWith('//'))) {
+      i++;
+    }
+    return lines.skip(i).take(max).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final lines = codeLines(p);
+    if (lines.isEmpty) return const Thumb(blocks: false);
+    return Stack(children: [
+      Positioned.fill(
+        child: Container(
+          color: c.sunk,
+          padding: const EdgeInsets.fromLTRB(14, 40, 10, 0),
+          child: ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topLeft,
+              maxHeight: double.infinity,
+              maxWidth: double.infinity,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                for (final l in lines)
+                  Text.rich(
+                    TextSpan(children: [
+                      for (final w in RegExp(r'(\s+|[A-Za-z_#][A-Za-z0-9_]*|.)').allMatches(l).map((m) => m.group(0)!))
+                        TextSpan(
+                            text: w,
+                            style: _keyword.hasMatch(w) ? TextStyle(color: c.dark ? kBrand : const Color(0xFF8A5A00)) : null),
+                    ]),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(fontFamily: fMono, fontSize: 9.5, height: 1.45, color: c.ink.withValues(alpha: .8)),
+                  ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        left: 10,
+        top: 10,
+        child: Container(
+          height: 22,
+          padding: const EdgeInsets.only(left: 6, right: 8),
+          decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(4)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            RcIcon('code', size: 14, color: c.ink),
+            const SizedBox(width: 4),
+            Text('Code', style: tCaption(c, color: c.ink, w: FontWeight.w500)),
+          ]),
+        ),
+      ),
+    ]);
   }
 }
 
