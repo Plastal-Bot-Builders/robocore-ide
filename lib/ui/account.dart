@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import 'app_scope.dart';
-import 'dialogs.dart' show DialogFrame;
+import 'dialogs.dart' show DialogFrame, leaveProject;
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/menu.dart';
 
 /// Keep in step with `version:` in pubspec.yaml.
-const kAppVersion = '1.0.10';
+const kAppVersion = '1.0.11';
 
 class AccountButton extends StatelessWidget {
   const AccountButton({super.key});
@@ -30,6 +30,8 @@ class AccountButton extends StatelessWidget {
         ]),
       ),
       entries: () => [
+        // A shared computer: someone else's name and projects ("Who's coding today?").
+        MenuEntry('Switch person', icon: 'swap', onTap: () => leaveProject(context, then: s.chooseAnotherPerson)),
         MenuEntry('Edit profile', icon: 'user', onTap: () => s.go(Screen.settings)),
         MenuEntry('Keyboard shortcuts', icon: 'keyboard', onTap: () => showShortcutsDialog(context)),
         MenuEntry('About RoboCore IDE', icon: 'info', onTap: () => showAboutRoboCoreDialog(context)),

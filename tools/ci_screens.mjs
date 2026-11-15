@@ -16,14 +16,19 @@ const shots = [
   ['editor-blocks-small', '?open=1&mode=blocks&panel=0', 1100, 700],
   ['editor-blocks-flyout', '?open=1&mode=blocks&panel=0', 1440, 900, 'Movement'],
   ['home', '', 1440, 900],
+  ['who', '', 1440, 900, null, { 'flutter.rc-people': JSON.stringify(JSON.stringify([{ id: 'p0', name: 'Fredo', school: 'Class 5' }, { id: 'pa', name: 'Amahle', school: 'Class 5' }, { id: 'pt', name: 'Thabo', school: '' }])) }],
+  ['board-setup', '?open=0&screen=board', 1440, 900],
   ['update-banner-home', '?update=1.0.7', 1440, 900],
   ['update-banner-editor', '?open=1&mode=blocks&panel=0&update=1.0.7', 1440, 900],
 ];
 
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--lang=en-US'], env: { ...process.env, LANG: 'en_US.UTF-8' } });
-for (const [name, query, width, height, category] of shots) {
+for (const [name, query, width, height, category, extra] of shots) {
   const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'Africa/Johannesburg' });
-  await ctx.addInitScript((s) => localStorage.setItem('flutter.robocore-ide-v1', JSON.stringify(s)), JSON.stringify(store));
+  await ctx.addInitScript(([s, more]) => {
+    localStorage.setItem('flutter.robocore-ide-v1', JSON.stringify(s));
+    for (const [k, v] of Object.entries(more || {})) localStorage.setItem(k, v);
+  }, [JSON.stringify(store), extra || null]);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${name}] page error: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[${name}] console: ${m.text().slice(0, 300)}`); });

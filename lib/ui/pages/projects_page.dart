@@ -76,7 +76,7 @@ class ProjectsPage extends StatelessWidget {
       PageTop(
         title: 'Projects',
         subtitle: s.folder != null
-            ? 'Saved as files in ${s.folder!.path}. Copy a project’s folder to take it to another computer.'
+            ? 'In ${shortFolder(s.folder!.path)}'
             : 'Saved on this device. Each computer or browser has its own projects.',
         trailing: phone
             ? Row(children: [Expanded(child: filter), const SizedBox(width: 8), actions])
@@ -120,4 +120,10 @@ class _NoProjects extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// A projects folder as people know it: from "Documents" on (C:\\Users\\…\\Documents\\RoboCore → Documents\\RoboCore).
+String shortFolder(String path) {
+  final i = path.replaceAll('/', '\\').toLowerCase().lastIndexOf('\\documents\\');
+  return i < 0 ? path : path.substring(i + 1);
 }

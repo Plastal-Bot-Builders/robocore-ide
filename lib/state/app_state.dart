@@ -33,7 +33,20 @@ class ConnMsg {
   const ConnMsg(this.kind, this.text);
 }
 
-const _storeKey = 'robocore-ide-v1';
+const _baseKey = 'robocore-ide-v1';
+
+/// Someone who uses RoboCore on this computer (a shared classroom PC has several): each has their own name,
+/// projects and settings, saved under their own key.
+class Person {
+  Person(this.id, this.name, [this.school = '']);
+  final String id;
+  String name, school;
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'school': school};
+  static Person? fromJson(Object? j) {
+    if (j is! Map || j['id'] is! String) return null;
+    return Person(j['id'] as String, '${j['name'] ?? ''}', '${j['school'] ?? ''}');
+  }
+}
 
 /// Shown when esptool-js cannot put the board into its bootloader.
 const kBootTip = 'Could not start the board’s bootloader. Hold BOOT, tap RESET, release BOOT, then press Upload again. '
@@ -186,7 +199,7 @@ class AppState extends ChangeNotifier {
   Future<ProjectFolder?> Function()? chooseFolder;
 
   /// Set in the Windows app: the suggested projects folder (Documents\RoboCore).
-  Future<ProjectFolder?> Function()? defaultFolder;
+  Future<ProjectFolder?> Function({String? sub})? defaultFolder;
 
   /// Set in the desktop apps: Open from computer, a sketch or RoboCore project picked in the file dialog (its name, its
   /// files, and the project's .robocore.json when there is one). Null when cancelled.
@@ -215,9 +228,93 @@ class AppState extends ChangeNotifier {
   void folderAsked() {
     _folderAsked = true;
     try {
-      _prefs?.setBool('rc-folder-asked', true);
+      _prefs?.setBool(_askedKey, true);
     } catch (_) {}
   }
+
+  // ---------- people sharing this computer ("Who's coding today?") ----------
+  /// The first person on this computer keeps the saved state from before people could switch.
+  static const kFirstPerson = 'p0';
+  String _person = kFirstPerson;
+
+  /// Everyone who has used RoboCore on this computer.
+  List<Person> people = [];
+
+  /// The "Who's coding today?" screen shows: at start when several people use this computer, or from Switch person.
+  bool choosingPerson = false;
+
+  String get personId => _person;
+  String get _storeKey => _person == kFirstPerson ? _baseKey : '$_baseKey@$_person';
+  String get _askedKey => _person == kFirstPerson ? 'rc-folder-asked' : 'rc-folder-asked@$_person';
+
+  void _readPeople() {
+    try {
+      final j = jsonDecode(_prefs?.getString('rc-people') ?? '[]');
+      people = [for (final x in (j is List ? j : const [])) Person.fromJson(x)].whereType<Person>().toList();
+    } catch (_) {
+      people = [];
+    }
+    final last = _prefs?.getString('rc-person');
+    _person = last != null && people.any((p) => p.id == last) ? last : kFirstPerson;
+    choosingPerson = people.length > 1;
+  }
+
+  /// The current person in the list (once they have answered the welcome screen), with their name.
+  void _rememberPerson() {
+    if (!welcomed) return;
+    final p = people.where((x) => x.id == _person).firstOrNull;
+    if (p == null) {
+      people.add(Person(_person, user, school));
+    } else {
+      p
+        ..name = user
+        ..school = school;
+    }
+    try {
+      _prefs?.setString('rc-people', jsonEncode([for (final p in people) p.toJson()]));
+      _prefs?.setString('rc-person', _person);
+    } catch (_) {}
+  }
+
+  /// Switch person: the "Who's coding today?" screen.
+  void chooseAnotherPerson() {
+    choosingPerson = true;
+    notifyListeners();
+  }
+
+  /// Back from "Who's coding today?" to the person already here.
+  void keepPerson() {
+    choosingPerson = false;
+    notifyListeners();
+  }
+
+  /// Switches to [id] (someone in [people]) or, with null, to someone new, who gets the welcome screen. This
+  /// person's work is saved first; then everything (projects, settings, board) is theirs.
+  Future<void> switchPerson(String? id) async {
+    if (id == _person && !needsProfile) return keepPerson();
+    final p = cur;
+    if (p != null) saveNow(p);
+    persist(now: true);
+    if (usbOpen) await disconnectUsb(quiet: true);
+    _clearState();
+    _person = id ?? 'p${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
+    try {
+      await _prefs?.setString('rc-person', _person);
+    } catch (_) {}
+    choosingPerson = false;
+    await _loadPerson();
+    notifyListeners();
+  }
+
+  /// Windows' suggested projects folder for this person: Documents\RoboCore, or a folder of their own in it when
+  /// several people use this computer.
+  String? get _personFolder {
+    if (_person == kFirstPerson) return null;
+    final n = user.trim().replaceAll(RegExp(r'[<>:"/\\|?*.]'), '').trim();
+    return n.isEmpty ? _person : n;
+  }
+
+  String get suggestedFolder => 'Documents\\RoboCore${_personFolder == null ? '' : '\\$_personFolder'}';
   int logVersion = 0;
 
   // ---- USB board ----
@@ -292,6 +389,7 @@ class AppState extends ChangeNotifier {
     // After Reset all data the next profile starts with the starter projects again (W-04).
     if (projects.isEmpty) _seed();
     persist(now: true);
+    _rememberPerson();
     notifyListeners();
   }
 
@@ -300,6 +398,15 @@ class AppState extends ChangeNotifier {
 
   /// Something is there to talk to: the open USB port, or the preview board when it is switched on.
   bool get linked => onUsb ? usbOpen : connected;
+
+  /// The connection light: 'live' (the real board, connected), 'waiting' (the preview board, or a board found
+  /// and waiting for Connect) or 'off' (nothing connected). [connLabel] is its word.
+  String get connLevel => linked
+      ? (onUsb ? 'live' : 'waiting')
+      : (onUsb && detectedBoard != null ? 'waiting' : 'off');
+  String get connLabel => linked
+      ? (onUsb ? 'Connected' : 'Preview')
+      : (onUsb && detectedBoard != null ? 'Board found' : 'Not connected');
 
   /// The socket of the board in use, as messages name it: USB-C on the RoboCore V2, USB on the others.
   String get usbName => kBoards[boardId]!.usb;
@@ -350,15 +457,26 @@ class AppState extends ChangeNotifier {
 
   // ---------- persistence ----------
   Future<void> load() async {
-    String? raw;
     try {
       _prefs = await SharedPreferences.getInstance();
-      raw = _prefs!.getString(_storeKey);
-      _folderAsked = _prefs!.getBool('rc-folder-asked') ?? false;
+      _readPeople();
+    } catch (_) {}
+    await _loadPerson();
+    loading = false;
+    notifyListeners();
+  }
+
+  /// The current person's saved state, projects folder and board.
+  Future<void> _loadPerson() async {
+    String? raw;
+    try {
+      raw = _prefs?.getString(_storeKey);
+      _folderAsked = _prefs?.getBool(_askedKey) ?? false;
     } catch (_) {
       raw = null;
     }
     if (raw != null) _restoreSaved(raw);
+    _rememberPerson();
     await _openFolder(raw);
     if (projects.isEmpty && missingFolder == null) _seed();
     if (onUsb) {
@@ -370,8 +488,6 @@ class AppState extends ChangeNotifier {
       _bootBoard();
     }
     if (loadNotice != null) showToast(loadNotice!, error: true);
-    loading = false;
-    notifyListeners();
   }
 
   /// Reads the saved state one piece at a time, so one damaged project (or setting) never
@@ -494,7 +610,7 @@ class AppState extends ChangeNotifier {
   /// Settings → Projects folder: from now on the projects are files in the folder the user picks. The app's
   /// projects go there too, and sketches already in that folder join them. False when the user cancels.
   Future<bool> chooseProjectsFolder({bool suggested = false}) async {
-    final f = suggested ? await defaultFolder?.call() : await chooseFolder?.call();
+    final f = suggested ? await defaultFolder?.call(sub: _personFolder) : await chooseFolder?.call();
     if (f == null) return false;
     final mine = projects;
     try {
@@ -804,6 +920,8 @@ class AppState extends ChangeNotifier {
       updateUrl = kReleasesPage;
       appVersion ??= 'an older version';
     }
+    // screen=board: Board Setup (the build's screenshots of it).
+    if (q['screen'] == 'board' && !needsProfile) go(Screen.board);
     final n = int.tryParse(q['open'] ?? '');
     final list = sortedProjects;
     if (needsProfile || n == null || n < 1 || n > list.length) return;
@@ -1345,7 +1463,7 @@ class AppState extends ChangeNotifier {
         final label = _labelOf(msg);
         detectedBoard = label;
         if (!usbOpen) {
-          conn = ConnMsg('', '${kBoards[boardId]!.name} found on $label. Press Connect.');
+          conn = ConnMsg('', 'Found on $label. Press Connect.');
           setStatus('Board found');
           showToast('Board plugged in', body: '$label. Press Connect to use it.', info: true);
         }
@@ -2176,13 +2294,30 @@ class AppState extends ChangeNotifier {
     // Everything the app keeps on this device: the saved state with the copies of damaged saves set aside beside it
     // (_keepAside), the rc- preferences (panels, the USB ports allowed, the folder question) and the Mac's build copies.
     try {
-      final keys = _prefs?.getKeys().where((k) => k.startsWith(_storeKey) || k.startsWith('rc-')).toList() ?? const <String>[];
+      final keys = _prefs?.getKeys().where((k) => k.startsWith(_baseKey) || k.startsWith('rc-')).toList() ?? const <String>[];
       for (final k in keys) {
         await _prefs?.remove(k);
       }
     } catch (_) {}
-    _folderAsked = false;
     await local?.forgetBuilds();
+    people = [];
+    _person = kFirstPerson;
+    choosingPerson = false;
+    _clearState();
+    view = Screen.home;
+    setStatus('Ready');
+    notifyListeners();
+  }
+
+  /// Back to a fresh start in memory (Reset all data, or another person): no profile, projects or settings.
+  void _clearState() {
+    sim.stop();
+    folder = null;
+    missingFolder = null;
+    _savedFolder = null;
+    _opened = null;
+    loadNotice = null;
+    _folderAsked = false;
     final fresh = Settings();
     welcomed = false;
     user = '';
@@ -2211,8 +2346,6 @@ class AppState extends ChangeNotifier {
     cog.newChat(notify: false);
     cog.close();
     view = Screen.home;
-    setStatus('Ready');
-    notifyListeners();
   }
 
   void setSerialOption({bool? ts, bool? scroll, String? ending}) {

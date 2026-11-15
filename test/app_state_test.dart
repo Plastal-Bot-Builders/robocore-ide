@@ -190,6 +190,50 @@ void main() {
     s.sim.stop();
     expect(s.port, kPortSim);
     expect(s.linked, isTrue);
+    expect((s.connLevel, s.connLabel), ('waiting', 'Preview')); // yellow light
+  });
+
+  group('Shared computer', () {
+    test('each person has their own name and projects; with several, RoboCore asks who is coding', () async {
+      SharedPreferences.setMockInitialValues({
+        'robocore-ide-v1': jsonEncode({
+          'v': 1,
+          'profile': true,
+          'user': 'Fredo',
+          'school': '5',
+          'projects': [projectFrom(exampleById('blink'), name: 'Fredo blink').toJson()],
+        }),
+      });
+      final s = AppState(usbLink: FakeUsb());
+      await s.load();
+      s.sim.stop();
+      expect(s.people.map((p) => p.name), ['Fredo'], reason: 'the person from before is the first');
+      expect(s.choosingPerson, isFalse, reason: 'one person: straight in');
+
+      await s.switchPerson(null); // I'm new here
+      expect(s.needsProfile, isTrue);
+      expect(s.projects.any((p) => p.name == 'Fredo blink'), isFalse, reason: 'not Fredo’s projects');
+      s.setProfile(name: 'Amahle');
+      expect(s.people.map((p) => p.name), ['Fredo', 'Amahle']);
+      s.projects.first.name = 'Amahle robot';
+      s.persist(now: true);
+
+      await s.switchPerson(AppState.kFirstPerson);
+      expect(s.user, 'Fredo');
+      expect(s.school, '5');
+      expect(s.projects.map((p) => p.name), contains('Fredo blink'));
+      expect(s.projects.map((p) => p.name), isNot(contains('Amahle robot')));
+
+      // Next start: two people use this computer, so it asks.
+      final again = AppState(usbLink: FakeUsb());
+      await again.load();
+      again.sim.stop();
+      expect(again.choosingPerson, isTrue);
+      expect(again.people, hasLength(2));
+      await again.switchPerson(again.people.last.id);
+      expect(again.user, 'Amahle');
+      expect(again.projects.map((p) => p.name), contains('Amahle robot'));
+    });
   });
 
   group('Open from computer', () {
@@ -452,6 +496,7 @@ void main() {
     });
 
     test('a board that keeps restarting gets one message and stays connected for Upload', () async {
+      expect((s.connLevel, s.connLabel), ('live', 'Connected')); // green light
       final before = s.log.length;
       usb.onEvent!('bootloop', jsonEncode({'reason': 'empty', 'label': 'COM5 · Espressif'}));
       expect(s.usbOpen, isTrue);
@@ -469,14 +514,17 @@ void main() {
       await s.disconnectUsb(quiet: true);
       usb.detecting = true;
       expect(s.canConnectUsb, isFalse);
+      expect((s.connLevel, s.connLabel), ('off', 'Not connected')); // hollow grey ring
       usb.onEvent!('found', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
       expect(s.detectedBoard, 'COM5 · Espressif');
       expect(s.canConnectUsb, isTrue);
       expect(s.usbOpen, isFalse); // not connected by itself
       expect(s.conn!.text, contains('Press Connect'));
+      expect((s.connLevel, s.connLabel), ('waiting', 'Board found')); // yellow light
       usb.onEvent!('gone', jsonEncode({'label': 'COM5 · Espressif', 'address': 'COM5'}));
       expect(s.detectedBoard, isNull);
       expect(s.canConnectUsb, isFalse);
+      expect(s.connLevel, 'off');
     });
 
     test('serial text goes to the board; unplug and replug are reported', () async {

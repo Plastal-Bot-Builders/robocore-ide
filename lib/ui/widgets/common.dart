@@ -614,13 +614,27 @@ class Dot extends StatelessWidget {
       );
 }
 
-/// The connection dot: filled ink when connected, an ink ring when not.
+/// The connection light: green when the real board is connected ('live'), yellow for the preview board or a
+/// board found and waiting for Connect ('waiting'), a hollow grey ring when nothing is connected ('off').
 class LinkDot extends StatelessWidget {
-  const LinkDot({super.key, required this.on, this.size = 8});
-  final bool on;
+  const LinkDot({super.key, required this.level, this.size = 8});
+  final String level;
   final double size;
   @override
-  Widget build(BuildContext context) => Dot(color: RC.of(context).ink, size: size, ring: !on);
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return switch (level) {
+      'live' => Dot(key: const ValueKey('dot-live'), color: c.dark ? kLiveDark : kLive, size: size),
+      'waiting' => Container(
+          key: const ValueKey('dot-waiting'),
+          width: size,
+          height: size,
+          // A thin ink edge keeps the yellow visible on cream, white and the yellow top bar.
+          decoration: BoxDecoration(color: kBrand, shape: BoxShape.circle, border: Border.all(color: kNavy.withValues(alpha: .55), width: 1)),
+        ),
+      _ => Dot(key: const ValueKey('dot-off'), color: c.muted, size: size, ring: true),
+    };
+  }
 }
 
 class LinkText extends StatelessWidget {

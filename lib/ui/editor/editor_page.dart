@@ -885,7 +885,7 @@ class _UsbBoardStatus extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          LinkDot(on: s.usbOpen, size: 7),
+          LinkDot(level: s.usbOpen ? 'live' : (s.detectedBoard != null ? 'waiting' : 'off'), size: 7),
           const SizedBox(width: 7),
           Expanded(
             child: Text(s.usbOpen ? 'Real board on ${s.usbName}' : 'Real board not connected',

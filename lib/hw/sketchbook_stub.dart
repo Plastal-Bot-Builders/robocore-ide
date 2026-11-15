@@ -7,7 +7,7 @@ Future<ProjectFolder?> restoreProjectsFolder() async => null;
 
 Future<ProjectFolder?> chooseProjectsFolder() async => null;
 
-Future<ProjectFolder?> defaultProjectsFolder() async => null;
+Future<ProjectFolder?> defaultProjectsFolder({String? sub}) async => null;
 
 ProjectFolder? projectsFolderAt(String path) => null;
 

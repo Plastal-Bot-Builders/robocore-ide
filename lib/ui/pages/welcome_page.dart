@@ -88,6 +88,11 @@ class _WelcomePageState extends State<WelcomePage> {
                 const SizedBox(height: 12),
                 Text('Saved only on this device, with your projects. You can change it any time in Settings.',
                     style: tCaption(c), textAlign: TextAlign.center),
+                // Someone new on a shared computer: back to "Who's coding today?".
+                if (AppScope.of(context).people.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Center(child: Btn('Back', icon: 'undo', kind: BtnKind.plain, onTap: AppScope.read(context).chooseAnotherPerson)),
+                ],
               ]),
             ),
           ),

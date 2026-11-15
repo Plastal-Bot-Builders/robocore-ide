@@ -156,7 +156,7 @@ class SettingsPage extends StatelessWidget {
               Row(mainAxisSize: MainAxisSize.min, children: [
                 if (f != null) ...[Btn('Show in $explorer', icon: 'open', onTap: () => f.reveal()), const SizedBox(width: 8)],
                 if (f == null && s.defaultFolder != null) ...[
-                  Btn('Use Documents\\RoboCore', icon: 'check', onTap: () => s.chooseProjectsFolder(suggested: true)),
+                  Btn('Use ${s.suggestedFolder}', icon: 'check', onTap: () => s.chooseProjectsFolder(suggested: true)),
                   const SizedBox(width: 8),
                 ],
                 Btn(f != null ? 'Change…' : 'Choose folder…', icon: 'folder', onTap: () => s.chooseProjectsFolder()),
@@ -370,7 +370,7 @@ class _ProfileRowState extends State<_ProfileRow> {
     }
     s.setProfile(name: _name.text, school: _school.text);
     setState(() => _error = null);
-    s.showToast('Profile saved', body: 'Shown on Home and in the account menu.');
+    s.showToast('Saved');
   }
 
   @override
