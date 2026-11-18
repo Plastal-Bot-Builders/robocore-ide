@@ -119,6 +119,8 @@ and to point a student who mentions harm or distress to a trusted adult without 
 | `COG_LOCAL` | (off) | With `openai`: `1` when the model runs on this computer (nothing goes on to another company) |
 | `COG_AI_NAME` / `COG_AI_COMPANY` / `COG_AI_WHERE` | model / (none) / (none) | With `openai`: what the IDE tells students: the AI's name, the company their words go to, and its country. Company and country are needed unless `COG_LOCAL=1` |
 | `COG_EXTRA_BODY` | (none) | With `openai`: JSON added to every request, for settings a service documents |
+| `COG_JSON_MODE` | `schema` | With `openai`: how the fix and the quick check are asked for: `schema` (JSON Schema first), `object` (plain JSON mode) or `none` (by instruction only) |
+| `COG_MAX_TOKENS` / `COG_FIX_MAX_TOKENS` | 4000 / 12000 | With `openai`: the longest answer and the longest fix, in tokens |
 | `COG_EFFORT` / `COG_FIX_EFFORT` | `low` / `medium` | How much the model thinks for chat / for suggested fixes |
 | `COG_RATE_PER_MIN` | 12 | Cog requests per client per minute |
 | `COG_KEYS` | (none) | The schools' keys, comma-separated. Cog answers only requests that carry one |

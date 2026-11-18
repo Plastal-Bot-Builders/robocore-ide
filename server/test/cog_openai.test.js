@@ -3,6 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import fs from 'node:fs';
 import { createServer, loadConfig } from '../src/server.js';
 import { cogConfig, thinkFilter } from '../src/cog.js';
 import worker from '../../cog-worker/src/index.js';
@@ -277,6 +278,97 @@ test('a model that is not running: the message says so', async () => {
   } finally {
     s.close();
   }
+});
+
+test('a free allowance that is used up for the day is said plainly', async () => {
+  next = { status: 429, sticky: true };
+  try {
+    const s = await start(ENV());
+    try {
+      const url = `http://127.0.0.1:${s.address().port}`;
+      assert.match((await events(await post('/cog/chat', job(), url))).at(-1).message, /busy right now/);
+    } finally {
+      s.close();
+    }
+  } finally {
+    next = {};
+  }
+  // Cloudflare's words when the daily free allowance is gone, whatever status they come with.
+  for (const status of [429, 400]) {
+    const quota = http.createServer((req, res) => {
+      req.resume();
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ errors: [{ code: 4006, message: 'you have used up your daily free allocation of 10,000 neurons' }] }));
+    });
+    await new Promise((r) => quota.listen(0, '127.0.0.1', r));
+    const s = await start({ ...ENV(), COG_BASE_URL: `http://127.0.0.1:${quota.address().port}/v1` });
+    try {
+      const url = `http://127.0.0.1:${s.address().port}`;
+      assert.match((await events(await post('/cog/chat', job(), url))).at(-1).message, /for today\. It will be back tomorrow/);
+      const fix = await post('/cog/fix', job(), url);
+      assert.equal(fix.status, 429);
+      assert.match((await fix.json()).error, /back tomorrow/);
+    } finally {
+      s.close();
+      quota.close();
+    }
+  }
+});
+
+test('COG_JSON_MODE and the token caps: how the fix is asked for, and how long answers may be', async () => {
+  assert.equal(cogConfig({ ...ENV(), COG_JSON_MODE: 'xml' }).ready, false);
+  assert.equal(cogConfig({ ...ENV(), COG_MAX_TOKENS: 'lots' }).ready, false);
+  const s = await start({ ...ENV(), COG_JSON_MODE: 'object', COG_MAX_TOKENS: '1500', COG_FIX_MAX_TOKENS: '6000' });
+  const url = `http://127.0.0.1:${s.address().port}`;
+  try {
+    const at = seen.length;
+    assert.deepEqual(await (await post('/cog/fix', job(), url)).json(), FIX);
+    assert.equal(seen.length, at + 1, 'asked once: JSON Schema was not tried first');
+    assert.deepEqual(seen.at(-1).body.response_format, { type: 'json_object' });
+    assert.equal(seen.at(-1).body.max_tokens, 6000);
+    await events(await post('/cog/chat', job(), url));
+    assert.equal(seen.at(-1).body.max_tokens, 1500);
+  } finally {
+    s.close();
+  }
+  const none = await start({ ...ENV(), COG_JSON_MODE: 'none' });
+  try {
+    assert.deepEqual(await (await post('/cog/check', job(), `http://127.0.0.1:${none.address().port}`)).json(), CHECK);
+    assert.equal(seen.at(-1).body.response_format, undefined);
+    assert.equal(seen.at(-1).body.max_tokens, 12000);
+  } finally {
+    none.close();
+  }
+});
+
+test('the free Cloudflare set-up (wrangler.jsonc, env.cloudflare) makes a Cog that says who answers', async () => {
+  // wrangler.jsonc has comments; strings (which hold // in addresses) are kept as they are.
+  const text = fs.readFileSync(new URL('../../cog-worker/wrangler.jsonc', import.meta.url), 'utf8')
+    .replace(/("(?:[^"\\]|\\.)*")|\/\/[^\n]*/g, (m, s) => s ?? '');
+  const config = JSON.parse(text);
+  assert.equal(config.env.cloudflare.name, config.name, 'the same Worker, with another engine');
+  const vars = config.env.cloudflare.vars;
+  for (const k of Object.keys(config.vars)) if (k !== 'COG_MODEL') assert.equal(vars[k], config.vars[k], `${k} is the same with either engine`);
+  // The secrets deploy.sh sets, with the fake service in place of the account's AI address.
+  const env = { ...vars, COG_BASE_URL: `${apiBase}/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1`, COG_API_KEY: 'cf-token', COG_KEYS: 'school-1' };
+  const cfg = cogConfig(env);
+  assert.equal(cfg.ready, true, cfg.missing.join(', '));
+  const by = 'Llama 3.3, run by Cloudflare|Cloudflare|the United States|hosted';
+  const call = (path, body) => worker.fetch(new Request(`https://robocore-cog.example.workers.dev${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', 'X-Cog-Key': 'school-1' },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  }), env, { waitUntil() {} });
+  const health = await (await call('/health')).json();
+  assert.deepEqual(health.cog, { ready: true, model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', keys: true, by: { label: 'Llama 3.3, run by Cloudflare', company: 'Cloudflare', where: 'the United States', local: false } });
+  assert.equal(said(await events(await call('/cog/chat', job({ by })))), 'Names in Arduino are case-sensitive.');
+  const q = seen.at(-1);
+  assert.equal(q.path, '/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1/chat/completions');
+  assert.equal(q.headers.authorization, 'Bearer cf-token');
+  assert.equal(q.body.model, '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+  assert.equal(q.body.max_tokens, 1500);
+  assert.deepEqual(await (await call('/cog/fix', job({ by }))).json(), FIX);
+  assert.deepEqual(seen.at(-1).body.response_format, { type: 'json_object' });
 });
 
 test('the Cloudflare Worker runs the same engine', async () => {

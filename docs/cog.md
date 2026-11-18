@@ -85,8 +85,9 @@ COG_PROVIDER=openai COG_BASE_URL=https://api.deepseek.com COG_MODEL=deepseek-fla
 COG_AI_NAME=DeepSeek COG_AI_COMPANY=DeepSeek COG_AI_WHERE=China COG_KEYS=… npm start
 ```
 
-Cloudflare Workers AI, Groq, OpenRouter and Ollama's cloud work the same way, with the address their documentation
-gives for the OpenAI format. Free allowances are small (tens to a few hundred questions a day) and change without
+Cloudflare's own AI is set up ready-made, for nothing up to a daily allowance: `bash cog-worker/deploy.sh cloudflare`
+(`cog-worker/README.md`, "Without paying"). Groq, OpenRouter and Ollama's cloud work the same way, with the address
+their documentation gives for the OpenAI format. Free allowances are small (tens to a few hundred questions a day) and change without
 notice, and some free tiers use what is sent to train models: read the terms before a class uses one.
 
 **Who answers.** The IDE tells every student what Cog is and where their words go, before the first question. That
@@ -98,7 +99,8 @@ Claude) gets no answer from another AI.
 How the engines differ: structured answers (the fix, the quick check) are asked for by JSON Schema, then as plain JSON
 when the service doesn't know that, and are checked either way; a model's thinking (`<think>…</think>` or a separate
 reasoning field) never reaches the student; `COG_EFFORT` only applies to Claude; `COG_EXTRA_BODY` adds settings a
-service documents to every request, as JSON. This engine is tested against a stand-in service only: try a real model
+service documents to every request, as JSON; `COG_JSON_MODE` and the two token caps are in `server/README.md`. A
+free allowance that is used up for the day is said plainly ("Cog will be back tomorrow"). This engine is tested against a stand-in service only: try a real model
 on real questions before a class does.
 
 ## Teacher PIN

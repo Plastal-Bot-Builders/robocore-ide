@@ -15,7 +15,10 @@
 //                            the service asks for one; and who answers, because the IDE tells students where their
 //                            words go: COG_LOCAL=1 for a model on this computer, or COG_AI_COMPANY and COG_AI_WHERE.
 //                            COG_AI_NAME is what the IDE calls the AI (default: the model's name); COG_EXTRA_BODY is
-//                            JSON added to every request (e.g. {"thinking":{"type":"disabled"}}).
+//                            JSON added to every request (e.g. {"thinking":{"type":"disabled"}}). COG_JSON_MODE
+//                            says how to ask for the fix and the quick check: schema (JSON Schema first, the
+//                            default), object (plain JSON mode) or none (by instruction only). COG_MAX_TOKENS and
+//                            COG_FIX_MAX_TOKENS cap an answer and a fix (4000 and 12000).
 //
 // COG_KEYS: the schools' keys, one of which each request carries in X-Cog-Key, so nobody else can spend the credit
 // (COG_OPEN=1 instead lets anyone in, for a server on your own computer).
@@ -64,12 +67,17 @@ export function cogConfig(env = process.env) {
         extraOk = false;
       }
     }
+    const jsonMode = String(env.COG_JSON_MODE || 'schema').trim().toLowerCase();
+    const maxTokens = Number(env.COG_MAX_TOKENS || 4000);
+    const fixMaxTokens = Number(env.COG_FIX_MAX_TOKENS || 12000);
     const missing = [
       !baseURL && 'COG_BASE_URL',
       !model && 'COG_MODEL',
       // The IDE tells students who gets their words, so the server must know.
       !local && !(company && where) && 'COG_LOCAL=1 (a model on this computer) or COG_AI_COMPANY and COG_AI_WHERE (who answers, and in which country)',
       !extraOk && 'COG_EXTRA_BODY as a JSON object',
+      !['schema', 'object', 'none'].includes(jsonMode) && 'COG_JSON_MODE as schema, object or none',
+      !(maxTokens >= 200 && fixMaxTokens >= 200) && 'COG_MAX_TOKENS and COG_FIX_MAX_TOKENS as numbers (200 or more)',
     ].filter(Boolean);
     return {
       ...common,
@@ -79,6 +87,9 @@ export function cogConfig(env = process.env) {
       baseURL,
       apiKey: env.COG_API_KEY || undefined,
       extra: extraOk ? extra : {},
+      jsonMode,
+      maxTokens,
+      fixMaxTokens,
       by: { label: String(env.COG_AI_NAME || '').trim() || model, company: local ? '' : company, where: local ? '' : where, local },
     };
   }
@@ -436,14 +447,18 @@ function openaiEngine(cfg) {
     { type: 'json_object' },
     null,
   ];
-  let format = 0;
+  let format = Math.max(0, ['schema', 'object', 'none'].indexOf(cfg.jsonMode ?? 'schema'));
+  // A free allowance that is used up for the day (Cloudflare's "daily free allocation", a quota): waiting a minute
+  // would not help, so students are told when it is back.
+  const spent = (e) => e instanceof ModelError && /daily|allocation|quota/i.test(e.message);
 
   return {
-    busy: (e) => e instanceof ModelError && e.status === 429,
+    busy: (e) => e instanceof ModelError && (e.status === 429 || spent(e)),
     friendly(e) {
       if (!(e instanceof ModelError)) return 'Cog hit a problem. Try again.';
       // The service's own words are for whoever runs the server, not for students.
-      if (e.status !== 429) console.error(`Cog: ${e.message}`);
+      if (e.status !== 429 || spent(e)) console.error(`Cog: ${e.message}`);
+      if (spent(e)) return 'Cog has answered all the questions it can for today. It will be back tomorrow.';
       if (e.status === 429) return 'Cog is busy right now. Try again in a minute.';
       if (e.status === 401 || e.status === 403) return 'Cog is not set up correctly on the server (API key).';
       if (e.status === 404) return 'Cog is not set up correctly on the server (address or model).';
@@ -453,7 +468,7 @@ function openaiEngine(cfg) {
     stream(job, instruction, onText) {
       const ac = new AbortController();
       const stop = (async () => {
-        const r = await post({ model: cfg.model, messages: messages(job, instruction), stream: true, max_tokens: 4000 }, ac.signal);
+        const r = await post({ model: cfg.model, messages: messages(job, instruction), stream: true, max_tokens: cfg.maxTokens ?? 4000 }, ac.signal);
         const clean = thinkFilter(onText);
         let why = 'end_turn';
         for await (const data of sseData(r.body)) {
@@ -477,7 +492,7 @@ function openaiEngine(cfg) {
     },
     async json(job, instruction, schema, name) {
       const ask = `${instruction}\n\nReply with one JSON object and nothing else: no words around it and no code fence. It must follow this JSON Schema:\n${JSON.stringify(schema)}`;
-      const body = { model: cfg.model, messages: messages(job, ask), max_tokens: 12000 };
+      const body = { model: cfg.model, messages: messages(job, ask), max_tokens: cfg.fixMaxTokens ?? 12000 };
       const ways = formats(name, schema);
       let r;
       for (;;) {

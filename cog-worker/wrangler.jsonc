@@ -19,5 +19,31 @@
     // Web pages that may call Cog; the desktop apps send no Origin and are always let in.
     "ALLOWED_ORIGINS": "https://plastal-bot-builders.github.io,http://localhost:*,http://127.0.0.1:*"
     // "COMPILE_SERVER": "https://robocore-compile.onrender.com"   passes compiles on, for the web IDE
+  },
+  "env": {
+    // The same Worker with Cloudflare's own AI (Workers AI) instead of Claude: `bash cog-worker/deploy.sh cloudflare`.
+    // Free up to Cloudflare's daily allowance, and on the free plan it stops for the day instead of billing.
+    // Its secrets (the script sets them): COG_API_KEY (a Workers AI API token), COG_BASE_URL (the account's AI
+    // address) and COG_KEYS.
+    "cloudflare": {
+      "name": "robocore-cog",
+      "vars": {
+        "COG_PROVIDER": "openai",
+        // About 50 questions a day fit in the free allowance with this model. @cf/meta/llama-3.1-8b-instruct-fp8-fast
+        // allows about 300, with weaker answers. When you change the model, change COG_AI_NAME to match.
+        "COG_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        // What the IDE tells students: the AI's name, and the company and country their words go to.
+        "COG_AI_NAME": "Llama 3.3, run by Cloudflare",
+        "COG_AI_COMPANY": "Cloudflare",
+        "COG_AI_WHERE": "the United States",
+        // Workers AI takes plain JSON mode; answers and fixes are capped to fit the model.
+        "COG_JSON_MODE": "object",
+        "COG_MAX_TOKENS": "1500",
+        "COG_FIX_MAX_TOKENS": "6000",
+        "COG_RATE_PER_MIN": "12",
+        "COG_KEY_RATE_PER_MIN": "60",
+        "ALLOWED_ORIGINS": "https://plastal-bot-builders.github.io,http://localhost:*,http://127.0.0.1:*"
+      }
+    }
   }
 }
