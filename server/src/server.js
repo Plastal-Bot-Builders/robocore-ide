@@ -175,7 +175,7 @@ export function createServer(cfg = loadConfig()) {
         return res.end();
       }
       if (req.method === 'GET' && url.pathname === '/health') {
-        return send(res, 200, { ok: true, ...versions, running: queue.running, queued: queue.queued, cog: { ready: cog.ready, model: cog.model, keys: cog.keys } }, cors);
+        return send(res, 200, { ok: true, ...versions, running: queue.running, queued: queue.queued, cog: { ready: cog.ready, model: cog.model, keys: cog.keys, by: cog.by } }, cors);
       }
       if (req.method === 'GET' && url.pathname === '/boards') {
         return send(res, 200, { boards: Object.entries(BOARDS).map(([id, b]) => ({ id, name: b.name, fqbn: b.fqbn, arch: b.arch })), limits: LIMITS }, cors);
@@ -224,6 +224,7 @@ export function createServer(cfg = loadConfig()) {
           if (e instanceof RequestError) throw e;
           throw new RequestError(400, 'The request is not valid JSON.');
         }
+        cog.agree(body?.by);
         const job = validateCog(body, { needTask: kind === 'chat' });
         if (kind === 'chat') {
           return await cog.chat(job, res, cors, (stop) => res.on('close', () => { if (!res.writableEnded) stop(); }));

@@ -2,7 +2,7 @@
 // check, the calls to the Anthropic API) without the compiler, so the API key never sits next to students' builds.
 // The IDE uses this address as its RoboCore server; the routes and answers are the server's:
 //
-//   GET  /health      {ok, cog: {ready, model, keys}}
+//   GET  /health      {ok, cog: {ready, model, keys, by}}
 //   GET  /cog/key     200 when X-Cog-Key is a school key (the IDE's Test Cog)
 //   POST /cog/chat    server-sent events      POST /cog/fix, /cog/check    JSON
 //
@@ -48,7 +48,7 @@ const setups = new WeakMap();
 function setup(env) {
   let s = setups.get(env);
   if (!s) {
-    const cfg = { ...cogConfig(env), apiKey: env.ANTHROPIC_API_KEY || undefined };
+    const cfg = cogConfig(env); // it carries the key: a Worker has no process.env for the SDK to read
     s = {
       cog: makeCog(cfg),
       allowed: originMatcher(String(env.ALLOWED_ORIGINS || DEFAULT_ORIGINS).split(',').map((o) => o.trim()).filter(Boolean)),
@@ -150,7 +150,7 @@ export default {
         });
       }
       if (request.method === 'GET' && url.pathname === '/health') {
-        return json(200, { ok: true, cog: { ready: s.cog.ready, model: s.cog.model, keys: s.cog.keys }, compile: Boolean(s.compile) }, cors);
+        return json(200, { ok: true, cog: { ready: s.cog.ready, model: s.cog.model, keys: s.cog.keys, by: s.cog.by }, compile: Boolean(s.compile) }, cors);
       }
       if (url.pathname === '/cog/key' || url.pathname.startsWith('/cog/')) {
         if (origin && !cors['Access-Control-Allow-Origin']) return json(403, { error: 'Origin not allowed.' }, cors);
@@ -165,7 +165,9 @@ export default {
         if (request.method !== 'POST' || !['chat', 'fix', 'check'].includes(kind)) return json(404, { error: 'Not found.' }, cors);
         // A whole school shares one key: this caps what it can spend, however many addresses it asks from.
         if (!s.perSchool(key ?? '')) return tooMany(cors, 'Cog is busy for your school right now. Wait a minute and ask again.');
-        const job = validateCog(await readJson(request), { needTask: kind === 'chat' });
+        const body = await readJson(request);
+        s.cog.agree(body?.by);
+        const job = validateCog(body, { needTask: kind === 'chat' });
         if (kind === 'chat') return await chat(s.cog, job, cors, ctx);
         return json(200, kind === 'fix' ? await s.cog.fix(job) : await s.cog.check(job), cors);
       }

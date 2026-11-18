@@ -5,8 +5,10 @@ It runs the official **arduino-cli** with the **esp32 by Espressif 3.3.12** core
 and the optional libraries the IDE lists (ESP32Servo, Adafruit NeoPixel, NewPing, LiquidCrystal I2C).
 The IDE then flashes the result over USB-C with esptool-js.
 
-It also runs **Cog**, the IDE's learning partner, through the Anthropic API (below). Compiling uses only Node 22's
-built-in modules; Cog uses the official Anthropic SDK (`@anthropic-ai/sdk`, pinned in `package-lock.json`; `npm ci`).
+It also runs **Cog**, the IDE's learning partner (below): through the Anthropic API by default, or through any
+service that speaks the OpenAI chat format, such as a model on your own computer. Compiling uses only Node 22's
+built-in modules; Cog uses the official Anthropic SDK (`@anthropic-ai/sdk`, pinned in `package-lock.json`; `npm ci`)
+for Claude and plain `fetch` for the others.
 
 ## API
 
@@ -77,13 +79,17 @@ Output and the Serial Monitor, the selected block; `{"read": false}` when the st
 - `/cog/check` returns `{question, options, answer, explanation, concept}`: one multiple-choice question after a fix.
 
 The wording of every task and the system prompt live on the server (`src/cog.js`), so the IDE can't change what Cog is
-asked to do. Requests use adaptive thinking with the effort below, prompt caching for the system prompt, and
-`fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), which re-runs a request on Anthropic's recommended
-model if the first one declines it. Without `ANTHROPIC_API_KEY`, `/health` says `cog.ready: false` and the Cog routes
-answer 503; compiling keeps working.
+asked to do. With Claude, requests use adaptive thinking with the effort below, prompt caching for the system prompt,
+and, on the models that offer it (not Haiku 5.5), `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`),
+which re-runs a request on Anthropic's recommended model if the first one declines it. Without its settings,
+`/health` says `cog.ready: false` and the Cog routes answer 503 with what is missing; compiling keeps working.
+
+`/health` also says who answers (`cog.by`: `{label, company, where, local}`), and the IDE writes its notice to
+students from that. Each request carries the `by` its notice named; if that is not this server's AI, the request
+gets 409 and no model is asked, so the IDE shows the new notice first. `docs/cog.md` ("Another AI") has the rest.
 
 Every Cog request needs a **school key** in the `X-Cog-Key` header, one of `COG_KEYS`, so that nobody who finds the
-server's address can spend its Anthropic credit. Make one key per school (a long random string, e.g.
+server's address can spend its AI credit. Make one key per school (a long random string, e.g.
 `openssl rand -hex 16`) and give it to the teacher, who types it in the IDE (Settings → Cog → School key, locked by the
 teacher PIN). A wrong or missing key gets 401; `GET /cog/key` answers 200 for a good key (the IDE's Test Cog). Without
 `COG_KEYS` the Cog routes answer 503, unless `COG_OPEN=1` (only for a server on your own computer). To shut a school
@@ -105,8 +111,14 @@ and to point a student who mentions harm or distress to a trusted adult without 
 | `COMPILE_JOBS` | 2 | Compiler threads per build |
 | `COMPILE_TIMEOUT_MS` | 120000 | |
 | `RATE_PER_MIN` | 20 | Per client |
-| `ANTHROPIC_API_KEY` | (none) | Turns Cog on. Keep it secret: set it in the host's dashboard, never in the repo |
-| `COG_MODEL` | `claude-opus-5-5` | The model Cog uses. See `docs/cog.md` for cost |
+| `ANTHROPIC_API_KEY` | (none) | Turns Cog on (with Claude). Keep it secret: set it in the host's dashboard, never in the repo |
+| `COG_MODEL` | `claude-haiku-5-5` | The model Cog uses. See `docs/cog.md` for cost |
+| `COG_PROVIDER` | `anthropic` | `openai` = another AI through the OpenAI chat format (`docs/cog.md`, "Another AI") |
+| `COG_BASE_URL` | (none) | With `openai`: the service's address, before `/chat/completions` |
+| `COG_API_KEY` | (none) | With `openai`: the service's key, when it asks for one. Keep it secret |
+| `COG_LOCAL` | (off) | With `openai`: `1` when the model runs on this computer (nothing goes on to another company) |
+| `COG_AI_NAME` / `COG_AI_COMPANY` / `COG_AI_WHERE` | model / (none) / (none) | With `openai`: what the IDE tells students: the AI's name, the company their words go to, and its country. Company and country are needed unless `COG_LOCAL=1` |
+| `COG_EXTRA_BODY` | (none) | With `openai`: JSON added to every request, for settings a service documents |
 | `COG_EFFORT` / `COG_FIX_EFFORT` | `low` / `medium` | How much the model thinks for chat / for suggested fixes |
 | `COG_RATE_PER_MIN` | 12 | Cog requests per client per minute |
 | `COG_KEYS` | (none) | The schools' keys, comma-separated. Cog answers only requests that carry one |
@@ -122,8 +134,8 @@ node server/test/smoke.mjs http://localhost:8080      # compiles every example f
 ```
 
 Without Docker (arduino-cli and the cores installed locally): `cd server && npm ci && npm start`
-(add `ANTHROPIC_API_KEY=… COG_OPEN=1` in front of `npm start` for Cog). `npm test` runs the unit tests with a fake arduino-cli and a
-fake Anthropic API.
+(add `ANTHROPIC_API_KEY=… COG_OPEN=1` in front of `npm start` for Cog). `npm test` runs the unit tests with a fake arduino-cli, a
+fake Anthropic API and a fake OpenAI-format service.
 
 ## Put it online
 

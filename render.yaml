@@ -17,6 +17,7 @@ services:
       - key: COMPILE_JOBS
         value: "1"
       # Cog: paste the Anthropic API key in Render's dashboard when it asks (it is never stored in this repo).
+      # For another AI (a model on your own computer, DeepSeek, Cloudflare …) see docs/cog.md: COG_PROVIDER=openai.
       - key: ANTHROPIC_API_KEY
         sync: false
       # Cog answers only requests with one of these school keys (comma-separated), so nobody else spends the credit.
@@ -24,4 +25,4 @@ services:
       - key: COG_KEYS
         sync: false
       - key: COG_MODEL
-        value: claude-opus-5-5
+        value: claude-haiku-5-5 # the cheapest Claude; docs/cog.md compares the costs

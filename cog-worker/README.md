@@ -35,9 +35,9 @@ To change a secret later, from this folder: `wrangler secret put ANTHROPIC_API_K
 
 | Name | Where | What |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | secret | Turns Cog on |
+| `ANTHROPIC_API_KEY` | secret | Turns Cog on (with Claude; for another AI see `docs/cog.md`, "Another AI") |
 | `COG_KEYS` | secret | The schools' keys, comma-separated. Cog answers only requests that carry one |
-| `COG_MODEL` | `wrangler.jsonc` | Default `claude-opus-5-5`; `claude-haiku-5-5` costs far less |
+| `COG_MODEL` | `wrangler.jsonc` | Default `claude-haiku-5-5`, the cheapest Claude; `claude-sonnet-5-5` and `claude-opus-5-5` are stronger and cost 20 and 40 times as much |
 | `COG_EFFORT`, `COG_FIX_EFFORT` | `wrangler.jsonc` (optional) | How hard it thinks for chat and for fixes (`low`, `medium`, `high`) |
 | `COG_RATE_PER_MIN` | `wrangler.jsonc` | Requests per minute from one address (12) |
 | `COG_KEY_RATE_PER_MIN` | `wrangler.jsonc` | Requests per minute with one school key, all its classrooms together (60) |

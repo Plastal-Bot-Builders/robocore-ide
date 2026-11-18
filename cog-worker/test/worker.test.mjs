@@ -90,7 +90,7 @@ const events = async (r) => (await r.text()).split('\n\n').filter((l) => l.start
 
 test('health says Cog is ready, which model it uses and that it needs a school key', async () => {
   const j = await (await call(env(), '/health', { key: null })).json();
-  assert.deepEqual(j.cog, { ready: true, model: 'claude-opus-5-5', keys: true });
+  assert.deepEqual(j.cog, { ready: true, model: 'claude-haiku-5-5', keys: true, by: { label: 'Claude, made by Anthropic', company: 'Anthropic', where: 'the United States', local: false } });
   assert.equal(j.compile, false);
   const off = await (await call(env({ ANTHROPIC_API_KEY: '' }), '/health')).json();
   assert.equal(off.cog.ready, false);

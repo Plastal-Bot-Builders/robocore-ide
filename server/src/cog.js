@@ -1,15 +1,24 @@
-// Cog, the learning partner in the RoboCore IDE. It answers through Claude (the Anthropic API),
-// so the API key stays on this server and never reaches the IDE.
+// Cog, the learning partner in the RoboCore IDE. The AI's key stays on this server and never reaches the IDE.
 //
 //   POST /cog/chat   text/event-stream of {"t":"text","v":"…"} … then {"t":"done"} (or {"t":"refusal"} / {"t":"error"})
 //   POST /cog/fix    {explanation, file, newContent}: the smallest change that fixes the problem
 //   POST /cog/check  {question, options, answer, explanation, concept}: one question after a fix
-//
-// Needs ANTHROPIC_API_KEY, and COG_KEYS: the schools' keys, one of which each request carries in X-Cog-Key, so nobody
-// else can spend the API credit (COG_OPEN=1 instead lets anyone in, for a server on your own computer). COG_MODEL picks
-// the model (default claude-opus-5-5); COG_EFFORT and COG_FIX_EFFORT set how hard it thinks for chat / for fixes (low,
-// medium, high).
 //   GET /cog/key     200 when the X-Cog-Key header is a school key (the IDE's Test Cog)
+//
+// Two engines write the answers (COG_PROVIDER):
+//   anthropic (the default)  Claude through the Anthropic API. Needs ANTHROPIC_API_KEY. COG_MODEL picks the model
+//                            (default claude-haiku-5-5, the cheapest); COG_EFFORT and COG_FIX_EFFORT set how hard it
+//                            thinks for chat / for fixes (low, medium, high).
+//   openai                   any service that speaks the OpenAI chat format: a model on your own computer (Ollama,
+//                            LM Studio, llama.cpp) or a host (DeepSeek, Cloudflare Workers AI, Groq, OpenRouter …).
+//                            Needs COG_BASE_URL (the address before /chat/completions) and COG_MODEL; COG_API_KEY when
+//                            the service asks for one; and who answers, because the IDE tells students where their
+//                            words go: COG_LOCAL=1 for a model on this computer, or COG_AI_COMPANY and COG_AI_WHERE.
+//                            COG_AI_NAME is what the IDE calls the AI (default: the model's name); COG_EXTRA_BODY is
+//                            JSON added to every request (e.g. {"thinking":{"type":"disabled"}}).
+//
+// COG_KEYS: the schools' keys, one of which each request carries in X-Cog-Key, so nobody else can spend the credit
+// (COG_OPEN=1 instead lets anyone in, for a server on your own computer).
 import { createHash, timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { RequestError } from './errors.js';
@@ -23,16 +32,68 @@ export const COG_LIMITS = {
   messages: 30, messageChars: 4000, files: 20, fileChars: 60_000, totalChars: 200_000, problems: 50, logChars: 8000,
 };
 
+// Who answers, for the IDE's notice to students: what the AI is called and where their words go.
+const CLAUDE = { label: 'Claude, made by Anthropic', company: 'Anthropic', where: 'the United States', local: false };
+
+/// Who answers, as one string. The IDE sends the one its notice named with each request (`by`).
+export const byId = (b) => [b.label, b.company, b.where, b.local ? 'local' : 'hosted'].join('|');
+
 export function cogConfig(env = process.env) {
-  return {
-    ready: Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN),
-    model: env.COG_MODEL || 'claude-opus-5-5',
+  const provider = String(env.COG_PROVIDER || 'anthropic').trim().toLowerCase();
+  const common = {
+    provider,
     effort: env.COG_EFFORT || 'low',
     fixEffort: env.COG_FIX_EFFORT || 'medium',
     ratePerMin: Number(env.COG_RATE_PER_MIN || 12),
-    baseURL: env.ANTHROPIC_BASE_URL || undefined,
     keys: String(env.COG_KEYS || '').split(',').map((k) => k.trim()).filter(Boolean),
     open: env.COG_OPEN === '1',
+  };
+  if (provider === 'openai') {
+    const baseURL = String(env.COG_BASE_URL || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
+    const model = String(env.COG_MODEL || '').trim();
+    const local = env.COG_LOCAL === '1';
+    const company = String(env.COG_AI_COMPANY || '').trim();
+    const where = String(env.COG_AI_WHERE || '').trim();
+    let extra = {};
+    let extraOk = true;
+    if (env.COG_EXTRA_BODY) {
+      try {
+        extra = JSON.parse(env.COG_EXTRA_BODY);
+        extraOk = !!extra && typeof extra === 'object' && !Array.isArray(extra);
+      } catch {
+        extraOk = false;
+      }
+    }
+    const missing = [
+      !baseURL && 'COG_BASE_URL',
+      !model && 'COG_MODEL',
+      // The IDE tells students who gets their words, so the server must know.
+      !local && !(company && where) && 'COG_LOCAL=1 (a model on this computer) or COG_AI_COMPANY and COG_AI_WHERE (who answers, and in which country)',
+      !extraOk && 'COG_EXTRA_BODY as a JSON object',
+    ].filter(Boolean);
+    return {
+      ...common,
+      ready: !missing.length,
+      missing,
+      model,
+      baseURL,
+      apiKey: env.COG_API_KEY || undefined,
+      extra: extraOk ? extra : {},
+      by: { label: String(env.COG_AI_NAME || '').trim() || model, company: local ? '' : company, where: local ? '' : where, local },
+    };
+  }
+  if (provider !== 'anthropic') {
+    return { ...common, ready: false, missing: ['COG_PROVIDER as "anthropic" or "openai"'], model: String(env.COG_MODEL || ''), by: CLAUDE };
+  }
+  return {
+    ...common,
+    ready: Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN),
+    missing: ['an Anthropic API key (ANTHROPIC_API_KEY)'],
+    model: env.COG_MODEL || 'claude-haiku-5-5',
+    baseURL: env.ANTHROPIC_BASE_URL || undefined,
+    // Given to the SDK directly: a Cloudflare Worker has no process.env for it to read.
+    apiKey: env.ANTHROPIC_API_KEY || undefined,
+    by: CLAUDE,
   };
 }
 
@@ -219,21 +280,14 @@ const CHECK_SCHEMA = {
   additionalProperties: false,
 };
 
-function friendly(e) {
-  if (e instanceof Anthropic.RateLimitError) return 'Cog is busy right now. Try again in a minute.';
-  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return 'Cog is not set up correctly on the server (API key).';
-  if (e instanceof Anthropic.APIConnectionError) return 'The server could not reach Cog. Check its internet connection.';
-  if (e instanceof Anthropic.APIError) return 'Cog hit a problem. Try again.';
-  return 'Cog hit a problem. Try again.';
-}
+const REFUSED = 'Cog can\'t help with that one. Try asking about your code or your robot.';
+const TOO_LONG = 'Cog\'s answer was too long. Try again.';
+const UNREADABLE = 'Cog gave an answer the IDE could not read. Try again.';
 
-// Keys are compared as hashes of the same length, so how long a check takes says nothing about them.
-const digest = (s) => createHash('sha256').update(String(s)).digest();
+// ---- Claude, through the Anthropic SDK ----------------------------------------------------------------------------
 
-export function makeCog(cfg) {
-  const client = cfg.ready ? new Anthropic({ ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}), ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}) }) : null;
-  const keys = (cfg.keys ?? []).map(digest);
-  const notReady = () => new RequestError(503, 'Cog is not set up on this server yet: it needs an Anthropic API key (ANTHROPIC_API_KEY).');
+function anthropicEngine(cfg) {
+  const client = new Anthropic({ ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}), ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}) });
   const base = (effort, maxTokens) => ({
     model: cfg.model,
     max_tokens: maxTokens,
@@ -242,35 +296,244 @@ export function makeCog(cfg) {
     system: SYSTEM,
     output_config: { effort },
   });
-
-  async function structured(job, instruction, schema, effort) {
-    if (!client) throw notReady();
-    let msg;
-    try {
+  return {
+    busy: (e) => e instanceof Anthropic.RateLimitError,
+    friendly(e) {
+      if (e instanceof Anthropic.RateLimitError) return 'Cog is busy right now. Try again in a minute.';
+      if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return 'Cog is not set up correctly on the server (API key).';
+      if (e instanceof Anthropic.APIConnectionError) return 'The server could not reach Cog. Check its internet connection.';
+      return 'Cog hit a problem. Try again.';
+    },
+    /// Starts the answer; [onText] gets each piece. `stop` resolves to why it ended (end_turn, max_tokens, refusal).
+    stream(job, instruction, onText) {
+      const s = client.beta.messages.stream({ ...base(cfg.effort, 8000), messages: apiMessages(job, instruction) });
+      s.on('text', onText);
+      return { stop: s.finalMessage().then((m) => m.stop_reason), abort: () => s.abort() };
+    },
+    /// One answer as an object that follows [schema].
+    async json(job, instruction, schema, _name, effort) {
       const p = base(effort, 16000);
-      msg = await client.beta.messages.create({
+      const msg = await client.beta.messages.create({
         ...p,
         output_config: { ...p.output_config, format: { type: 'json_schema', schema } },
         messages: apiMessages(job, instruction),
       });
-    } catch (e) {
-      throw new RequestError(e instanceof Anthropic.RateLimitError ? 429 : 502, friendly(e));
+      if (msg.stop_reason === 'refusal') throw new RequestError(422, REFUSED);
+      if (msg.stop_reason === 'max_tokens') throw new RequestError(502, TOO_LONG);
+      return parseAnswer(msg.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+    },
+  };
+}
+
+// ---- Any service that speaks the OpenAI chat format ---------------------------------------------------------------
+
+class ModelError extends Error {
+  constructor(status, detail = '') {
+    super(`The model service answered ${status || 'nothing'}${detail ? `: ${detail}` : ''}`);
+    this.status = status; // 0 = could not be reached
+  }
+}
+
+// The data lines of a server-sent event stream (works in Node and in a Cloudflare Worker).
+async function* sseData(body) {
+  const reader = body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).replace(/\r$/, '');
+      buf = buf.slice(i + 1);
+      if (line.startsWith('data:')) yield line.slice(5).trim();
     }
-    if (msg.stop_reason === 'refusal') throw new RequestError(422, 'Cog can\'t help with that one. Try asking about your code or your robot.');
-    if (msg.stop_reason === 'max_tokens') throw new RequestError(502, 'Cog\'s answer was too long. Try again.');
-    const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+  }
+  if (buf.trim().startsWith('data:')) yield buf.trim().slice(5).trim();
+}
+
+// Some open models write their thinking first, between <think> and </think>. Students only get the answer.
+// Text arrives in pieces, so a piece that might be the start of a tag is held back until the next one.
+export function thinkFilter(emit) {
+  const OPEN = '<think>';
+  const CLOSE = '</think>';
+  let buf = '';
+  let inside = false;
+  let started = false;
+  const out = (text) => {
+    const t = started ? text : text.replace(/^\s+/, '');
+    if (!t) return;
+    started = true;
+    emit(t);
+  };
+  const held = (tag) => {
+    for (let n = Math.min(tag.length - 1, buf.length); n > 0; n--) if (tag.startsWith(buf.slice(-n))) return n;
+    return 0;
+  };
+  return {
+    push(text) {
+      buf += text;
+      for (;;) {
+        const tag = inside ? CLOSE : OPEN;
+        const i = buf.indexOf(tag);
+        if (i < 0) {
+          const keep = held(tag);
+          if (!inside && buf.length > keep) out(buf.slice(0, buf.length - keep));
+          buf = buf.slice(buf.length - keep);
+          return;
+        }
+        if (!inside && i > 0) out(buf.slice(0, i));
+        buf = buf.slice(i + tag.length);
+        inside = !inside;
+      }
+    },
+    end() {
+      if (!inside && buf) out(buf);
+      buf = '';
+    },
+  };
+}
+
+// The object in a model's answer: without its thinking, a code fence or words around it.
+function parseAnswer(text) {
+  const t = String(text ?? '').replace(/<think>[\s\S]*?<\/think>/g, '');
+  const a = t.indexOf('{');
+  const b = t.lastIndexOf('}');
+  try {
+    const o = JSON.parse(a >= 0 && b > a ? t.slice(a, b + 1) : t);
+    if (o && typeof o === 'object' && !Array.isArray(o)) return o;
+  } catch {
+    // falls through
+  }
+  throw new RequestError(502, UNREADABLE);
+}
+
+function openaiEngine(cfg) {
+  const url = `${cfg.baseURL}/chat/completions`;
+  const headers = { 'Content-Type': 'application/json', ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}) };
+  // The same turns Claude gets, as plain text.
+  const messages = (job, instruction) => [
+    { role: 'system', content: SYSTEM },
+    ...apiMessages(job, instruction).map((m) => ({
+      role: m.role,
+      content: typeof m.content === 'string' ? m.content : m.content.map((b) => b.text).join('\n\n'),
+    })),
+  ];
+  async function post(body, signal) {
+    let r;
     try {
-      return JSON.parse(text);
-    } catch {
-      throw new RequestError(502, 'Cog gave an answer the IDE could not read. Try again.');
+      r = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ ...cfg.extra, ...body }), signal });
+    } catch (e) {
+      throw new ModelError(0, e?.cause?.code || e?.name || '');
+    }
+    if (!r.ok) throw new ModelError(r.status, (await r.text().catch(() => '')).slice(0, 300));
+    return r;
+  }
+  // How to ask for an object, strictest first. Not every service knows every way: the first one it accepts is kept.
+  const formats = (name, schema) => [
+    { type: 'json_schema', json_schema: { name, strict: true, schema } },
+    { type: 'json_object' },
+    null,
+  ];
+  let format = 0;
+
+  return {
+    busy: (e) => e instanceof ModelError && e.status === 429,
+    friendly(e) {
+      if (!(e instanceof ModelError)) return 'Cog hit a problem. Try again.';
+      // The service's own words are for whoever runs the server, not for students.
+      if (e.status !== 429) console.error(`Cog: ${e.message}`);
+      if (e.status === 429) return 'Cog is busy right now. Try again in a minute.';
+      if (e.status === 401 || e.status === 403) return 'Cog is not set up correctly on the server (API key).';
+      if (e.status === 404) return 'Cog is not set up correctly on the server (address or model).';
+      if (e.status === 0) return cfg.by.local ? 'The server could not reach Cog\'s AI model. Check that it is running.' : 'The server could not reach Cog. Check its internet connection.';
+      return 'Cog hit a problem. Try again.';
+    },
+    stream(job, instruction, onText) {
+      const ac = new AbortController();
+      const stop = (async () => {
+        const r = await post({ model: cfg.model, messages: messages(job, instruction), stream: true, max_tokens: 4000 }, ac.signal);
+        const clean = thinkFilter(onText);
+        let why = 'end_turn';
+        for await (const data of sseData(r.body)) {
+          if (data === '[DONE]') break;
+          let j;
+          try {
+            j = JSON.parse(data);
+          } catch {
+            continue;
+          }
+          if (j.error) throw new ModelError(500, String(j.error.message ?? j.error).slice(0, 300));
+          const c = j.choices?.[0];
+          if (typeof c?.delta?.content === 'string') clean.push(c.delta.content);
+          if (c?.finish_reason === 'length') why = 'max_tokens';
+          if (c?.finish_reason === 'content_filter') why = 'refusal';
+        }
+        clean.end();
+        return why;
+      })();
+      return { stop, abort: () => ac.abort() };
+    },
+    async json(job, instruction, schema, name) {
+      const ask = `${instruction}\n\nReply with one JSON object and nothing else: no words around it and no code fence. It must follow this JSON Schema:\n${JSON.stringify(schema)}`;
+      const body = { model: cfg.model, messages: messages(job, ask), max_tokens: 12000 };
+      const ways = formats(name, schema);
+      let r;
+      for (;;) {
+        try {
+          r = await post(ways[format] ? { ...body, response_format: ways[format] } : body, AbortSignal.timeout(300_000));
+          break;
+        } catch (e) {
+          // 400 or 422: most likely this service does not know that way of asking. Try the next one.
+          if (!(e instanceof ModelError) || (e.status !== 400 && e.status !== 422) || format >= ways.length - 1) throw e;
+          format++;
+        }
+      }
+      const c = (await r.json()).choices?.[0];
+      if (c?.finish_reason === 'content_filter') throw new RequestError(422, REFUSED);
+      if (c?.finish_reason === 'length') throw new RequestError(502, TOO_LONG);
+      return parseAnswer(c?.message?.content);
+    },
+  };
+}
+
+// Keys are compared as hashes of the same length, so how long a check takes says nothing about them.
+const digest = (s) => createHash('sha256').update(String(s)).digest();
+
+export function makeCog(cfg) {
+  const engine = !cfg.ready ? null : cfg.provider === 'openai' ? openaiEngine(cfg) : anthropicEngine(cfg);
+  const keys = (cfg.keys ?? []).map(digest);
+  const notReady = () => new RequestError(503, `Cog is not set up on this server yet: it needs ${(cfg.missing?.length ? cfg.missing : ['an Anthropic API key (ANTHROPIC_API_KEY)']).join(', ')}.`);
+
+  async function structured(job, instruction, schema, name, effort) {
+    if (!engine) throw notReady();
+    try {
+      return await engine.json(job, instruction, schema, name, effort);
+    } catch (e) {
+      if (e instanceof RequestError) throw e;
+      throw new RequestError(engine.busy(e) ? 429 : 502, engine.friendly(e));
     }
   }
 
   return {
     get ready() { return cfg.ready; },
     get model() { return cfg.model; },
+    /// Who answers: {label, company, where, local}. The IDE's notice to students is written from it.
+    get by() { return cfg.by ?? CLAUDE; },
     /// Whether requests need a school key.
     get keys() { return !cfg.open; },
+
+    /// Throws unless the IDE's notice named this server's AI, so a student's words only go on to the AI they were
+    /// told about. [seen]: the request's `by`. An IDE from before the notice could change sends none: it says Claude.
+    agree(seen) {
+      if (!cfg.ready) return; // the request then hears that Cog is not set up
+      const theirs = typeof seen === 'string' ? seen : byId(CLAUDE);
+      if (theirs === byId(cfg.by ?? CLAUDE)) return;
+      throw new RequestError(409, typeof seen === 'string'
+        ? 'Cog on this server gets its answers from somewhere new. Read the note at the top of the Cog panel, then ask again.'
+        : 'Cog on this server needs a newer RoboCore IDE. Update the app, then ask again.');
+    },
 
     /// Throws unless [key] (the X-Cog-Key header) lets the request in.
     admit(key) {
@@ -284,9 +547,9 @@ export function makeCog(cfg) {
     },
 
     /// Streams the reply to [res] as server-sent events. [onClose] registers a callback for when the
-    /// IDE goes away, which stops the request to the API.
+    /// IDE goes away, which stops the request to the model.
     async chat(job, res, headers, onClose) {
-      if (!client) throw notReady();
+      if (!engine) throw notReady();
       res.writeHead(200, {
         ...headers,
         'Content-Type': 'text/event-stream; charset=utf-8',
@@ -295,17 +558,15 @@ export function makeCog(cfg) {
         'X-Content-Type-Options': 'nosniff',
       });
       const event = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
-      const instruction = TASKS[job.task](job.hint);
-      const stream = client.beta.messages.stream({ ...base(cfg.effort, 8000), messages: apiMessages(job, instruction) });
+      const run = engine.stream(job, TASKS[job.task](job.hint), (t) => event({ t: 'text', v: t }));
       let closed = false;
-      onClose(() => { closed = true; stream.abort(); });
-      stream.on('text', (t) => event({ t: 'text', v: t }));
+      onClose(() => { closed = true; run.abort(); });
       try {
-        const msg = await stream.finalMessage();
-        if (msg.stop_reason === 'refusal') event({ t: 'refusal', message: 'Cog can\'t help with that one. Try asking about your code or your robot.' });
-        event({ t: 'done', stop: msg.stop_reason });
+        const stop = await run.stop;
+        if (stop === 'refusal') event({ t: 'refusal', message: REFUSED });
+        event({ t: 'done', stop });
       } catch (e) {
-        if (!closed) event({ t: 'error', message: friendly(e) });
+        if (!closed) event({ t: 'error', message: engine.friendly(e) });
       }
       res.end();
     },
@@ -315,23 +576,23 @@ export function makeCog(cfg) {
       if (!job.context.read || !files.length) throw new RequestError(400, 'Cog needs to read the project to suggest a fix.');
       const fix = await structured(job,
         'Suggest the smallest change to one file that fixes the first error (or the problem the student described). Keep their style, names and comments; change only what is needed. Return the whole new content of that one file.',
-        FIX_SCHEMA, cfg.fixEffort);
+        FIX_SCHEMA, 'cog_fix', cfg.fixEffort);
       const before = files.find((f) => f.name === fix.file);
       if (!before) throw new RequestError(502, 'Cog suggested a change to a file that is not in the project. Try again.');
       if (typeof fix.newContent !== 'string' || !fix.newContent.trim() || fix.newContent === before.content) {
         throw new RequestError(502, 'Cog could not find a change to suggest.');
       }
-      return { explanation: String(fix.explanation), file: fix.file, newContent: fix.newContent };
+      return { explanation: String(fix.explanation ?? ''), file: fix.file, newContent: fix.newContent };
     },
 
     async check(job) {
       const q = await structured(job,
         'The student just applied a fix. Write one multiple-choice question (two to four options) that checks they understood the idea behind it. Not a trick question.',
-        CHECK_SCHEMA, cfg.effort);
+        CHECK_SCHEMA, 'cog_check', cfg.effort);
       const ok = typeof q.question === 'string' && Array.isArray(q.options) && q.options.length >= 2 && q.options.length <= 4 &&
         q.options.every((o) => typeof o === 'string') && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.options.length;
       if (!ok) throw new RequestError(502, 'Cog could not make a question this time.');
-      return { question: q.question, options: q.options, answer: q.answer, explanation: String(q.explanation), concept: String(q.concept) };
+      return { question: q.question, options: q.options, answer: q.answer, explanation: String(q.explanation ?? ''), concept: String(q.concept ?? '') };
     },
   };
 }

@@ -10,7 +10,8 @@ One codebase for the RoboCore IDE on **web, Windows, macOS, Linux, Android and i
 - **Verify and Upload**: with a compile server, a real C++ build (arduino-cli) and an upload over USB-C to the RoboCore V2. Without one, a built-in check like the Arduino compiler's (missing includes, undeclared names, types and board support), then a run on a **simulated RoboCore board** (RGB LED, USER button, motors, servo, sonar, line sensor, IMU, battery and serial in and out).
 - **Cog, the learning partner** (Ask Cog, Ctrl+I): explains errors and blocks, gives hints one at a time before it ever
   shows a fix, applies a fix only when the student presses Apply, asks a quick question afterwards, and keeps a "You've
-  learned" list per project. It runs through the compile server, which holds the Anthropic API key. See `docs/cog.md`.
+  learned" list per project. It runs through the RoboCore server, which holds the AI's key: Claude by default, or another AI, including a
+  model on the school's own computer. See `docs/cog.md`.
 - Projects and settings are saved on the device.
 
 ## Run it

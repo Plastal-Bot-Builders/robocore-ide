@@ -1,5 +1,5 @@
 // Talks to Cog on the RoboCore server (server/src/cog.js): a streamed chat reply, a suggested fix
-// and a one-question quick check. The server holds the Anthropic API key; the IDE never sees it.
+// and a one-question quick check. The server holds the AI's key; the IDE never sees it.
 import 'dart:async';
 import 'dart:convert';
 
@@ -22,11 +22,45 @@ class CogDone extends CogEvent {
   final String stop;
 }
 
-/// Cog declined, or something went wrong. [offline]: the server could not be reached.
+/// Cog declined, or something went wrong. [offline]: the server could not be reached. [changed]: the server's AI is
+/// not the one this device's notice named (HTTP 409).
 class CogProblem extends CogEvent {
-  const CogProblem(this.message, {this.offline = false, this.refused = false});
+  const CogProblem(this.message, {this.offline = false, this.refused = false, this.changed = false});
   final String message;
-  final bool offline, refused;
+  final bool offline, refused, changed;
+}
+
+/// Who writes Cog's answers, as the server says (GET /health → cog.by). The notice to students is written from it.
+class CogBy {
+  const CogBy({required this.label, this.company = '', this.where = '', this.local = false});
+
+  /// What the AI is called, e.g. "Claude, made by Anthropic".
+  final String label;
+
+  /// The company the students' words go on to, and its country. Empty when [local].
+  final String company, where;
+
+  /// The AI runs on the RoboCore server itself: nothing goes on to another company.
+  final bool local;
+
+  static const claude = CogBy(label: 'Claude, made by Anthropic', company: 'Anthropic', where: 'the United States');
+
+  /// A server from before it said who answers was always Claude.
+  factory CogBy.fromJson(Object? j) {
+    if (j is! Map) return claude;
+    final label = '${j['label'] ?? ''}'.trim();
+    if (label.isEmpty) return claude;
+    final local = j['local'] == true;
+    return CogBy(label: label, company: local ? '' : '${j['company'] ?? ''}'.trim(), where: local ? '' : '${j['where'] ?? ''}'.trim(), local: local);
+  }
+
+  Map<String, dynamic> toJson() => {'label': label, 'company': company, 'where': where, 'local': local};
+
+  /// The same string the server makes (byId in server/src/cog.js); sent with each request as `by`.
+  String get id => '$label|$company|$where|${local ? 'local' : 'hosted'}';
+
+  /// For the About box.
+  String get about => id == claude.id ? 'Claude, an AI made by Anthropic' : '$label, an AI';
 }
 
 class CogFix {
@@ -42,9 +76,9 @@ class CogCheck {
 }
 
 class CogFailure implements Exception {
-  const CogFailure(this.message, {this.offline = false});
+  const CogFailure(this.message, {this.offline = false, this.changed = false});
   final String message;
-  final bool offline;
+  final bool offline, changed;
   @override
   String toString() => message;
 }
@@ -85,7 +119,7 @@ class CogClient {
       return;
     }
     if (res.statusCode != 200) {
-      yield CogProblem(_error(await res.stream.bytesToString(), res.statusCode));
+      yield CogProblem(_error(await res.stream.bytesToString(), res.statusCode), changed: res.statusCode == 409);
       return;
     }
     var finished = false;
@@ -126,7 +160,7 @@ class CogClient {
     } catch (_) {
       throw const CogFailure(kCogOffline, offline: true);
     }
-    if (res.statusCode != 200) throw CogFailure(_error(text, res.statusCode));
+    if (res.statusCode != 200) throw CogFailure(_error(text, res.statusCode), changed: res.statusCode == 409);
     return (jsonDecode(text) as Map).cast<String, dynamic>();
   }
 
@@ -140,7 +174,7 @@ class CogClient {
       final j = jsonDecode(utf8.decode(res.bodyBytes));
       final cog = j is Map ? j['cog'] : null;
       if (cog is! Map) return (false, 'This server has no Cog yet. Update the RoboCore server.');
-      if (cog['ready'] != true) return (false, 'Cog is not set up on this server yet: it needs an Anthropic API key (ANTHROPIC_API_KEY).');
+      if (cog['ready'] != true) return (false, 'Cog is not set up on this server yet. Whoever runs the server needs to finish its AI settings.');
       if (cog['keys'] == true) {
         final k = await _http.get(Uri.parse('$base/cog/key'), headers: {if (key.isNotEmpty) 'X-Cog-Key': key}).timeout(const Duration(seconds: 30));
         if (k.statusCode != 200) return (false, _error(utf8.decode(k.bodyBytes), k.statusCode));
@@ -148,6 +182,20 @@ class CogClient {
       return (true, 'Answers come from ${cog['model']} through this server.');
     } catch (_) {
       return (null, kCogOffline);
+    }
+  }
+
+  /// Who answers on [server]. Null when the server can't be reached or has no Cog.
+  Future<CogBy?> who(String server) async {
+    final base = normalizeServerUrl(server);
+    if (base.isEmpty) return null;
+    try {
+      final res = await _http.get(Uri.parse('$base/health')).timeout(const Duration(seconds: 75));
+      final j = jsonDecode(utf8.decode(res.bodyBytes));
+      final cog = j is Map ? j['cog'] : null;
+      return cog is Map ? CogBy.fromJson(cog['by']) : null;
+    } catch (_) {
+      return null;
     }
   }
 

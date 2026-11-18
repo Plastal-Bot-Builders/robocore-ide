@@ -91,7 +91,7 @@ const post = (path, body, url = base, key = SCHOOL) => fetch(`${url}${path}`, {
 const events = async (r) => (await r.text()).split('\n\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
 
 test('health says whether Cog is ready and which model it uses', async () => {
-  assert.deepEqual((await (await fetch(`${base}/health`)).json()).cog, { ready: true, model: 'claude-opus-5-5', keys: true });
+  assert.deepEqual((await (await fetch(`${base}/health`)).json()).cog, { ready: true, model: 'claude-opus-5-5', keys: true, by: { label: 'Claude, made by Anthropic', company: 'Anthropic', where: 'the United States', local: false } });
   assert.equal((await (await fetch(`${offlineBase}/health`)).json()).cog.ready, false);
 });
 
@@ -249,6 +249,22 @@ test('without school keys Cog stays shut, unless COG_OPEN=1', async () => {
     shut.close();
     open.close();
   }
+});
+
+test('an IDE whose notice named another AI reads the new notice first; older IDEs (which say Claude) are let in', async () => {
+  assert.equal((await post('/cog/chat', job())).status, 200, 'no `by`: an older IDE');
+  assert.equal((await post('/cog/chat', job({ by: 'Claude, made by Anthropic|Anthropic|the United States|hosted' }))).status, 200);
+  const r = await post('/cog/fix', job({ by: 'gemma3|||local' }));
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).error, /Read the note/);
+});
+
+test('without COG_MODEL, Cog uses the cheapest Claude (Haiku 5.5)', () => {
+  const cfg = cogConfig({ ANTHROPIC_API_KEY: 'k' });
+  assert.equal(cfg.provider, 'anthropic');
+  assert.equal(cfg.model, 'claude-haiku-5-5');
+  assert.equal(cfg.ready, true);
+  assert.equal(cogConfig({ ANTHROPIC_API_KEY: 'k', COG_MODEL: 'claude-opus-5-5' }).model, 'claude-opus-5-5');
 });
 
 test('COG_KEYS is read as a comma-separated list', () => {

@@ -88,9 +88,34 @@ class CogController {
   String get _server => app.settings.compileServer;
   String get _key => app.settings.cogKey;
 
+  /// Who answers on the Cog server, as it last said (kept between runs). The notice and the captions say this.
+  CogBy get by => CogBy.fromJson(app.settings.cogBy);
+
+  /// Who the notice named when this device said OK.
+  String get _seenBy => app.settings.cogNoticeFor.isEmpty ? CogBy.claude.id : app.settings.cogNoticeFor;
+
+  /// The notice comes first: on a new device, and again when the server's AI is not the one it named.
+  bool get needsNotice => !app.settings.cogNoticeSeen || _seenBy != by.id;
+
+  String? _askedWho; // the server that was asked who answers, this run
+
+  /// Asks the server who answers (once per server and run, or again with [force]) and keeps it.
+  Future<void> refreshBy({bool force = false}) async {
+    final server = _server;
+    if (!force && _askedWho == server) return;
+    _askedWho = server;
+    final who = await client.who(server);
+    if (who == null) {
+      if (_askedWho == server) _askedWho = null; // not reached: ask again next time
+      return;
+    }
+    if (who.id != by.id) app.updateSettings((x) => x.cogBy = who.id == CogBy.claude.id ? null : who.toJson());
+  }
+
   void toggle() {
     if (!open && _off()) return;
     open = !open;
+    if (open) unawaited(refreshBy());
     app.changed();
   }
 
@@ -105,14 +130,24 @@ class CogController {
   /// (CogPanel), and the student asks again after reading it.
   bool _blocked() {
     if (_off()) return true;
-    if (app.settings.cogNoticeSeen) return false;
+    if (!needsNotice) return false;
     open = true;
+    unawaited(refreshBy());
     app.changed();
     return true;
   }
 
-  /// "OK" on the notice.
-  void noticeSeen() => app.updateSettings((x) => x.cogNoticeSeen = true);
+  /// "OK" on the notice: it named [by].
+  void noticeSeen() {
+    final id = by.id;
+    app.updateSettings((x) {
+      x.cogNoticeSeen = true;
+      x.cogNoticeFor = id;
+    });
+  }
+
+  /// The server said its AI is not the one the notice named: ask who it is now, so the notice shows again.
+  void _changed() => unawaited(refreshBy(force: true));
 
   void close() {
     open = false;
@@ -166,6 +201,8 @@ class CogController {
   }
 
   Map<String, Object?> _body(String task, {int hint = 1, String? extra}) => {
+        // Who the notice named: the server only answers when that is still its AI.
+        'by': _seenBy,
         'style': app.settings.cogStyle,
         'level': app.settings.cogLevel,
         'task': task,
@@ -219,9 +256,10 @@ class CogController {
           app.changed();
         case CogDone():
           finish();
-        case CogProblem(:final message, :final offline):
+        case CogProblem(:final message, :final offline, :final changed):
           if (reply.text.trim().isEmpty) items.remove(reply);
           _notice(message, offline: offline);
+          if (changed) _changed();
           finish();
       }
     }, onDone: finish, onError: (_) {
@@ -273,6 +311,7 @@ class CogController {
       items.remove(item);
       fixShown = false;
       _notice(e.message, offline: e.offline);
+      if (e.changed) _changed();
     }
     busy = false;
     app.changed();
@@ -303,8 +342,9 @@ class CogController {
     try {
       item.check = await client.check(_server, _body('chat', extra: 'I applied the fix.'), key: _key);
       item.streaming = false;
-    } on CogFailure {
+    } on CogFailure catch (e) {
       items.remove(item); // the question is a bonus: no notice when it can't be made
+      if (e.changed) _changed();
     }
     busy = false;
     app.changed();

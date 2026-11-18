@@ -191,6 +191,12 @@ class Settings {
   /// Whether Cog is on; whether this device was told what Cog sends and where (shown before the first question).
   bool cogOn, cogNoticeSeen;
 
+  /// Who answers on the Cog server, as it last said (CogBy as JSON; null = Claude), and who the notice named when
+  /// this device said OK (CogBy.id; empty = Claude, from before the notice could name anyone else). When the two
+  /// differ, the notice is shown again before anything is sent.
+  Map<String, dynamic>? cogBy;
+  String cogNoticeFor;
+
   /// The school key a Cog server asks for (server/src/cog.js, COG_KEYS). Empty = none.
   String cogKey;
 
@@ -214,6 +220,8 @@ class Settings {
     this.cogPin = '',
     this.cogOn = true,
     this.cogNoticeSeen = false,
+    this.cogBy,
+    this.cogNoticeFor = '',
     this.cogKey = '',
     this.cogLevel = 'beginner',
   });
@@ -234,6 +242,8 @@ class Settings {
         'cogPin': cogPin,
         'cogOn': cogOn,
         'cogNoticeSeen': cogNoticeSeen,
+        if (cogBy != null) 'cogBy': cogBy,
+        'cogNoticeFor': cogNoticeFor,
         'cogKey': cogKey,
         'cogLevel': cogLevel,
       };
@@ -256,6 +266,8 @@ class Settings {
         cogPin: j['cogPin'] as String? ?? '',
         cogOn: j['cogOn'] as bool? ?? true,
         cogNoticeSeen: j['cogNoticeSeen'] as bool? ?? false,
+        cogBy: j['cogBy'] is Map ? (j['cogBy'] as Map).cast<String, dynamic>() : null,
+        cogNoticeFor: j['cogNoticeFor'] as String? ?? '',
         cogKey: j['cogKey'] as String? ?? '',
         cogLevel: const ['beginner', 'intermediate', 'advanced'].contains(j['cogLevel']) ? j['cogLevel'] as String : 'beginner',
       );

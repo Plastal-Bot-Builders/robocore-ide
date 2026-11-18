@@ -12,7 +12,7 @@ import 'package:robocore_ide/hw/cog_client.dart';
 import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/cog.dart';
 import 'package:robocore_ide/state/models.dart';
-import 'package:robocore_ide/ui/cog/cog_panel.dart' show cogDiff;
+import 'package:robocore_ide/ui/cog/cog_panel.dart' show cogDiff, cogNoticeLines;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_state_test.dart' show FakeUsb;
@@ -24,8 +24,25 @@ class FakeCog extends CogClient {
   final keys = <String>[];
   String reply = 'Arduino names are case-sensitive.';
 
+  /// Who answers on this server (null = Claude), how often the IDE asked, and the requests it turned away because
+  /// the IDE's notice named someone else (HTTP 409 on the real server).
+  CogBy? says;
+  int whoAsked = 0;
+  final turnedAway = <Map<String, Object?>>[];
+
+  @override
+  Future<CogBy?> who(String server) async {
+    whoAsked++;
+    return says ?? CogBy.claude;
+  }
+
   @override
   Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = ''}) async* {
+    if (body['by'] != (says ?? CogBy.claude).id) {
+      turnedAway.add(body);
+      yield const CogProblem('Cog on this server gets its answers from somewhere new.', changed: true);
+      return;
+    }
     asked.add(body);
     keys.add(key);
     for (final w in reply.split(' ')) {
@@ -235,6 +252,123 @@ void main() {
       final cog = sent.where((m) => m['role'] == 'assistant').map((m) => '${m['content']}'.trim()).toList();
       expect(cog, [fake.reply], reason: 'the one streamed reply, word for word');
       expect(sent.any((m) => m['role'] == 'user' && '${m['content']}'.contains('[RoboCore IDE: Cog suggested a change to Blink.ino')), isTrue);
+    });
+  });
+
+  group('who answers', () {
+    const local = CogBy(label: 'Gemma 3', local: true);
+    const deepseek = CogBy(label: 'DeepSeek', company: 'DeepSeek', where: 'China');
+    const url = 'http://localhost:8080';
+
+    test('the server says who answers; a server from before that is Claude', () async {
+      final c = CogClient(
+          client: MockClient((req) async => http.Response(
+              jsonEncode({
+                'ok': true,
+                'cog': {
+                  'ready': true,
+                  'model': 'gemma3',
+                  'keys': false,
+                  'by': {'label': 'Gemma 3', 'company': '', 'where': '', 'local': true}
+                }
+              }),
+              200)));
+      final who = (await c.who(url))!;
+      expect((who.id, who.local), ('Gemma 3|||local', true));
+      final old = CogClient(client: MockClient((_) async => http.Response('{"ok":true,"cog":{"ready":true,"model":"claude-opus-5-5","keys":true}}', 200)));
+      expect((await old.who(url))!.id, CogBy.claude.id);
+      expect(CogBy.claude.id, 'Claude, made by Anthropic|Anthropic|the United States|hosted', reason: 'the string the server compares (byId in server/src/cog.js)');
+      expect(CogBy.fromJson(deepseek.toJson()).id, 'DeepSeek|DeepSeek|China|hosted');
+      expect(await CogClient(client: MockClient((_) => Future.error(Exception('down')))).who(url), isNull);
+      expect(await CogClient(client: MockClient((_) async => http.Response('{"ok":true}', 200))).who(url), isNull, reason: 'a server without Cog');
+    });
+
+    test('a server that turns the request away (409) is passed on as "changed"', () async {
+      final c = CogClient(client: MockClient((_) async => http.Response('{"error":"Cog on this server gets its answers from somewhere new."}', 409)));
+      final ev = await c.chat(url, {}).toList();
+      expect(ev.single, isA<CogProblem>().having((p) => p.changed, 'changed', isTrue));
+      await expectLater(c.fix(url, {}), throwsA(isA<CogFailure>().having((f) => f.changed, 'changed', isTrue)));
+      final other = await CogClient(client: MockClient((_) async => http.Response('{"error":"busy"}', 429))).chat(url, {}).toList();
+      expect((other.single as CogProblem).changed, isFalse);
+    });
+
+    test('the notice names who answers and where the words go', () {
+      const server = 'the RoboCore server (cog.example.org)';
+      final claude = cogNoticeLines(CogBy.claude, read: true, server: server).join(' ');
+      expect(claude, contains('Cog is an AI: Claude, made by Anthropic. It is not a person'));
+      expect(claude, contains('go to $server and on to Anthropic, a company in the United States, which writes the answer.'));
+      expect(claude, contains('Anthropic handles them under its own terms.'));
+
+      final host = cogNoticeLines(deepseek, read: false, server: server).join(' ');
+      expect(host, contains('Cog is an AI: DeepSeek.'));
+      expect(host, contains('on to DeepSeek, a company in China, which writes the answer.'));
+      expect(host, contains('Your project stays on this device'));
+      expect(host, isNot(contains('Anthropic')));
+
+      final own = cogNoticeLines(local, read: true, server: server).join(' ');
+      expect(own, contains('go to $server, where the AI runs. They are not sent on to another company.'));
+      expect(own, isNot(contains('under its own terms')));
+      expect(own, isNot(contains('Anthropic')));
+    });
+
+    test('every request says who the notice named; opening Cog asks the server who answers, once', () async {
+      final (s, fake) = await openProject();
+      await s.cog.ask('Hello?');
+      expect(fake.asked.single['by'], CogBy.claude.id);
+      expect(s.cog.needsNotice, isFalse);
+      s.cog.toggle(); // closes
+      s.cog.toggle();
+      s.cog.toggle();
+      s.cog.toggle();
+      await pumpEventQueue();
+      expect(fake.whoAsked, 1);
+    });
+
+    test('when the server’s AI changes, the notice comes back before anything else is sent', () async {
+      final (s, fake) = await openProject();
+      fake.says = local; // the school moved Cog to a model on its own computer
+      await s.cog.ask('Hello?');
+      await pumpEventQueue();
+      expect(fake.asked, isEmpty, reason: 'the server gave no answer');
+      expect(fake.turnedAway, hasLength(1));
+      expect(s.cog.by.id, local.id, reason: 'the IDE asked who answers now');
+      expect(s.cog.needsNotice, isTrue);
+
+      await s.cog.ask('Hello again?');
+      await s.cog.explainError(s.problems.first);
+      await s.cog.showFix();
+      expect(fake.asked, isEmpty);
+      expect(fake.turnedAway, hasLength(1), reason: 'nothing is sent until the new notice was read');
+
+      s.cog.noticeSeen();
+      expect(s.settings.cogNoticeFor, local.id);
+      expect(s.cog.needsNotice, isFalse);
+      await s.cog.ask('Hello again?');
+      expect(fake.asked.single['by'], local.id);
+    });
+
+    test('a first-time student who said OK before the server answered who it is reads the right notice too', () async {
+      final (s, fake) = await openProject();
+      s.updateSettings((x) => x.cogNoticeSeen = false);
+      fake.says = deepseek;
+      await s.cog.ask('Hello?'); // opens the panel on the notice, and asks the server who answers
+      await pumpEventQueue();
+      expect(s.cog.by.id, deepseek.id);
+      s.cog.noticeSeen();
+      await s.cog.ask('Hello?');
+      expect(fake.asked.single['by'], deepseek.id);
+      expect(fake.turnedAway, isEmpty);
+    });
+
+    test('who answers and who the notice named are saved', () {
+      final st = Settings.fromJson((Settings()
+            ..cogBy = local.toJson()
+            ..cogNoticeFor = local.id)
+          .toJson());
+      expect(CogBy.fromJson(st.cogBy).id, local.id);
+      expect(st.cogNoticeFor, local.id);
+      final older = Settings.fromJson({'cogNoticeSeen': true});
+      expect((older.cogBy, older.cogNoticeFor), (null, ''), reason: 'an older save: the notice it read named Claude');
     });
   });
 

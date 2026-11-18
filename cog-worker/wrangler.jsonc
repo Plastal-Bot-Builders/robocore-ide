@@ -2,14 +2,17 @@
   // Cog on Cloudflare Workers (README.md here). The two secrets are never in this file:
   //   wrangler secret put ANTHROPIC_API_KEY     the Anthropic API key
   //   wrangler secret put COG_KEYS              the schools' keys, comma-separated
+  // For another AI than Claude (docs/cog.md, "Another AI"): COG_PROVIDER, COG_BASE_URL, COG_MODEL, COG_AI_NAME,
+  // COG_AI_COMPANY and COG_AI_WHERE go in "vars"; its key is the secret COG_API_KEY.
   "name": "robocore-cog",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
   // node:crypto, for comparing school keys in constant time (server/src/cog.js).
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    // The model Cog uses (server/README.md and docs/cog.md say what each costs). claude-haiku-5-5 costs far less.
-    "COG_MODEL": "claude-opus-5-5",
+    // The model Cog uses (docs/cog.md says what each costs). Haiku 5.5 is the cheapest Claude; claude-sonnet-5-5 and
+    // claude-opus-5-5 are stronger and cost 20 and 40 times as much.
+    "COG_MODEL": "claude-haiku-5-5",
     // Cog requests per minute from one address, and from one school key (all its classrooms together).
     "COG_RATE_PER_MIN": "12",
     "COG_KEY_RATE_PER_MIN": "60",

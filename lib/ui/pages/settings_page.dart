@@ -128,7 +128,7 @@ class SettingsPage extends StatelessWidget {
                     x.cogOn = v;
                     if (!v) s.cog.close();
                   })),
-          hint: 'An AI helper (Claude, made by Anthropic) that answers through the RoboCore server.'),
+          hint: 'An AI helper (${s.cog.by.label}) that answers through the RoboCore server.'),
       const _CogStyleRow(),
       row(
           'Explanation level',
@@ -623,6 +623,8 @@ class _CogStatusRowState extends State<_CogStatusRow> {
     final s = AppScope.read(context);
     setState(() => _busy = true);
     final r = await s.cog.client.status(s.settings.compileServer, key: s.settings.cogKey);
+    // The same visit asks who answers there, so this page and the notice name the right AI.
+    await s.cog.refreshBy(force: true);
     if (mounted) {
       setState(() {
         _status = r;
@@ -645,7 +647,7 @@ class _CogStatusRowState extends State<_CogStatusRow> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Cog on the RoboCore server', style: tLabel(c, w: FontWeight.w500)),
               const SizedBox(height: 2),
-              Text('Cog answers through the server above. Its Anthropic API key stays on the server.', style: tCaption(c)),
+              Text('Cog answers through the server above. The AI’s key stays on the server.', style: tCaption(c)),
             ]),
           ),
           const SizedBox(width: 16),
@@ -654,7 +656,7 @@ class _CogStatusRowState extends State<_CogStatusRow> {
         const SizedBox(height: 12),
         Text('School key', style: tLabel(c, w: FontWeight.w500)),
         const SizedBox(height: 2),
-        Text('The server only answers schools with a key, so nobody else can use its Anthropic credit. Ask whoever runs it.',
+        Text('The server only answers schools with a key, so nobody else can use up its AI credit. Ask whoever runs it.',
             style: tCaption(c)),
         const SizedBox(height: 8),
         Row(children: [

@@ -158,7 +158,7 @@ class _AboutDialog extends StatelessWidget {
       AppScope.read(context).local != null
           ? 'Compiling: arduino-cli (GPL 3.0) with the Arduino AVR and ESP32 tools, on this Mac'
           : 'Compiling: arduino-cli and the board tools, on the compile server',
-      'Ask Cog: Claude, an AI made by Anthropic, through the RoboCore server',
+      'Ask Cog: ${AppScope.read(context).cog.by.about}, through the RoboCore server',
       'Fonts: Barlow, JetBrains Mono, Noto (SIL OFL 1.1). Icons: Lucide (ISC)',
     ];
     return DialogFrame(
