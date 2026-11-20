@@ -45,8 +45,12 @@ if [ "$MODE" = cloudflare ]; then
     if [ "$(grep -c . <<<"$IDS" || true)" = 1 ]; then
       ACCOUNT=$IDS
     else
-      echo "Which Cloudflare account? Paste its Account ID (dashboard > Workers AI > Use REST API > Account ID):"
+      echo "Your Cloudflare login sees more than one account:"
+      grep -E '[0-9a-f]{32}' <<<"$WHO" || true
+      echo "Which one should Cog live in? Copy its Account ID (the 32 letters and digits) from above, paste it here"
+      echo "and press Enter. (To skip this question next time, start with CLOUDFLARE_ACCOUNT_ID=<that ID> in front.)"
       read -r ACCOUNT
+      ACCOUNT=$(tr -d '[:space:]' <<<"$ACCOUNT")
     fi
   fi
   if ! grep -qE '^[0-9a-f]{32}$' <<<"$ACCOUNT"; then
@@ -59,34 +63,71 @@ fi
 # shellcheck disable=SC2086  # $WRANGLER and $ENVARG are words on purpose
 $WRANGLER deploy $ENVARG
 
-# shellcheck disable=SC2086
-has_secret() {
-  local list
-  list=$($WRANGLER secret list $ENVARG 2>/dev/null || true)
-  grep -q "\"$1\"" <<<"$list"
+# A slow or dropped connection is tried again: a key that was pasted is not asked for twice, and a setting that could
+# not be read is never taken for "not set" (that would swap a working school key for a new one).
+WAIT=${COG_DEPLOY_RETRY_SECONDS:-10}
+gave_up() {
+  echo "Cloudflare could not be reached ($1). Check the internet, then run this again: it carries on where it stopped." >&2
+  exit 1
 }
-# shellcheck disable=SC2086
-put_secret() { $WRANGLER secret put "$1" $ENVARG; }
 
+# The names of the settings Cloudflare already holds for this Worker (never their values).
+SECRETS=""
+# shellcheck disable=SC2086
+load_secrets() {
+  local try
+  for try in 1 2 3; do
+    if SECRETS=$($WRANGLER secret list $ENVARG 2>/dev/null) && grep -q '^\[' <<<"$SECRETS"; then return 0; fi
+    [ "$try" = 3 ] || sleep "$WAIT"
+  done
+  gave_up "reading the Worker's settings"
+}
+has_secret() { grep -q "\"$1\"" <<<"$SECRETS"; }
+
+# send_secret NAME VALUE
+# shellcheck disable=SC2086
+send_secret() {
+  local try
+  for try in 1 2 3; do
+    if printf '%s' "$2" | $WRANGLER secret put "$1" $ENVARG; then return 0; fi
+    [ "$try" = 3 ] || { echo "That did not reach Cloudflare. Trying again in $WAIT seconds…"; sleep "$WAIT"; }
+  done
+  gave_up "saving $1"
+}
+
+# ask_secret NAME QUESTION: a hidden prompt, then send_secret.
+ask_secret() {
+  local value
+  read -rsp "$2 (it won't show), then press Enter: " value
+  echo
+  value=$(tr -d '[:space:]' <<<"$value")
+  if [ -z "$value" ]; then
+    echo "Nothing was pasted. Run this again when you have it." >&2
+    exit 1
+  fi
+  send_secret "$1" "$value"
+}
+
+load_secrets
 if [ "$MODE" = cloudflare ]; then
-  printf '%s' "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/ai/v1" | put_secret COG_BASE_URL
+  send_secret COG_BASE_URL "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/ai/v1"
   if ! has_secret COG_API_KEY; then
     echo
     echo "First time: Cog needs a free Workers AI API token."
-    echo "  1. Open https://dash.cloudflare.com and go to the Workers AI page."
+    echo "  1. Open https://dash.cloudflare.com/$ACCOUNT/ai/workers-ai (the Workers AI page of this account)."
     echo "  2. Select Use REST API, then Create a Workers AI API Token, then Create API Token."
-    echo "  3. Copy the token and paste it here when asked (it won't show)."
-    put_secret COG_API_KEY
+    echo "  3. Copy the token."
+    ask_secret COG_API_KEY "Paste the token here"
   fi
 elif ! has_secret ANTHROPIC_API_KEY; then
   echo
-  echo "First time: paste your Anthropic API key when asked (it won't show)."
-  put_secret ANTHROPIC_API_KEY
+  echo "First time: Cog needs your Anthropic API key."
+  ask_secret ANTHROPIC_API_KEY "Paste the key here"
 fi
 
 if ! has_secret COG_KEYS; then
   KEY=${COG_SCHOOL_KEY:-$(openssl rand -hex 16)}
-  printf '%s' "$KEY" | put_secret COG_KEYS
+  send_secret COG_KEYS "$KEY"
   echo
   echo "School key, for RoboCore Settings > Cog > School key:  $KEY"
   echo "Keep it. To give each school its own, set all of them, comma-separated: wrangler secret put COG_KEYS $ENVARG"

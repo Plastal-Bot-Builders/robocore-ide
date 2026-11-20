@@ -49,6 +49,11 @@ The first time it asks for a **Workers AI API token**: in the Cloudflare dashboa
 asks (hidden; it goes straight to Cloudflare). The script also sets the account's AI address and a school key.
 The settings are in `wrangler.jsonc` under `env.cloudflare`.
 
+If your Cloudflare login sees more than one account, the script lists them and asks which one; to skip the question,
+put `CLOUDFLARE_ACCOUNT_ID=<that account's ID>` in front of the command. On a slow connection it tries each step
+three times, and running it again carries on where it stopped: it never asks twice for a token it has saved, and
+never replaces a school key that is already set.
+
 What to know:
 
 - **It is enough for testing, not for a class.** Thirty students asking 20 questions each is 600 questions. A smaller
