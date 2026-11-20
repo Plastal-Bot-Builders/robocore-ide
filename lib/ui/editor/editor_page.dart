@@ -48,11 +48,21 @@ class _EditorPageState extends State<EditorPage> {
   void initState() {
     super.initState();
     editorMenuCommand = _menuCommand;
+    // Cog hands blocks and code to the Blockly and Monaco editors (the Flutter editors of the other apps take none).
+    if (kWebEditors) {
+      cogAddBlocks = _addBlocks;
+      cogInsertCode = _insertCode;
+    }
   }
+
+  void _addBlocks(String json) => _blockly.currentState?.add(json);
+  void _insertCode(String text) => _monaco.currentState?.insert(text);
 
   @override
   void dispose() {
     if (editorMenuCommand == _menuCommand) editorMenuCommand = null;
+    if (cogAddBlocks == _addBlocks) cogAddBlocks = null;
+    if (cogInsertCode == _insertCode) cogInsertCode = null;
     super.dispose();
   }
 

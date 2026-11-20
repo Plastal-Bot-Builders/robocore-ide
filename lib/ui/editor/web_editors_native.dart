@@ -268,6 +268,9 @@ class BlocklyEditorState extends State<BlocklyEditor> {
   void undo() => _call('undo');
   void redo() => _call('redo');
   void clear() => _call('clear');
+
+  /// Puts stacks of blocks (a JSON list of Blockly block states) loose beside the program, as one undo step.
+  void add(String json) => _call('add', [json]);
   int get count => _count;
 
   /// [dir] 1 zooms in, -1 out.
@@ -389,6 +392,9 @@ class MonacoEditorState extends State<MonacoEditor> {
 
   /// Runs a Monaco command by id ('undo', 'editor.action.commentLine' …).
   void action(String id) => _call('action', [id]);
+
+  /// Puts [text] at the cursor (over the selection), as one undo step.
+  void insert(String text) => _call('insert', [text]);
 
   @override
   Widget build(BuildContext context) => _page.view(ready: _ready, theme: widget.options['theme']);

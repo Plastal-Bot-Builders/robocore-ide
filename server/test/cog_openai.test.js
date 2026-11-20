@@ -163,6 +163,38 @@ test('with "Let Cog read this project" off, no code is sent', async () => {
   assert.match(text, /turned off "Let Cog read this project"/);
 });
 
+test('beside each question: which editor is open, and in the blocks whether the answer comes as a blocks script', async () => {
+  const ask = async (over) => {
+    await events(await post('/cog/chat', job(over)));
+    return seen.at(-1).body.messages.at(-1).content;
+  };
+  const blocks = { ...job().context, editor: 'blocks' };
+  assert.match(await ask({}), /Editor: Code\./);
+  assert.doesNotMatch(await ask({ style: 'write' }), /blocks script/, 'in the code editor code is the answer');
+
+  for (const style of ['explain', 'write']) {
+    const text = await ask({ style, context: blocks });
+    assert.match(text, /Editor: Blocks\. When you give the answer, give it as a ```blocks script and never as C\+\+/, style);
+    assert.match(text, /move forward for 20 cm/, 'an example with its number');
+  }
+  const hints = await ask({ style: 'hints', context: blocks });
+  assert.match(hints, /Editor: Blocks\. Talk about blocks, not C\+\+\. Do not give a blocks script or code yet/);
+
+  // "Show the fix" in the blocks is the student asking for the answer, whatever the style.
+  const fix = await ask({ style: 'hints', task: 'fix_blocks', context: blocks });
+  assert.match(fix, /give it as a ```blocks script/);
+  assert.match(fix, /Task: The student is in the Blocks editor and pressed "Show the fix"/);
+
+  // With reading off the IDE still says which editor is open.
+  const unread = await ask({ style: 'write', context: { read: false, editor: 'blocks' } });
+  assert.match(unread, /Editor: Blocks\./);
+  assert.doesNotMatch(unread, /digitalwrite/);
+
+  const system = seen.at(-1).body.messages[0].content;
+  assert.match(system, /Blocks scripts/);
+  assert.match(system, /set 1 wheel turn to 18\.8 cm → robot\.setWheelCm\(18\.8\)/);
+});
+
 test('a host gets its key and the extra settings', async () => {
   const s = await start({ ...ENV(), COG_LOCAL: '', COG_API_KEY: 'sk-test', COG_AI_COMPANY: 'DeepSeek', COG_AI_WHERE: 'China', COG_EXTRA_BODY: '{"thinking":{"type":"disabled"}}' });
   try {

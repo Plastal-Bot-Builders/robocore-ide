@@ -2,8 +2,12 @@
 // show the fix → Apply → quick check), and the block steps (explain a block → Try it → I tried it).
 // Cog guides before it fixes: it never changes code without Apply. AppState owns one CogController.
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../data/catalog.dart';
+import '../engine/block_script.dart';
 import '../engine/compiler.dart' show Problem;
 import '../hw/cog_client.dart';
 import 'app_state.dart';
@@ -11,10 +15,14 @@ import 'app_state.dart';
 enum CogKind { you, cog, hint, tryIt, fix, check, notice }
 
 class CogItem {
-  CogItem(this.kind, {this.text = '', this.overline, this.streaming = false, this.fix, this.check, this.offline = false});
+  CogItem(this.kind, {this.text = '', this.overline, this.streaming = false, this.fix, this.check, this.offline = false, this.give = false});
   final CogKind kind;
   String text;
   final String? overline;
+
+  /// Cog may hand this reply's blocks or code over (Add to my blocks, Insert in my code): the help style was
+  /// Explain the answer or Write code for me, or the student asked for the fix. In Hints first it only guides.
+  final bool give;
 
   /// Still arriving (a reply), or still being prepared (a fix or a question).
   bool streaming;
@@ -34,6 +42,11 @@ class CogBlock {
   const CogBlock({required this.type, required this.label, required this.cpp});
   final String type, label, cpp;
 }
+
+/// Set by the editor page while it is open (the editors are its children): Cog's blocks go loose beside the
+/// program (a JSON list of Blockly block states), its code to the cursor. Null where the editors can't take them.
+void Function(String json)? cogAddBlocks;
+void Function(String text)? cogInsertCode;
 
 const kCogStyles = {'hints': 'Hints first', 'explain': 'Explain the answer', 'write': 'Write code for me'};
 
@@ -177,7 +190,8 @@ class CogController {
   /// What Cog may read, sent with every request. Nothing from the project when reading is off.
   Map<String, Object?> context() {
     final p = app.cur;
-    if (p == null || !app.settings.cogRead) return {'read': false};
+    // Which editor is open is not the project's content: Cog needs it to answer with blocks or with code.
+    if (p == null || !app.settings.cogRead) return {'read': false, if (p != null) 'editor': p.mode};
     String tail(Iterable<String> lines) {
       final l = lines.toList();
       return (l.length > 40 ? l.sublist(l.length - 40) : l).join('\n');
@@ -226,12 +240,12 @@ class CogController {
 
   /// Sends one turn and streams the reply into a new item of kind [into].
   /// [you]: shown as the student's bubble; [said]: what is sent when nothing is shown.
-  Future<void> _send(String task, {String? you, String? said, int hint = 1, CogKind into = CogKind.cog, String? overline}) {
+  Future<void> _send(String task, {String? you, String? said, int hint = 1, CogKind into = CogKind.cog, String? overline, bool? give}) {
     if (busy || _blocked()) return Future.value();
     open = true;
     if (you != null) items.add(CogItem(CogKind.you, text: you));
     _remember('user', you ?? said ?? '');
-    final reply = CogItem(into, overline: overline, streaming: true);
+    final reply = CogItem(into, overline: overline, streaming: true, give: give ?? app.settings.cogStyle != 'hints');
     items.add(reply);
     busy = true;
     app.changed();
@@ -291,6 +305,12 @@ class CogController {
 
   Future<void> showFix() async {
     if (busy || _blocked()) return;
+    if (app.cur?.mode == 'blocks') {
+      // In the blocks the fix is a stack to add, not a changed file (applying a file would leave the blocks behind).
+      fixShown = true;
+      final p = problem;
+      return _send('fix_blocks', said: p == null ? 'Show me the fix.' : 'Show me the fix for: ${p.file}:${p.line} ${p.msg}', give: true);
+    }
     fixShown = true;
     final item = CogItem(CogKind.fix, streaming: true);
     items.add(item);
@@ -315,6 +335,58 @@ class CogController {
     }
     busy = false;
     app.changed();
+  }
+
+  // ---------- blocks and code from a reply into the project
+
+  /// Whether a reply's blocks can go into the workspace now, and its code into the sketch.
+  bool get canAddBlocks => cogAddBlocks != null && app.cur?.mode == 'blocks';
+  bool get canInsertCode => cogInsertCode != null && app.cur?.mode == 'code';
+
+  String? _varsOf;
+  List<String> _vars = const [];
+
+  /// A blocks script from a reply, read with the project's variables.
+  BlockScript blocksOf(String script) {
+    final saved = app.cur?.blockly;
+    if (saved != _varsOf) {
+      _varsOf = saved;
+      try {
+        _vars = saved == null ? const [] : blocklyVariables((jsonDecode(saved) as Map).cast<String, dynamic>());
+      } catch (_) {
+        _vars = const [];
+      }
+    }
+    return parseBlockScript(script, variables: _vars);
+  }
+
+  /// Puts a reply's blocks loose beside the program (one undo step). The student joins them on.
+  void addBlocks(BlockScript script) {
+    final add = cogAddBlocks;
+    if (add == null || script.isEmpty || app.cur?.mode != 'blocks') return;
+    add(jsonEncode(script.stacks));
+    final left = script.unknown;
+    app.showToast('Blocks added beside your program',
+        body: left == 0
+            ? 'Drag them into place. Undo takes them away again.'
+            : 'Drag them into place. $left line${left == 1 ? ' is' : 's are'} not a block: build ${left == 1 ? 'it' : 'them'} yourself.');
+  }
+
+  /// Puts a reply's code at the cursor in the code editor (one undo step).
+  void insertCode(String code) {
+    final insert = cogInsertCode;
+    if (insert == null || code.trim().isEmpty || app.cur?.mode != 'code') return;
+    insert(code);
+    app.showToast('Code put in at the cursor', body: 'Undo takes it out again.');
+  }
+
+  Future<void> copy(String text) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+      app.showToast('Copied');
+    } catch (_) {
+      app.showToast('Could not copy', body: 'Select the text and copy it yourself.', error: true);
+    }
   }
 
   /// Applies the suggested fix (one undo step in the code editor), then asks one quick-check question.

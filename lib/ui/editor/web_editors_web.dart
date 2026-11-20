@@ -46,6 +46,7 @@ extension type _Blocks._(JSObject _) implements JSObject {
   external void undo();
   external void redo();
   external void clear();
+  external int add(String json);
   external int count();
   external void zoom(int dir);
   external void zoomToFit();
@@ -60,6 +61,7 @@ extension type _Code._(JSObject _) implements JSObject {
   external void reveal(int line, int column);
   external void find();
   external void action(String id);
+  external bool insert(String text);
 }
 
 @JS('document')
@@ -273,6 +275,9 @@ class BlocklyEditorState extends State<BlocklyEditor> {
   void undo() => _api?.undo();
   void redo() => _api?.redo();
   void clear() => _api?.clear();
+
+  /// Puts stacks of blocks (a JSON list of Blockly block states) loose beside the program, as one undo step.
+  void add(String json) => _api?.add(json);
   int get count => _api?.count() ?? 0;
 
   /// [dir] 1 zooms in, -1 out.
@@ -381,6 +386,9 @@ class MonacoEditorState extends State<MonacoEditor> {
 
   /// Runs a Monaco command by id ('undo', 'editor.action.commentLine' …).
   void action(String id) => _api?.action(id);
+
+  /// Puts [text] at the cursor (over the selection), as one undo step.
+  void insert(String text) => _api?.insert(text);
 
   @override
   Widget build(BuildContext context) => _view;

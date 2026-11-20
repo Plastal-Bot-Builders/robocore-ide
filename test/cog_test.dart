@@ -179,7 +179,8 @@ void main() {
 
       s.updateSettings((x) => x.cogRead = false);
       await s.cog.ask('And now?');
-      expect(fake.asked.last['context'], {'read': false});
+      // Nothing of the project goes; which editor is open does, so Cog can answer with blocks or with code.
+      expect(fake.asked.last['context'], {'read': false, 'editor': 'code'});
     });
 
     test('a selected block is explained with its C++ and its idea is learned', () async {

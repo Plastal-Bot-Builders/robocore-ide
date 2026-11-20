@@ -15,6 +15,12 @@ before it fixes**: it explains, gives hints one at a time, shows a fix only when
   first" only after two hints) → a diff with **Apply** / **Not now** → a quick check → the idea joins **You've learned**.
 - **Blocks**: select a block and ask *Explain …* (Cog explains it and shows its C++) → *Give me a challenge* (a "Try it"
   card) → *I tried it* (Cog looks at the project and says what works).
+- **Blocks and code from Cog into the project**: in a blocks project Cog gives its answer as a stack of blocks drawn in
+  the chat, with **Add to my blocks**: the stack lands loose beside the program (greyed until it is joined on), nothing
+  of the student's changes, and one Undo takes it away. In a code project each piece of code has **Insert in my code**
+  (at the cursor, one undo step). Both have **Copy**. Cog hands answers over in **Explain the answer** and **Write code
+  for me**; in **Hints first** it only guides, and the stack comes with *Show the fix* after two hints. A line of a
+  stack that is not a real block is shown as plain text and is never added.
 - **Settings → Cog**: help style (**Hints first**, the default; **Explain the answer**; **Write code for me**, which needs a
   teacher PIN), *Let Cog read this project*, and **Test Cog**.
 - **Offline**: Cog says it needs the internet; writing code, Verify, Upload and the Serial Monitor keep working.
@@ -28,11 +34,21 @@ before it fixes**: it explains, gives hints one at a time, shows a fix only when
 | The conversation and both step-by-step flows | `lib/state/cog.dart` (`AppState.cog`) |
 | Panel, Ask Cog button, Explain lens, diff, quick check, concepts | `lib/ui/cog/cog_panel.dart` |
 | Selected block → Cog; Explain with Cog in the code editor | `web/robocore_editors.js` (`onSelect`, `onExplain`) |
+| Cog's blocks scripts → rows to draw and Blockly JSON | `lib/engine/block_script.dart` (the catalogue as it reads on the blocks) |
+| Stacks into the workspace, code to the cursor | `web/robocore_editors.js` (`rcEditor.blocks.add`, `rcEditor.code.insert`), `cogAddBlocks` / `cogInsertCode` in `lib/state/cog.dart`, set by the editor page |
 | Settings → Cog | `lib/ui/pages/settings_page.dart` |
-| Tests | `test/cog_test.dart`, `server/test/cog.test.js` (fake Anthropic API), `server/test/cog_openai.test.js` (fake OpenAI-format service) |
+| Tests | `test/cog_test.dart`, `test/block_script_test.dart`, `test/cog_give_test.dart`, `server/test/cog.test.js` (fake Anthropic API), `server/test/cog_openai.test.js` (fake OpenAI-format service) |
 
 The IDE only chooses the task; the words sent to the model are on the server. The student's project is sent only while
 *Let Cog read this project* is on. Learned concepts are saved in each project (`Project.learned`).
+
+**Blocks scripts.** In the Blocks editor the model is told to answer with a fenced block that starts with
+`` ```blocks ``: one block per line, worded as the block reads (`move forward for 20 cm`), the blocks inside another
+indented by two spaces, `else` on its own line. The rule is repeated beside each question (`editorNote` in
+`server/src/cog.js`), because a small model follows it there and not from the long instructions alone. The IDE reads
+the lines against the block catalogue (`_statements` and `_reporters` in `block_script.dart`): a new block in
+`web/robocore_editors.js` needs its line there and in the list in the system prompt. The IDE also says which editor
+is open when it may not read the project, so Cog knows to answer with blocks.
 
 ## Setting it up
 

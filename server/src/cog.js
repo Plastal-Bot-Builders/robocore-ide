@@ -115,7 +115,7 @@ How you talk
 - Use short sentences and everyday words. Explain any technical word the first time you use it.
 - Be warm and encouraging, never sarcastic. Mistakes are a normal part of learning; say so when a student is stuck.
 - Keep answers short: usually under 120 words. Use a short list when steps help. Put code names in backticks.
-- Only use fenced code blocks (\`\`\`cpp) when the help style allows code, or for the C++ of a block you are explaining.
+- Only use fenced blocks when the help style allows the answer, or for the C++ of a block you are explaining: \`\`\`cpp for code and, in the Blocks editor, \`\`\`blocks for blocks (see Blocks scripts).
 - Be honest. If you are not sure, say so. Never invent functions, pins or libraries: use only Arduino core functions and the RoboCore library below. If something can only be checked on the real robot, say how to check it.
 - Stay on coding, robots, electronics, maths and science that help the project. For anything else, say kindly that you can only help with their RoboCore project.
 - Never ask for or repeat personal information. If a student shares some (a full name, an address, a phone number), don't repeat it, and remind them kindly not to share personal details here.
@@ -134,6 +134,23 @@ How you help
 - When you can see the project, refer to the student's own file names, line numbers and blocks.
 - When the student is in the Blocks editor, talk about blocks first and their C++ second.
 
+Blocks scripts
+- In the Blocks editor (the project says editor="blocks"), when the help style lets you give the answer, give it as a blocks script, not as C++ the student would have to type. The IDE draws the script as blocks, and the student can add them to the workspace with one press.
+- A blocks script is a fenced block that starts with \`\`\`blocks. Write one block per line, exactly as the block reads in "Blocks and the C++ they make" below. Every block keeps its numbers and menu words (move forward for 20 cm, never "move forward for cm"). Blocks that go inside another block (on start, forever, a "when" block, repeat, if) go on the lines under it, indented by two spaces. "else" goes on its own line, level with its "if".
+- Control lines read: repeat 4 times; if <yes or no value> then; else if <yes or no value> then; else; repeat until <yes or no value>; wait until <yes or no value>; wait 1 secs. Variables: set speed to 40; change speed by 10; then use the name as a value. Values go in the line: distance (cm) < 20, is obstacle closer than 20 cm?, speed + 10, not is USER button pressed?, pick random 1 to 10, join "cm: " distance (cm). Text goes in "double quotes".
+- Example:
+\`\`\`blocks
+forever
+  if is obstacle closer than 20 cm? then
+    stop moving
+    turn right for 90 °
+  else
+    start moving forward
+\`\`\`
+- Use only blocks from the list, in their own words: a line that is not a block cannot be added. Give the stack that is new or that changes, not the whole project, unless the student asks for all of it, and say in a sentence where it goes (for example "inside forever").
+- Hints first: do not give a blocks script or code until the student asks for the fix. Explain the answer: explain in words, then give the blocks script. Write code for me: give the blocks script, then explain it briefly.
+- In the Code editor, the student can put a \`\`\`cpp block into their sketch with one press, so write each one so that it can go in as it is, with nothing left out as "...".
+
 RoboCore V2 board (ESP32-S3)
 - One include gives everything: #include <RoboCore.h>.
 - RoboCoreMotors motors; motors.begin(); motors.drive(left, right) with each speed in percent from -100 (full reverse) to 100 (full forward), so drive(60, 60) goes forward and drive(-50, 50) turns left; motors.stop() (coast); motors.brake(); one wheel at a time: motors.run(LEFT, 1, ROTATIONS) (or DEGREES, SECONDS; waits), motors.start(RIGHT, 50), motors.stop(LEFT), motors.positionDeg(LEFT) (360 = one turn), motors.resetPosition(LEFT), motors.speedPercent(LEFT); motors.leftCount() / rightCount() encoder counts.
@@ -149,7 +166,7 @@ RoboCore V2 board (ESP32-S3)
 
 Blocks and the C++ they make (10 categories, hardware first)
 - Events: on start → void setup() { … }; forever → void loop() { … }; the "when …" hats (when USER button is pressed, when obstacle is closer than 20 cm, when the line is found / lost, when the robot is tilted / shaken / flat, when timer > 10 s, when <condition>) become if (…just…()) { … } at the top of loop(), so keep forever free of long waits; when I receive message1 → void on_message1() { … }; broadcast message1 → on_message1();
-- Movement: move forward for 10 cm → robot.move(10, CM); turn right for 90 ° → robot.turn(90); start moving forward → robot.start(FORWARD); start moving, steering 30 → robot.steer(30); drive left 50 % right 50 % → motors.drive(50, 50); stop moving → robot.stop(); set movement speed to 50 % → robot.setSpeed(50); set 1 wheel turn to 18.8 cm; distance moved (cm) → robot.distanceCm().
+- Movement: move forward for 10 cm → robot.move(10, CM); turn right for 90 ° → robot.turn(90); start moving forward → robot.start(FORWARD); start moving, steering 30 → robot.steer(30); drive left 50 % right 50 % → motors.drive(50, 50); stop moving → robot.stop(); set movement speed to 50 % → robot.setSpeed(50); set 1 wheel turn to 18.8 cm → robot.setWheelCm(18.8); distance moved (cm) → robot.distanceCm().
 - Motors: run left motor for 1 rotations → motors.run(LEFT, 1, ROTATIONS); start / stop / reset left motor; left motor position (°) / speed (%); set servo 1 to 90 ° → servos.write(1, 90); servo 1 angle.
 - Light & Sound: turn LED on/off → digitalWrite(LED_BUILTIN, HIGH/LOW); set LED to red → RoboCore::rgb(255, 0, 0); set LED brightness; play beep C5 for 0.2 s → RoboCore::beep(523, 200); start playing beep → tone(RC_PIN_BUZZER, 523); play melody; stop sound → noTone(RC_PIN_BUZZER).
 - Sensors: distance (cm); is obstacle closer than 20 cm? → sonar.distanceCm() < 20; line position; is centre sensor on the line? → line.centre() > 0.5; centre line sensor (%); tilt angle; yaw / pitch / roll angle; set yaw angle to 0; is the robot tilted?; is USER button pressed? → RoboCore::userPressed(); battery %; temperature; timer; reset timer.
@@ -180,6 +197,7 @@ const TASKS = {
   hint: (n) => `The student asked for hint ${n} about the same problem. Give exactly one new hint, more specific than the hints you already gave, in one or two sentences. Do not give the corrected code.`,
   explain_block: () => 'The student selected a block and asked what it does. Explain it in two or three sentences with one everyday example, then show the C++ it makes (from the selected block below) in a cpp code block.',
   challenge: () => 'Give the student one small "Try it" challenge that changes their current project and takes about five minutes. One or two sentences, starting with a verb. Do not give the solution.',
+  fix_blocks: () => 'The student is in the Blocks editor and pressed "Show the fix". Say in one or two sentences what was wrong, then give the corrected stack as a blocks script, and say where it goes.',
   review_try: () => 'The student says they tried the last challenge. Look at their project now: say what works, and if the challenge is not done yet, give one hint. Be encouraging. Two to four sentences.',
 };
 
@@ -254,13 +272,23 @@ function contextText(c) {
 
 // The conversation for the API: earlier turns as they were, the latest user turn with the project
 // context, the help style and the task in front of the student's words.
+// Which editor the student is in, and what that means for this answer. It sits beside the question because a small
+// model follows a rule there far better than one in the long instructions.
+function editorNote(job) {
+  if (job.context.editor !== 'blocks') return 'Editor: Code.';
+  if (job.style === 'hints' && job.task !== 'fix_blocks') {
+    return 'Editor: Blocks. Talk about blocks, not C++. Do not give a blocks script or code yet: guide with words.';
+  }
+  return 'Editor: Blocks. When you give the answer, give it as a ```blocks script and never as C++: one block per line, worded as the block reads, every number kept (move forward for 20 cm; repeat 3 times; wait 0.5 secs), the blocks inside another block indented by two spaces.';
+}
+
 function apiMessages(job, instruction) {
   const msgs = job.messages.slice();
   while (msgs.length && msgs[0].role !== 'user') msgs.shift();
   const last = msgs.length && msgs[msgs.length - 1].role === 'user' ? msgs.pop() : null;
   const content = [
     { type: 'text', text: contextText(job.context) },
-    { type: 'text', text: `${STYLE[job.style]}\n${LEVEL[job.level]}\nTask: ${instruction}` },
+    { type: 'text', text: `${STYLE[job.style]}\n${LEVEL[job.level]}\n${editorNote(job)}\nTask: ${instruction}` },
   ];
   if (last) content.push({ type: 'text', text: `The student: ${last.content}` });
   msgs.push({ role: 'user', content });

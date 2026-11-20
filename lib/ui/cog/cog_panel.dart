@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../data/catalog.dart';
+import '../../engine/block_script.dart';
 import '../../engine/compiler.dart' show Problem;
 import '../../hw/cog_client.dart' show CogBy;
 import '../../hw/compile_client.dart' show normalizeServerUrl;
@@ -443,7 +444,7 @@ class _Item extends StatelessWidget {
           ),
         );
       case CogKind.cog:
-        return _CogBubble(child: it.text.isEmpty ? const _Dots() : CogText(it.text));
+        return _CogBubble(child: it.text.isEmpty ? const _Dots() : CogText(it.text, item: it));
       case CogKind.hint:
       case CogKind.tryIt:
         return Container(
@@ -452,7 +453,7 @@ class _Item extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text((it.overline ?? '').toUpperCase(), style: tOverline(c, color: c.textBrand)),
             const SizedBox(height: 4),
-            if (it.text.isEmpty) const _Dots() else CogText(it.text),
+            if (it.text.isEmpty) const _Dots() else CogText(it.text, item: it),
           ]),
         );
       case CogKind.notice:
@@ -485,10 +486,13 @@ class _Dots extends StatelessWidget {
   Widget build(BuildContext context) => Text('Cog is thinking…', style: tCaption(RC.of(context), color: RC.of(context).faint));
 }
 
-/// Cog's words, with `code`, **bold**, lists and ```cpp blocks```.
+/// Cog's words, with `code`, **bold**, lists, ```cpp code``` and ```blocks stacks``` (drawn as blocks). With the
+/// reply's [item], code and stacks get their buttons: Copy, and Insert in my code / Add to my blocks when the reply
+/// may hand them over (CogItem.give).
 class CogText extends StatelessWidget {
-  const CogText(this.text, {super.key});
+  const CogText(this.text, {super.key, this.item});
   final String text;
+  final CogItem? item;
 
   @override
   Widget build(BuildContext context) {
@@ -500,8 +504,15 @@ class CogText extends StatelessWidget {
       final part = parts[i];
       if (i.isOdd) {
         final nl = part.indexOf('\n');
+        final lang = (nl >= 0 ? part.substring(0, nl) : '').trim().toLowerCase();
         final code = (nl >= 0 ? part.substring(nl + 1) : part).trimRight();
-        if (code.isEmpty) continue;
+        if (code.trim().isEmpty) continue;
+        // The buttons come when the block is whole (its closing ``` has arrived).
+        final whole = i < parts.length - 1 ? item : null;
+        if (lang == 'blocks') {
+          out.add(CogBlockStack(script: code, item: whole));
+          continue;
+        }
         out.add(Container(
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 4),
@@ -512,6 +523,7 @@ class CogText extends StatelessWidget {
             child: SelectableText(code, style: tMono(c, size: 12, height: 18 / 12)),
           ),
         ));
+        if (whole != null) out.add(_CodeActions(code: code, item: whole));
         continue;
       }
       final paragraphs = part.trim().split(RegExp(r'\n\s*\n'));
@@ -553,6 +565,151 @@ class CogText extends StatelessWidget {
     }
     if (last < s.length) spans.add(TextSpan(text: s.substring(last)));
     return spans;
+  }
+}
+
+/// Under code in a reply: Insert in my code (a code project, and a reply that may hand code over) and Copy.
+class _CodeActions extends StatelessWidget {
+  const _CodeActions({required this.code, required this.item});
+  final String code;
+  final CogItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final cog = AppScope.of(context).cog;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 6),
+      child: Wrap(spacing: 8, runSpacing: 6, children: [
+        if (item.give && cog.canInsertCode)
+          Btn('Insert in my code', icon: 'enter', kind: BtnKind.primary, small: true, height: 28, onTap: () => cog.insertCode(code)),
+        Btn('Copy', icon: 'copy', small: true, height: 28, onTap: () => cog.copy(code)),
+      ]),
+    );
+  }
+}
+
+/// The block categories' colours, as in the block editor (web/robocore_editors.js, CATS).
+const kBlockColours = {
+  'events': Color(0xFFF2B01E),
+  'movement': Color(0xFF2F6BBF),
+  'motors': Color(0xFFB84A26),
+  'light': Color(0xFF7A4FB5),
+  'sensors': Color(0xFF0F7680),
+  'control': Color(0xFF8A5A00),
+  'operators': Color(0xFF2F7A4C),
+  'variables': Color(0xFFB23E7A),
+  'pins': Color(0xFF1B2A41),
+};
+
+/// A blocks script from a reply, drawn as a stack: each line a bar in its category's colour, the blocks inside
+/// another indented along that block's side. A line that is not a block is shown as plain text and adds nothing.
+/// With [item] (the script is whole): Add to my blocks (a blocks project, and a reply that may hand blocks over)
+/// and Copy.
+class CogBlockStack extends StatelessWidget {
+  const CogBlockStack({super.key, required this.script, this.item});
+  final String script;
+  final CogItem? item;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    final cog = AppScope.of(context).cog;
+    final parsed = cog.blocksOf(script);
+    Color colour(String cat) => cat == 'pins' && c.dark ? const Color(0xFF4F6FA0) : (kBlockColours[cat] ?? c.muted);
+
+    final rows = <Widget>[];
+    final open = <Color>[]; // the colour of each block the next rows sit inside, outermost first
+    Widget line(List<Color> inside, Widget child) => IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final col in inside) Container(width: 6, margin: const EdgeInsets.only(right: 8), color: col),
+            Flexible(child: Align(alignment: Alignment.centerLeft, child: child)),
+          ]),
+        );
+    // Ends the blocks deeper than [depth], each with its foot.
+    void close(int depth) {
+      while (open.length > depth) {
+        final col = open.removeLast();
+        rows.add(line(
+            List.of(open),
+            Container(
+              width: 64,
+              height: 8,
+              margin: const EdgeInsets.only(bottom: 2),
+              decoration: BoxDecoration(color: col, borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(4), bottomRight: Radius.circular(4))),
+            )));
+      }
+    }
+
+    for (final r in parsed.rows) {
+      if (r.kind == RowKind.middle) {
+        close(r.depth + 1);
+        if (open.length > r.depth) open.removeLast(); // "else" carries its "if" on, with no foot between
+      } else {
+        close(r.depth);
+      }
+      if (r.kind == RowKind.unknown) {
+        rows.add(line(
+            List.of(open),
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 1.5),
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+              decoration: BoxDecoration(border: Border.all(color: c.line2), borderRadius: BorderRadius.circular(5)),
+              child: Text('${r.text}  (not a block)', style: tBody(c, size: 12, color: c.muted, height: 16 / 12)),
+            )));
+        continue;
+      }
+      final col = colour(r.cat);
+      final top = Radius.circular(r.kind == RowKind.hat ? 12 : 5);
+      rows.add(line(
+          List.of(open),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 1.5),
+            padding: const EdgeInsets.fromLTRB(10, 5, 12, 5),
+            decoration: BoxDecoration(
+              color: col,
+              borderRadius: BorderRadius.only(topLeft: top, topRight: top, bottomLeft: const Radius.circular(5), bottomRight: const Radius.circular(5)),
+            ),
+            child: Text(r.text,
+                style: TextStyle(
+                    fontFamily: fBody, fontSize: 12.5, height: 16 / 12.5, fontWeight: FontWeight.w600, color: r.cat == 'events' ? kNavy : kCream)),
+          )));
+      if (r.kind != RowKind.block) open.add(col);
+    }
+    close(0);
+
+    final it = item;
+    final left = parsed.unknown;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(8)),
+        child: Semantics(
+          container: true,
+          label: 'Blocks: ${[for (final r in parsed.rows) r.text].join(', ')}',
+          child: ExcludeSemantics(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows)),
+        ),
+      ),
+      if (it != null && left > 0)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+              parsed.isEmpty
+                  ? 'These lines are not blocks Cog can add. Build them yourself from the block menu.'
+                  : '$left line${left == 1 ? ' is' : 's are'} not a block. Cog adds the others; build ${left == 1 ? 'that one' : 'those'} yourself.',
+              style: tCaption(c, color: c.muted)),
+        ),
+      if (it != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 6),
+          child: Wrap(spacing: 8, runSpacing: 6, children: [
+            if (it.give && cog.canAddBlocks && !parsed.isEmpty)
+              Btn('Add to my blocks', icon: 'plus', kind: BtnKind.primary, small: true, height: 28, onTap: () => cog.addBlocks(parsed)),
+            Btn('Copy', icon: 'copy', small: true, height: 28, onTap: () => cog.copy(script.trim())),
+          ]),
+        ),
+    ]);
   }
 }
 

@@ -55,6 +55,8 @@
   const HATS = ['rc_on_start', 'rc_forever', 'rc_when_user', 'rc_when_closer', 'rc_when_line', 'rc_when_tilt',
     'rc_when_timer', 'rc_when', 'rc_when_receive'];
   const isRoot = (type) => HATS.includes(type) || type === 'procedures_defnoreturn';
+  // A program has one of each of these.
+  const ONCE = ['rc_on_start', 'rc_forever'];
 
   // The categories, hardware first: [key, name, colour, Lucide icon].
   const ICONS = {
@@ -1408,6 +1410,45 @@
     undo() { if (ws) ws.undo(false); },
     redo() { if (ws) ws.undo(true); },
     clear() { if (ws) { Blockly.Events.setGroup(true); ws.clear(); Blockly.Events.setGroup(false); } },
+    // Puts stacks of blocks (a JSON list of Blockly block states, as Cog suggests them) beside the program, as one
+    // undo step. Nothing of the student's is touched: the stacks land loose, to be dragged into place. "on start"
+    // and "forever" exist once, so a second one arrives as its blocks only. Returns how many stacks were added.
+    add(json) {
+      if (!ws) return 0;
+      let stacks;
+      try { stacks = JSON.parse(json); } catch (e) { return 0; }
+      if (!Array.isArray(stacks)) return 0;
+      rememberMessages(stacks);
+      const had = ws.getTopBlocks(false).length > 0;
+      const box = ws.getBlocksBoundingBox();
+      const x = had ? box.right + 48 : 40;
+      let y = had ? box.top : 40;
+      let first = null, made = 0;
+      Blockly.Events.setGroup(true);
+      try {
+        for (let state of stacks) {
+          if (!state || typeof state !== 'object') continue;
+          if (ONCE.includes(state.type) && ws.getBlocksByType(state.type, false).length) {
+            state = state.inputs && state.inputs.DO && state.inputs.DO.block;
+            if (!state) continue;
+          }
+          let b = null;
+          try {
+            b = Blockly.serialization.blocks.append(Object.assign({}, state, { x, y }), ws, { recordUndo: true });
+          } catch (e) {
+            console.warn('RoboCore: a suggested stack could not be made', e);
+            continue;
+          }
+          made++;
+          first = first || b;
+          y += b.getHeightWidth().height + 32;
+        }
+      } finally {
+        Blockly.Events.setGroup(false);
+      }
+      if (first) ws.centerOnBlock(first.id);
+      return made;
+    },
     count() { return ws ? countBlocks(ws) : 0; },
     zoom(dir) { zoomBy(dir); },
     zoomToFit() { if (ws) ws.zoomToFit(); },
@@ -1713,6 +1754,22 @@
     find() { if (editor) { editor.focus(); editor.getAction('actions.find').run(); } },
     // A Monaco command by id (undo, redo, editor.action.commentLine …), for the macOS app's menu bar.
     action(id) { if (editor) { editor.focus(); editor.trigger('menu', id, null); } },
+    // Puts `text` (code from Cog's answer) at the cursor, over the selection if there is one, as one undo step.
+    // On an empty or indented line the lines after the first take that line's indentation.
+    insert(text) {
+      if (!editor || editor.getOption(monaco.editor.EditorOption.readOnly)) return false;
+      const model = editor.getModel();
+      const sel = editor.getSelection();
+      if (!model || !sel) return false;
+      const before = model.getLineContent(sel.startLineNumber).slice(0, sel.startColumn - 1);
+      const indent = /^\s*$/.test(before) ? before : '';
+      const body = String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n').join('\n' + indent);
+      editor.pushUndoStop();
+      editor.executeEdits('cog', [{ range: sel, text: body, forceMoveMarkers: true }]);
+      editor.pushUndoStop();
+      editor.focus();
+      return true;
+    },
     focus() { if (editor) editor.focus(); },
   };
 
