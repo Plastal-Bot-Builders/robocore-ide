@@ -24,10 +24,18 @@ The first time it opens Cloudflare's sign-in page, uploads the Worker (about 130
 goes straight to Cloudflare) and sets a school key, which it prints. Later runs only upload the new code. It prints the
 Worker's address, `https://robocore-cog.<your subdomain>.workers.dev`.
 
-Then in RoboCore, Settings:
+**Nothing to set up in RoboCore.** Every copy of the IDE asks this Worker at
+`https://robocore-cog.robocorezambia.workers.dev` by itself (`kCogServer` in `lib/hw/cog_client.dart`). That address is
+the Worker's name plus the Cloudflare account's workers.dev name (robocorezambia, set 2026-11-22 so the address carries
+no personal name): renaming either breaks every IDE in use. A custom domain such as cog.plastalbotbuilders.com would
+need the domain in the same Cloudflare account; it is in another one. It is open to everyone (`COG_OPEN=1`): no school key is
+needed, and each question counts against daily limits instead (one computer, one internet address, everyone together;
+`src/quota.js`, counted in the `QUOTA` Durable Object, which the first deploy creates). The workers.dev address keeps
+working too.
 
-- **Real board and upload → Compile server**: the Worker's address.
-- **Cog → School key**: the school key. Then **Test Cog**.
+The school key the script prints is now optional. A school that types it in (Settings → Cog → Use your school’s own
+Cog server…, address left empty, key filled in) skips the daily limits. Give it only to schools you trust with your
+allowance.
 
 To change a secret later, from this folder: `wrangler secret put ANTHROPIC_API_KEY --env=` or
 `wrangler secret put COG_KEYS --env=` (all the schools' keys, comma-separated; to shut a school out, leave its key
@@ -72,7 +80,10 @@ What to know:
 | Name | Where | What |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | secret | Turns Cog on (with Claude; for another AI see "Without paying" above and `docs/cog.md`, "Another AI") |
-| `COG_KEYS` | secret | The schools' keys, comma-separated. Cog answers only requests that carry one |
+| `COG_KEYS` | secret | The schools' keys, comma-separated. Closed: Cog answers only requests that carry one. Open: a key skips the daily limits |
+| `COG_OPEN` | `wrangler.jsonc` | `1` = open to everyone, no key needed (both set-ups). Needs the `QUOTA` Durable Object |
+| `COG_DAY_LIMIT` | `wrangler.jsonc` | Questions a day for everyone without a key together (Cloudflare's AI: 45, under its free allowance; Claude: 200, the most it can spend) |
+| `COG_DEVICE_DAY_LIMIT`, `COG_ADDRESS_DAY_LIMIT` | `wrangler.jsonc` | Questions a day from one computer (15 / 20) and one internet address, a whole school's network (40 / 60) |
 | `COG_MODEL` | `wrangler.jsonc` | Default `claude-haiku-5-5`, the cheapest Claude; `claude-sonnet-5-5` and `claude-opus-5-5` are stronger and cost 20 and 40 times as much |
 | `COG_EFFORT`, `COG_FIX_EFFORT` | `wrangler.jsonc` (optional) | How hard it thinks for chat and for fixes (`low`, `medium`, `high`) |
 | `COG_RATE_PER_MIN` | `wrangler.jsonc` | Requests per minute from one address (12) |

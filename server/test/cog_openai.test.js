@@ -380,7 +380,12 @@ test('the free Cloudflare set-up (wrangler.jsonc, env.cloudflare) makes a Cog th
   const config = JSON.parse(text);
   assert.equal(config.env.cloudflare.name, config.name, 'the same Worker, with another engine');
   const vars = config.env.cloudflare.vars;
-  for (const k of Object.keys(config.vars)) if (k !== 'COG_MODEL') assert.equal(vars[k], config.vars[k], `${k} is the same with either engine`);
+  // The daily limits follow each engine's budget (Cloudflare's free allowance, or what Claude may spend).
+  const ownEach = new Set(['COG_MODEL', 'COG_DAY_LIMIT', 'COG_DEVICE_DAY_LIMIT', 'COG_ADDRESS_DAY_LIMIT']);
+  for (const k of Object.keys(config.vars)) if (!ownEach.has(k)) assert.equal(vars[k], config.vars[k], `${k} is the same with either engine`);
+  assert.equal(vars.COG_OPEN, '1', 'the free set-up is open to everyone, within its daily limits');
+  assert.ok(Number(vars.COG_DAY_LIMIT) < 50, 'everyone together stops before the free allowance (about 50 a day)');
+  assert.deepEqual(config.env.cloudflare.durable_objects, config.durable_objects, 'both engines count with the same QUOTA object');
   // The secrets deploy.sh sets, with the fake service in place of the account's AI address.
   const env = { ...vars, COG_BASE_URL: `${apiBase}/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1`, COG_API_KEY: 'cf-token', COG_KEYS: 'school-1' };
   const cfg = cogConfig(env);
@@ -392,7 +397,8 @@ test('the free Cloudflare set-up (wrangler.jsonc, env.cloudflare) makes a Cog th
     ...(body ? { body: JSON.stringify(body) } : {}),
   }), env, { waitUntil() {} });
   const health = await (await call('/health')).json();
-  assert.deepEqual(health.cog, { ready: true, model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', keys: true, by: { label: 'Llama 3.3, run by Cloudflare', company: 'Cloudflare', where: 'the United States', local: false } });
+  // Open: no key needed (this request's school key skips the daily limits, so no QUOTA object is needed here).
+  assert.deepEqual(health.cog, { ready: true, model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', keys: false, open: true, by: { label: 'Llama 3.3, run by Cloudflare', company: 'Cloudflare', where: 'the United States', local: false } });
   assert.equal(said(await events(await call('/cog/chat', job({ by })))), 'Names in Arduino are case-sensitive.');
   const q = seen.at(-1);
   assert.equal(q.path, '/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1/chat/completions');
@@ -404,7 +410,9 @@ test('the free Cloudflare set-up (wrangler.jsonc, env.cloudflare) makes a Cog th
 });
 
 test('the Cloudflare Worker runs the same engine', async () => {
-  const env = { ...ENV(), COG_LOCAL: '', COG_API_KEY: 'sk-test', COG_AI_NAME: 'DeepSeek', COG_AI_COMPANY: 'DeepSeek', COG_AI_WHERE: 'China' };
+  // Open (COG_OPEN=1 in ENV), so the Worker counts each question: a stand-in QUOTA that always says yes.
+  const QUOTA = { idFromName: (n) => n, get: () => ({ fetch: async () => Response.json({ ok: true, why: '', left: 1 }) }) };
+  const env = { ...ENV(), QUOTA, COG_LOCAL: '', COG_API_KEY: 'sk-test', COG_AI_NAME: 'DeepSeek', COG_AI_COMPANY: 'DeepSeek', COG_AI_WHERE: 'China' };
   const call = (path, init) => worker.fetch(new Request(`https://cog.example${path}`, init), env, { waitUntil() {} });
   const health = await (await call('/health')).json();
   assert.deepEqual(health.cog.by, { label: 'DeepSeek', company: 'DeepSeek', where: 'China', local: false });

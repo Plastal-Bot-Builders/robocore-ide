@@ -5,6 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import worker from '../src/index.js';
+import { CogQuota, take } from '../src/quota.js';
 
 let api, apiBase, compile, compileBase;
 const seen = []; // requests the fake API received
@@ -75,7 +76,7 @@ const job = (over = {}) => ({
   },
   ...over,
 });
-const call = (e, path, { method = 'GET', body, key = SCHOOL, ip = '203.0.113.7', origin } = {}) =>
+const call = (e, path, { method = 'GET', body, key = SCHOOL, ip = '203.0.113.7', origin, device } = {}) =>
   worker.fetch(new Request(`https://cog.example.workers.dev${path}`, {
     method,
     headers: {
@@ -83,6 +84,7 @@ const call = (e, path, { method = 'GET', body, key = SCHOOL, ip = '203.0.113.7',
       ...(key ? { 'X-Cog-Key': key } : {}),
       ...(ip ? { 'CF-Connecting-IP': ip } : {}),
       ...(origin ? { Origin: origin } : {}),
+      ...(device ? { 'X-Cog-Device': device } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   }), e, { waitUntil() {} });
@@ -90,7 +92,7 @@ const events = async (r) => (await r.text()).split('\n\n').filter((l) => l.start
 
 test('health says Cog is ready, which model it uses and that it needs a school key', async () => {
   const j = await (await call(env(), '/health', { key: null })).json();
-  assert.deepEqual(j.cog, { ready: true, model: 'claude-haiku-5-5', keys: true, by: { label: 'Claude, made by Anthropic', company: 'Anthropic', where: 'the United States', local: false } });
+  assert.deepEqual(j.cog, { ready: true, model: 'claude-haiku-5-5', keys: true, open: false, by: { label: 'Claude, made by Anthropic', company: 'Anthropic', where: 'the United States', local: false } });
   assert.equal(j.compile, false);
   const off = await (await call(env({ ANTHROPIC_API_KEY: '' }), '/health')).json();
   assert.equal(off.cog.ready, false);
@@ -189,4 +191,99 @@ test('anything else goes to the compile server when one is set, or is answered 4
   const passed = await call(env({ COMPILE_SERVER: `${compileBase}/` }), '/compile?x=1', { method: 'POST', body: { board: 'v2', files: [] }, key: null });
   assert.equal(passed.status, 200);
   assert.deepEqual(await passed.json(), { from: 'compile server', method: 'POST', path: '/compile?x=1' });
+});
+
+// ---- Open to everyone (COG_OPEN=1): no school key, daily limits counted by the QUOTA Durable Object ----
+
+// A stand-in for the QUOTA binding: the real CogQuota over storage kept in a Map, as Durable Object storage behaves.
+function fakeQuota() {
+  const map = new Map();
+  const storage = {
+    async get(k) { return Array.isArray(k) ? new Map(k.filter((x) => map.has(x)).map((x) => [x, map.get(x)])) : map.get(k); },
+    async put(k, v) { if (typeof k === 'object') for (const [a, b] of Object.entries(k)) map.set(a, b); else map.set(k, v); },
+    async deleteAll() { map.clear(); },
+  };
+  const object = new CogQuota({ storage });
+  return { map, storage, idFromName: (n) => n, get: () => ({ fetch: (url, init) => object.fetch(new Request(url, init)) }) };
+}
+const open = (over = {}) => env({ COG_OPEN: '1', COG_KEYS: SCHOOL, QUOTA: fakeQuota(), ...over });
+const ask = (e, opts = {}) => call(e, '/cog/chat', { method: 'POST', body: job(), key: null, ...opts });
+
+test('open: anyone may ask without a school key, and health says so', async () => {
+  const e = open();
+  const h = await (await call(e, '/health', { key: null })).json();
+  assert.equal(h.cog.keys, false);
+  assert.equal(h.cog.open, true);
+  const r = await ask(e, { device: 'device-aaaa-1111' });
+  assert.equal(r.status, 200, await r.clone().text());
+  assert.equal((await events(r)).at(-1).t, 'done');
+});
+
+test('open: each computer gets its questions for the day, then hears it is back tomorrow', async () => {
+  const e = open({ COG_DEVICE_DAY_LIMIT: '2' });
+  assert.equal((await ask(e, { device: 'device-aaaa-1111' })).status, 200);
+  assert.equal((await ask(e, { device: 'device-aaaa-1111' })).status, 200);
+  const third = await ask(e, { device: 'device-aaaa-1111' });
+  assert.equal(third.status, 429);
+  assert.match((await third.json()).error, /on this computer today\. It will be back tomorrow/);
+  assert.ok(Number(third.headers.get('Retry-After')) >= 60);
+  // Another computer behind the same address still may.
+  assert.equal((await ask(e, { device: 'device-bbbb-2222' })).status, 200);
+});
+
+test('open: one internet address and everyone together have their own limits', async () => {
+  const e = open({ COG_ADDRESS_DAY_LIMIT: '2' });
+  assert.equal((await ask(e, { device: 'device-aaaa-1111' })).status, 200);
+  assert.equal((await ask(e, { device: 'device-bbbb-2222' })).status, 200);
+  const third = await ask(e, { device: 'device-cccc-3333' });
+  assert.equal(third.status, 429);
+  assert.match((await third.json()).error, /this internet connection/);
+
+  const all = open({ COG_DAY_LIMIT: '3' });
+  for (const n of [1, 2, 3]) assert.equal((await ask(all, { device: `device-${n}-abcd`, ip: `198.51.100.${n}` })).status, 200);
+  const fourth = await ask(all, { device: 'device-4-abcd', ip: '198.51.100.4' });
+  assert.equal(fourth.status, 429);
+  assert.match((await fourth.json()).error, /all the questions it can for today/);
+});
+
+test('open: a school key skips the daily limits', async () => {
+  const e = open({ COG_DAY_LIMIT: '1' });
+  assert.equal((await ask(e, { device: 'device-aaaa-1111' })).status, 200);
+  assert.equal((await ask(e, { device: 'device-aaaa-1111' })).status, 429);
+  assert.equal((await ask(e, { device: 'device-aaaa-1111', key: SCHOOL })).status, 200);
+  assert.equal((await ask(e, { device: 'device-aaaa-1111', key: SCHOOL })).status, 200);
+  // A wrong key is treated as no key: it is let in, within the limits.
+  assert.equal((await ask(e, { device: 'device-bbbb-2222', key: 'wrong' })).status, 429);
+});
+
+test('open: a refused request is not counted, and an IDE that sends no device number counts by its address', async () => {
+  const e = open({ COG_DEVICE_DAY_LIMIT: '1' });
+  const bad = await call(e, '/cog/chat', { method: 'POST', body: job({ task: 'explode' }), key: null, device: 'device-aaaa-1111' });
+  assert.equal(bad.status, 400);
+  assert.equal((await ask(e, { device: 'device-aaaa-1111' })).status, 200);
+
+  const old = open({ COG_DEVICE_DAY_LIMIT: '1' });
+  assert.equal((await ask(old, { device: 'bad id!' })).status, 200);
+  assert.equal((await ask(old)).status, 429); // the same address: the same "computer"
+  assert.equal((await ask(old, { ip: '198.51.100.77' })).status, 200);
+});
+
+test('open: the counts hold no address or device number, and a new day starts from nothing', async () => {
+  const e = open();
+  await ask(e, { device: 'device-aaaa-1111', ip: '203.0.113.99' });
+  const saved = JSON.stringify([...e.QUOTA.map]);
+  assert.doesNotMatch(saved, /203\.0\.113\.99|device-aaaa-1111/);
+  assert.equal(e.QUOTA.map.get('all'), 1);
+
+  const { storage } = fakeQuota();
+  const limits = { all: 1, device: 1, address: 1 };
+  assert.equal((await take(storage, { day: '2026-11-21', device: 'd', address: 'a', limits })).ok, true);
+  assert.equal((await take(storage, { day: '2026-11-21', device: 'd', address: 'a', limits })).ok, false);
+  assert.equal((await take(storage, { day: '2026-11-22', device: 'd', address: 'a', limits })).ok, true);
+});
+
+test('open without the QUOTA object refuses rather than run without limits', async () => {
+  const r = await ask(open({ QUOTA: undefined }), { device: 'device-aaaa-1111' });
+  assert.equal(r.status, 503);
+  assert.match((await r.json()).error, /daily limits/);
 });

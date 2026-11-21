@@ -9,10 +9,25 @@
   "compatibility_date": "2026-10-01",
   // node:crypto, for comparing school keys in constant time (server/src/cog.js).
   "compatibility_flags": ["nodejs_compat"],
+  // The IDE asks this Worker at its workers.dev address, https://robocore-cog.robocorezambia.workers.dev (kCogServer in
+  // lib/hw/cog_client.dart). No custom domain: plastalbotbuilders.com is in another Cloudflare account (2026-11-22).
+  // The Worker's name and the account's workers.dev name (robocorezambia) make the address: keep both.
+  "workers_dev": true,
+  // The daily counts of an open Cog (src/quota.js). One object, so every Cloudflare server sees the same numbers.
+  "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "CogQuota" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CogQuota"] }],
   "vars": {
     // The model Cog uses (docs/cog.md says what each costs). Haiku 5.5 is the cheapest Claude; claude-sonnet-5-5 and
     // claude-opus-5-5 are stronger and cost 20 and 40 times as much.
     "COG_MODEL": "claude-haiku-5-5",
+    // Open to everyone: the IDE needs no school key. Each question is counted against these daily limits instead
+    // (one computer, one internet address, everyone together); a school key skips them. With Claude every question
+    // costs money, so COG_DAY_LIMIT is the most it can spend in a day: set it to your budget, and set a monthly
+    // spending limit in the Anthropic console too.
+    "COG_OPEN": "1",
+    "COG_DAY_LIMIT": "200",
+    "COG_DEVICE_DAY_LIMIT": "20",
+    "COG_ADDRESS_DAY_LIMIT": "60",
     // Cog requests per minute from one address, and from one school key (all its classrooms together).
     "COG_RATE_PER_MIN": "12",
     "COG_KEY_RATE_PER_MIN": "60",
@@ -27,7 +42,15 @@
     // address) and COG_KEYS.
     "cloudflare": {
       "name": "robocore-cog",
+      // Not inherited from the top: each environment names its own.
+      "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "CogQuota" }] },
       "vars": {
+        // Open to everyone, within Cloudflare's free allowance (about 50 questions a day with this model): everyone
+        // together stops a little before it, so students hear "back tomorrow" from Cog, not an error from the AI.
+        "COG_OPEN": "1",
+        "COG_DAY_LIMIT": "45",
+        "COG_DEVICE_DAY_LIMIT": "15",
+        "COG_ADDRESS_DAY_LIMIT": "40",
         "COG_PROVIDER": "openai",
         // About 50 questions a day fit in the free allowance with this model. @cf/meta/llama-3.1-8b-instruct-fp8-fast
         // allows about 300, with weaker answers. When you change the model, change COG_AI_NAME to match.

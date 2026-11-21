@@ -129,11 +129,13 @@ if ! has_secret COG_KEYS; then
   KEY=${COG_SCHOOL_KEY:-$(openssl rand -hex 16)}
   send_secret COG_KEYS "$KEY"
   echo
-  echo "School key, for RoboCore Settings > Cog > School key:  $KEY"
+  echo "School key (optional: a school that types it in skips the daily limits):  $KEY"
   echo "Keep it. To give each school its own, set all of them, comma-separated: wrangler secret put COG_KEYS $ENVARG"
 fi
 echo
-echo "In RoboCore Settings > Real board and upload > Compile server, use the workers.dev address above, then Test Cog."
+echo "Nothing to set up in RoboCore: the IDE asks https://robocore-cog.robocorezambia.workers.dev by itself (the address"
+echo "above, if this account's workers.dev name is robocorezambia). Cog is open to everyone within the daily limits in"
+echo "wrangler.jsonc (COG_DAY_LIMIT and the others)."
 if [ "$MODE" = cloudflare ]; then
   echo "Cloudflare answers about 50 questions a day for free with this model; after that Cog rests until 00:00 UTC."
   echo "Nothing is billed on Cloudflare's free plan. wrangler.jsonc (env.cloudflare) says how to allow more questions."

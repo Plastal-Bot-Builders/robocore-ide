@@ -10,8 +10,15 @@
 // answers 404. Settings: ANTHROPIC_API_KEY and COG_KEYS are secrets (`wrangler secret put`); COG_MODEL, COG_EFFORT,
 // COG_FIX_EFFORT, COG_RATE_PER_MIN (per address), COG_KEY_RATE_PER_MIN (per school key), ALLOWED_ORIGINS and
 // COMPILE_SERVER are in wrangler.jsonc. README.md says how to put it online.
+//
+// Open to everyone (COG_OPEN=1, so the IDE needs no school key): then each computer, each internet address and everyone
+// together get a number of questions a day (COG_DEVICE_DAY_LIMIT, COG_ADDRESS_DAY_LIMIT, COG_DAY_LIMIT), counted by
+// the QUOTA Durable Object (src/quota.js). A school key still works and skips those daily limits.
 import { cogConfig, makeCog, validateCog } from '../../server/src/cog.js';
 import { RequestError } from '../../server/src/errors.js';
+import { CogQuota, hashFor, secondsToTomorrow, today } from './quota.js';
+
+export { CogQuota };
 
 const BODY_LIMIT = 1_000_000;
 const DEFAULT_ORIGINS = 'https://plastal-bot-builders.github.io,http://localhost:*,http://127.0.0.1:*';
@@ -55,6 +62,12 @@ function setup(env) {
       perAddress: makeLimiter(cfg.ratePerMin),
       perSchool: makeLimiter(Number(env.COG_KEY_RATE_PER_MIN || 60)),
       compile: String(env.COMPILE_SERVER || '').replace(/\/+$/, ''),
+      open: cfg.open,
+      day: {
+        all: Number(env.COG_DAY_LIMIT || 45),
+        device: Number(env.COG_DEVICE_DAY_LIMIT || 15),
+        address: Number(env.COG_ADDRESS_DAY_LIMIT || 40),
+      },
     };
     setups.set(env, s);
   }
@@ -67,7 +80,31 @@ const json = (status, body, headers = {}) =>
     headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
   });
 
-const tooMany = (cors, message) => json(429, { error: message }, { ...cors, 'Retry-After': '60' });
+const tooMany = (cors, message, retryAfter = 60) => json(429, { error: message }, { ...cors, 'Retry-After': String(retryAfter) });
+
+const DEVICE = /^[A-Za-z0-9-]{8,64}$/;
+const DAY_DONE = {
+  all: 'Cog has answered all the questions it can for today. It will be back tomorrow.',
+  device: 'Cog has answered all the questions it can on this computer today. It will be back tomorrow.',
+  address: 'Cog has answered all the questions it can for this internet connection today. It will be back tomorrow.',
+};
+
+// One question against the daily limits of an open Cog. Null when it may go ahead, otherwise what to tell the student.
+// The device is the IDE's own random number (X-Cog-Device); an IDE that sends none counts by its address.
+async function daily(env, s, request, ip) {
+  if (!env.QUOTA) throw new RequestError(503, 'Cog is open to everyone here, but its daily limits are not set up yet (the QUOTA Durable Object).');
+  const day = today();
+  const raw = String(request.headers.get('X-Cog-Device') ?? '');
+  const body = {
+    day,
+    device: await hashFor(day, 'device', DEVICE.test(raw) ? raw : `address:${ip}`),
+    address: await hashFor(day, 'address', ip),
+    limits: s.day,
+  };
+  const stub = env.QUOTA.get(env.QUOTA.idFromName('cog'));
+  const r = await (await stub.fetch('https://quota/take', { method: 'POST', body: JSON.stringify(body) })).json();
+  return r.ok ? null : DAY_DONE[r.why] ?? DAY_DONE.all;
+}
 
 async function readJson(request) {
   if (!String(request.headers.get('Content-Type') ?? '').includes('application/json')) {
@@ -146,11 +183,11 @@ export default {
         if (!cors['Access-Control-Allow-Origin']) return json(403, { error: 'Origin not allowed.' });
         return new Response(null, {
           status: 204,
-          headers: { ...cors, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, X-Cog-Key', 'Access-Control-Max-Age': '600' },
+          headers: { ...cors, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, X-Cog-Key, X-Cog-Device', 'Access-Control-Max-Age': '600' },
         });
       }
       if (request.method === 'GET' && url.pathname === '/health') {
-        return json(200, { ok: true, cog: { ready: s.cog.ready, model: s.cog.model, keys: s.cog.keys, by: s.cog.by }, compile: Boolean(s.compile) }, cors);
+        return json(200, { ok: true, cog: { ready: s.cog.ready, model: s.cog.model, keys: s.cog.keys, open: s.open, by: s.cog.by }, compile: Boolean(s.compile) }, cors);
       }
       if (url.pathname === '/cog/key' || url.pathname.startsWith('/cog/')) {
         if (origin && !cors['Access-Control-Allow-Origin']) return json(403, { error: 'Origin not allowed.' }, cors);
@@ -159,15 +196,24 @@ export default {
         // The limit comes first, so keys can't be guessed quickly.
         if (!s.perAddress(ip)) return tooMany(cors, 'Cog needs a short break. Wait a minute and ask again.');
         const key = request.headers.get('X-Cog-Key') ?? undefined;
-        s.cog.admit(key);
+        s.cog.admit(key); // open: everyone; otherwise a school key
+        const school = s.cog.knows(key);
         if (request.method === 'GET' && url.pathname === '/cog/key') return json(200, { ok: true }, cors);
         const kind = url.pathname.slice(5);
         if (request.method !== 'POST' || !['chat', 'fix', 'check'].includes(kind)) return json(404, { error: 'Not found.' }, cors);
-        // A whole school shares one key: this caps what it can spend, however many addresses it asks from.
-        if (!s.perSchool(key ?? '')) return tooMany(cors, 'Cog is busy for your school right now. Wait a minute and ask again.');
+        // A whole school shares one key: this caps what it can spend, however many addresses it asks from. Everyone
+        // without a key shares one count too.
+        if (!s.perSchool(school ? key : '')) {
+          return tooMany(cors, school ? 'Cog is busy for your school right now. Wait a minute and ask again.' : 'Cog is busy right now. Wait a minute and ask again.');
+        }
         const body = await readJson(request);
         s.cog.agree(body?.by);
         const job = validateCog(body, { needTask: kind === 'chat' });
+        // Only a question that is going to the AI is counted.
+        if (s.open && !school) {
+          const done = await daily(env, s, request, ip);
+          if (done) return tooMany(cors, done, secondsToTomorrow());
+        }
         if (kind === 'chat') return await chat(s.cog, job, cors, ctx);
         return json(200, kind === 'fix' ? await s.cog.fix(job) : await s.cog.check(job), cors);
       }

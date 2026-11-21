@@ -578,6 +578,14 @@ export function makeCog(cfg) {
         : 'Cog on this server needs a newer RoboCore IDE. Update the app, then ask again.');
     },
 
+    /// Whether [key] is one of the schools' keys. An open server still knows its schools: on the Cog Worker they skip
+    /// the daily limits that everyone else shares.
+    knows(key) {
+      if (!key || !keys.length) return false;
+      const d = digest(key);
+      return keys.some((k) => timingSafeEqual(k, d));
+    },
+
     /// Throws unless [key] (the X-Cog-Key header) lets the request in.
     admit(key) {
       if (cfg.open) return;
