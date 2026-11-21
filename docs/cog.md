@@ -22,7 +22,8 @@ before it fixes**: it explains, gives hints one at a time, shows a fix only when
   for me**; in **Hints first** it only guides, and the stack comes with *Show the fix* after two hints. A line of a
   stack that is not a real block is shown as plain text and is never added.
 - **Settings → Cog**: help style (**Hints first**, the default; **Explain the answer**; **Write code for me**, which needs a
-  teacher PIN), *Let Cog read this project*, and **Test Cog**.
+  teacher PIN), *Let Cog read this project*, and **Test Cog**. Cog works straight away: there is no address or key to
+  type (see "Setting it up").
 - **Offline**: Cog says it needs the internet; writing code, Verify, Upload and the Serial Monitor keep working.
 
 ## How it is built
@@ -52,11 +53,27 @@ is open when it may not read the project, so Cog knows to answer with blocks.
 
 ## Setting it up
 
+**Nothing to set up in the IDE.** Every copy of the IDE asks RoboCore's own Cog, `https://robocore-cog.robocorezambia.workers.dev`
+(`kCogServer` in `lib/hw/cog_client.dart`): the Cog Worker in `cog-worker/` (its README says how it is put online). It
+is open to everyone (`COG_OPEN=1`), so no school key is needed; instead each question counts against daily limits, for
+one computer, one internet address and everyone together (`cog-worker/src/quota.js`). The IDE sends its own random
+number with each question (`X-Cog-Device`, `Settings.cogDevice`, made the first time Cog is asked) so the limits are
+shared fairly between computers; the Worker only keeps hashes of it and of the address, salted with the day. While
+RoboCore is being tested the Worker uses Cloudflare's free AI, about 45 questions a day for everyone.
+
+A school with its own RoboCore server and Cog uses **Settings → Cog → Use your school’s own Cog server…** (an address
+and, if that server asks for one, its school key). A school key that RoboCore's Cog knows (`COG_KEYS`) skips its daily
+limits. Devices that had the Cog Worker's workers.dev address typed in as their compile server have it removed on
+the next start (it never compiled).
+
+A RoboCore server of your own with Cog:
+
 1. Get an Anthropic API key (console.anthropic.com). Keep it on the server only. (For another AI, see "Another AI"
    below.)
 2. Locally: `cd server && npm ci && ANTHROPIC_API_KEY=… npm start`. On Render: the blueprint asks for
    `ANTHROPIC_API_KEY` (marked secret). Cloud Run: `--set-secrets` or `--set-env-vars`.
-3. In the IDE: Settings → Real board and upload → the server's address, then Settings → Cog → **Test Cog**.
+3. In the IDE: Settings → Cog → **Use your school’s own Cog server…**, the server's address (and its school key),
+   then **Test Cog**.
 
 ## Choosing the model (cost)
 

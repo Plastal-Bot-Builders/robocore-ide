@@ -348,7 +348,7 @@ class _Notice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    final host = Uri.tryParse(normalizeServerUrl(s.settings.compileServer))?.host ?? '';
+    final host = Uri.tryParse(normalizeServerUrl(s.cog.server))?.host ?? '';
     final server = host.isEmpty ? 'the RoboCore server' : 'the RoboCore server ($host)';
     final lines = cogNoticeLines(s.cog.by, read: s.settings.cogRead, server: server);
     return RcCard(

@@ -3,6 +3,7 @@
 // Cog guides before it fixes: it never changes code without Apply. AppState owns one CogController.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show Random;
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
@@ -98,8 +99,19 @@ class CogController {
   StreamSubscription<CogEvent>? _sub;
 
   String get styleLabel => kCogStyles[app.settings.cogStyle] ?? 'Hints first';
-  String get _server => app.settings.compileServer;
+  /// Where Cog answers: RoboCore's own Cog, unless Settings → Cog names another server (a school's own).
+  String get server => app.settings.cogServer.trim().isEmpty ? kCogServer : app.settings.cogServer.trim();
+  String get _server => server;
   String get _key => app.settings.cogKey;
+
+  /// This copy of the app's random number, made and kept the first time Cog is asked (Settings.cogDevice).
+  String _device() {
+    if (app.settings.cogDevice.isNotEmpty) return app.settings.cogDevice;
+    final r = Random.secure();
+    final id = List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    app.updateSettings((x) => x.cogDevice = id);
+    return id;
+  }
 
   /// Who answers on the Cog server, as it last said (kept between runs). The notice and the captions say this.
   CogBy get by => CogBy.fromJson(app.settings.cogBy);
@@ -263,7 +275,7 @@ class CogController {
       done.complete();
     }
 
-    _sub = client.chat(_server, _body(task, hint: hint), key: _key).listen((e) {
+    _sub = client.chat(_server, _body(task, hint: hint), key: _key, device: _device()).listen((e) {
       switch (e) {
         case CogText(:final text):
           reply.text += text;
@@ -321,7 +333,7 @@ class CogController {
         ? 'Show me the fix.'
         : 'Show me the fix for: ${problem!.file}:${problem!.line} ${problem!.msg}';
     try {
-      final f = await client.fix(_server, _body('chat', extra: ask), key: _key);
+      final f = await client.fix(_server, _body('chat', extra: ask), key: _key, device: _device());
       item.before = app.cur?.files.where((x) => x.name == f.file).firstOrNull?.content;
       item.fix = f;
       item.streaming = false;
@@ -412,7 +424,7 @@ class CogController {
     busy = true;
     app.changed();
     try {
-      item.check = await client.check(_server, _body('chat', extra: 'I applied the fix.'), key: _key);
+      item.check = await client.check(_server, _body('chat', extra: 'I applied the fix.'), key: _key, device: _device());
       item.streaming = false;
     } on CogFailure catch (e) {
       items.remove(item); // the question is a bonus: no notice when it can't be made

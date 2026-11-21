@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../hw/compile_client.dart' show normalizeServerUrl;
 import '../../state/app_state.dart';
 import '../../state/cog.dart';
 import '../../state/models.dart' show Settings;
@@ -595,19 +596,27 @@ class _CogStatusRowState extends State<_CogStatusRow> {
   (bool?, String)? _status;
   bool _busy = false;
   final _key = TextEditingController();
+  final _server = TextEditingController();
 
-  /// With a teacher PIN the key can't be changed until the PIN is typed.
+  /// With a teacher PIN the key and the server can't be changed until the PIN is typed.
   bool _unlocked = false;
+
+  /// "Use your school’s own Cog server": shown when one is set, or when someone opens it.
+  bool _own = false;
 
   @override
   void initState() {
     super.initState();
-    _key.text = AppScope.read(context).settings.cogKey;
+    final st = AppScope.read(context).settings;
+    _key.text = st.cogKey;
+    _server.text = st.cogServer;
+    _own = st.cogServer.isNotEmpty || st.cogKey.isNotEmpty;
   }
 
   @override
   void dispose() {
     _key.dispose();
+    _server.dispose();
     super.dispose();
   }
 
@@ -615,14 +624,20 @@ class _CogStatusRowState extends State<_CogStatusRow> {
     if (!mounted) return;
     final s = AppScope.read(context);
     final k = _key.text.trim();
-    if (k != s.settings.cogKey && (_unlocked || s.settings.cogPin.isEmpty)) s.updateSettings((x) => x.cogKey = k);
+    final url = _server.text.trim().isEmpty ? '' : normalizeServerUrl(_server.text);
+    if (!(_unlocked || s.settings.cogPin.isEmpty)) return;
+    if (k != s.settings.cogKey || url != s.settings.cogServer) {
+      s.updateSettings((x) => x
+        ..cogKey = k
+        ..cogServer = url);
+    }
   }
 
   Future<void> _test() async {
     _saveKey();
     final s = AppScope.read(context);
     setState(() => _busy = true);
-    final r = await s.cog.client.status(s.settings.compileServer, key: s.settings.cogKey);
+    final r = await s.cog.client.status(s.cog.server, key: s.settings.cogKey);
     // The same visit asks who answers there, so this page and the notice name the right AI.
     await s.cog.refreshBy(force: true);
     if (mounted) {
@@ -645,38 +660,65 @@ class _CogStatusRowState extends State<_CogStatusRow> {
         Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Cog on the RoboCore server', style: tLabel(c, w: FontWeight.w500)),
+              Text(s.settings.cogServer.isEmpty ? 'RoboCore’s Cog' : 'Your school’s Cog server', style: tLabel(c, w: FontWeight.w500)),
               const SizedBox(height: 2),
-              Text('Cog answers through the server above. The AI’s key stays on the server.', style: tCaption(c)),
+              Text(
+                s.settings.cogServer.isEmpty
+                    ? 'Ready to use over the internet, nothing to set up. While RoboCore is being tested, Cog answers a '
+                        'limited number of questions a day, so it may say it is back tomorrow.'
+                    : 'Cog answers through ${Uri.tryParse(s.settings.cogServer)?.host ?? s.settings.cogServer}. The AI’s key stays on that server.',
+                style: tCaption(c),
+              ),
             ]),
           ),
           const SizedBox(width: 16),
           Btn(_busy ? 'Testing…' : 'Test Cog', kind: BtnKind.outline, busy: _busy, onTap: _busy ? null : _test),
         ]),
-        const SizedBox(height: 12),
-        Text('School key', style: tLabel(c, w: FontWeight.w500)),
-        const SizedBox(height: 2),
-        Text('The server only answers schools with a key, so nobody else can use up its AI credit. Ask whoever runs it.',
-            style: tCaption(c)),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-            child: locked
-                ? _LockedField(s.settings.cogKey.isEmpty ? 'Not set' : '••••••••')
-                : Focus(
-                    onFocusChange: (has) {
-                      if (!has) _saveKey();
-                    },
-                    child: RcInput(controller: _key, hint: 'School key', height: 36, obscure: true, onSubmitted: (_) => _saveKey()),
-                  ),
+        if (!_own) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Btn('Use your school’s own Cog server…', kind: BtnKind.plain, onTap: () => setState(() => _own = true)),
           ),
-          if (locked) ...[
-            const SizedBox(width: 8),
-            Btn('Change…', height: 36, onTap: () async {
-              if (await _unlock(context, s)) setState(() => _unlocked = true);
-            }),
-          ],
-        ]),
+        ] else ...[
+          const SizedBox(height: 12),
+          Text('Your school’s own Cog server', style: tLabel(c, w: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text('Only for a school that runs its own RoboCore server with Cog. Leave both empty to use RoboCore’s Cog. '
+              'A school key from RoboCore also lets a school skip the daily limit.', style: tCaption(c)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: locked
+                  ? _LockedField(s.settings.cogServer.isEmpty ? 'RoboCore’s Cog' : s.settings.cogServer)
+                  : Focus(
+                      onFocusChange: (has) {
+                        if (!has) _saveKey();
+                      },
+                      child: RcInput(controller: _server, hint: 'Cog server address (empty = RoboCore’s Cog)', height: 36, onSubmitted: (_) => _saveKey()),
+                    ),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: locked
+                  ? _LockedField(s.settings.cogKey.isEmpty ? 'No school key' : '••••••••')
+                  : Focus(
+                      onFocusChange: (has) {
+                        if (!has) _saveKey();
+                      },
+                      child: RcInput(controller: _key, hint: 'School key (if the server asks for one)', height: 36, obscure: true, onSubmitted: (_) => _saveKey()),
+                    ),
+            ),
+            if (locked) ...[
+              const SizedBox(width: 8),
+              Btn('Change…', height: 36, onTap: () async {
+                if (await _unlock(context, s)) setState(() => _unlocked = true);
+              }),
+            ],
+          ]),
+        ],
         if (st != null) ...[
           const SizedBox(height: 10),
           Container(

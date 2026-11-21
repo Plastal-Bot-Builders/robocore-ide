@@ -197,8 +197,23 @@ class Settings {
   Map<String, dynamic>? cogBy;
   String cogNoticeFor;
 
-  /// The school key a Cog server asks for (server/src/cog.js, COG_KEYS). Empty = none.
+  /// The school key a Cog server asks for (server/src/cog.js, COG_KEYS). Empty = none. RoboCore's own Cog needs
+  /// none; a key it knows skips its daily limits.
   String cogKey;
+
+  /// Another Cog server than RoboCore's own (kCogServer), e.g. a school's own RoboCore server. Empty = RoboCore's.
+  String cogServer;
+
+  /// This copy of the app's random number (X-Cog-Device), so RoboCore's Cog can share its daily questions fairly
+  /// between computers. Made the first time Cog is asked; it says nothing about the person.
+  String cogDevice;
+
+  /// Before Cog had its own address, some devices were given the Cog Worker's address by hand as their "compile
+  /// server". It never compiled anything, so it is dropped: Cog now finds RoboCore's own Cog by itself.
+  static String _compileServer(Object? saved) {
+    final s = (saved as String? ?? '').trim();
+    return RegExp(r'^https://robocore-cog\.[a-z0-9-]+\.workers\.dev/*$').hasMatch(s) ? '' : s;
+  }
 
   /// How Cog pitches its explanations: beginner | intermediate | advanced (ST-03).
   String cogLevel;
@@ -223,6 +238,8 @@ class Settings {
     this.cogBy,
     this.cogNoticeFor = '',
     this.cogKey = '',
+    this.cogServer = '',
+    this.cogDevice = '',
     this.cogLevel = 'beginner',
   });
   Map<String, dynamic> toJson() => {
@@ -245,6 +262,8 @@ class Settings {
         if (cogBy != null) 'cogBy': cogBy,
         'cogNoticeFor': cogNoticeFor,
         'cogKey': cogKey,
+        'cogServer': cogServer,
+        'cogDevice': cogDevice,
         'cogLevel': cogLevel,
       };
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
@@ -255,7 +274,7 @@ class Settings {
         wrap: j['wrap'] as bool? ?? false,
         autosave: j['autosave'] as bool? ?? true,
         lang: j['lang'] as String? ?? 'English',
-        compileServer: j['compileServer'] as String? ?? '',
+        compileServer: _compileServer(j['compileServer']),
         cppPaneWidth: _paneSize(j['cppPaneWidth'], 400, defaultCppPaneWidth),
         consoleHeight: _paneSize(j['consoleHeight'], 232, defaultConsoleHeight),
         showCpp: j['showCpp'] as bool? ?? false,
@@ -269,6 +288,8 @@ class Settings {
         cogBy: j['cogBy'] is Map ? (j['cogBy'] as Map).cast<String, dynamic>() : null,
         cogNoticeFor: j['cogNoticeFor'] as String? ?? '',
         cogKey: j['cogKey'] as String? ?? '',
+        cogServer: j['cogServer'] as String? ?? '',
+        cogDevice: j['cogDevice'] as String? ?? '',
         cogLevel: const ['beginner', 'intermediate', 'advanced'].contains(j['cogLevel']) ? j['cogLevel'] as String : 'beginner',
       );
 }

@@ -83,8 +83,14 @@ class CogFailure implements Exception {
   String toString() => message;
 }
 
+/// RoboCore's own Cog (cog-worker/ in this repo, on Cloudflare). Every copy of the IDE uses it unless Settings → Cog
+/// names another Cog server: it is open to everyone within daily limits, so there is nothing to set up.
+/// (The Cloudflare account's workers.dev name was set to robocorezambia on 2026-11-22; plastalbotbuilders.com is in
+/// another Cloudflare account, so it can't carry a custom domain for this Worker.)
+const kCogServer = 'https://robocore-cog.robocorezambia.workers.dev';
+
 const kCogOffline = 'Cog needs the internet. Writing code, Verify, Upload and the Serial Monitor still work.';
-const kCogNoServer = 'Cog works through the RoboCore server. Add its address in Settings → Real board and upload.';
+const kCogNoServer = 'Cog has no server address. Clear the address in Settings → Cog to use RoboCore’s own Cog.';
 
 class CogClient {
   CogClient({http.Client? client}) : _http = client ?? http.Client();
@@ -98,14 +104,16 @@ class CogClient {
     return 'Cog answered with HTTP $status.';
   }
 
-  /// [key]: the school key the server asks for (COG_KEYS), sent in X-Cog-Key.
-  http.Request _post(String base, String path, Map<String, Object?> body, String key) => http.Request('POST', Uri.parse('$base/cog/$path'))
-    ..headers['Content-Type'] = 'application/json'
-    ..headers.addAll({if (key.isNotEmpty) 'X-Cog-Key': key})
-    ..body = jsonEncode(body);
+  /// [key]: the school key the server asks for (COG_KEYS), sent in X-Cog-Key. [device]: this copy of the app's random
+  /// number, sent in X-Cog-Device, so an open Cog can share its daily questions between computers.
+  http.Request _post(String base, String path, Map<String, Object?> body, String key, String device) =>
+      http.Request('POST', Uri.parse('$base/cog/$path'))
+        ..headers['Content-Type'] = 'application/json'
+        ..headers.addAll({if (key.isNotEmpty) 'X-Cog-Key': key, if (device.isNotEmpty) 'X-Cog-Device': device})
+        ..body = jsonEncode(body);
 
   /// Streams Cog's reply. Always ends with a [CogDone] or a [CogProblem].
-  Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = ''}) async* {
+  Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = '', String device = ''}) async* {
     final base = normalizeServerUrl(server);
     if (base.isEmpty) {
       yield const CogProblem(kCogNoServer, offline: true);
@@ -113,7 +121,7 @@ class CogClient {
     }
     http.StreamedResponse res;
     try {
-      res = await _http.send(_post(base, 'chat', body, key)).timeout(const Duration(seconds: 90));
+      res = await _http.send(_post(base, 'chat', body, key, device)).timeout(const Duration(seconds: 90));
     } catch (_) {
       yield const CogProblem(kCogOffline, offline: true);
       return;
@@ -149,13 +157,13 @@ class CogClient {
     if (!finished) yield const CogProblem('Cog stopped before finishing. Try again.');
   }
 
-  Future<Map<String, dynamic>> _json(String server, String path, Map<String, Object?> body, String key) async {
+  Future<Map<String, dynamic>> _json(String server, String path, Map<String, Object?> body, String key, String device) async {
     final base = normalizeServerUrl(server);
     if (base.isEmpty) throw const CogFailure(kCogNoServer, offline: true);
     http.StreamedResponse res;
     String text;
     try {
-      res = await _http.send(_post(base, path, body, key)).timeout(const Duration(seconds: 120));
+      res = await _http.send(_post(base, path, body, key, device)).timeout(const Duration(seconds: 120));
       text = await res.stream.bytesToString();
     } catch (_) {
       throw const CogFailure(kCogOffline, offline: true);
@@ -179,7 +187,9 @@ class CogClient {
         final k = await _http.get(Uri.parse('$base/cog/key'), headers: {if (key.isNotEmpty) 'X-Cog-Key': key}).timeout(const Duration(seconds: 30));
         if (k.statusCode != 200) return (false, _error(utf8.decode(k.bodyBytes), k.statusCode));
       }
-      return (true, 'Answers come from ${cog['model']} through this server.');
+      final who = CogBy.fromJson(cog['by']).about;
+      if (base == kCogServer) return (true, 'Answers come from $who, through RoboCore’s own Cog. Nothing to set up.');
+      return (true, 'Answers come from $who, through this server.');
     } catch (_) {
       return (null, kCogOffline);
     }
@@ -199,13 +209,13 @@ class CogClient {
     }
   }
 
-  Future<CogFix> fix(String server, Map<String, Object?> body, {String key = ''}) async {
-    final j = await _json(server, 'fix', body, key);
+  Future<CogFix> fix(String server, Map<String, Object?> body, {String key = '', String device = ''}) async {
+    final j = await _json(server, 'fix', body, key, device);
     return CogFix(explanation: '${j['explanation']}', file: '${j['file']}', newContent: '${j['newContent']}');
   }
 
-  Future<CogCheck> check(String server, Map<String, Object?> body, {String key = ''}) async {
-    final j = await _json(server, 'check', body, key);
+  Future<CogCheck> check(String server, Map<String, Object?> body, {String key = '', String device = ''}) async {
+    final j = await _json(server, 'check', body, key, device);
     return CogCheck(
       question: '${j['question']}',
       options: [for (final o in j['options'] as List) '$o'],

@@ -22,6 +22,8 @@ class FakeCog extends CogClient {
   FakeCog() : super(client: MockClient((_) async => http.Response('', 500)));
   final asked = <Map<String, Object?>>[];
   final keys = <String>[];
+  final devices = <String>[];
+  final servers = <String>[];
   String reply = 'Arduino names are case-sensitive.';
 
   /// Who answers on this server (null = Claude), how often the IDE asked, and the requests it turned away because
@@ -37,7 +39,7 @@ class FakeCog extends CogClient {
   }
 
   @override
-  Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = ''}) async* {
+  Stream<CogEvent> chat(String server, Map<String, Object?> body, {String key = '', String device = ''}) async* {
     if (body['by'] != (says ?? CogBy.claude).id) {
       turnedAway.add(body);
       yield const CogProblem('Cog on this server gets its answers from somewhere new.', changed: true);
@@ -45,6 +47,8 @@ class FakeCog extends CogClient {
     }
     asked.add(body);
     keys.add(key);
+    devices.add(device);
+    servers.add(server);
     for (final w in reply.split(' ')) {
       yield CogText('$w ');
     }
@@ -52,13 +56,13 @@ class FakeCog extends CogClient {
   }
 
   @override
-  Future<CogFix> fix(String server, Map<String, Object?> body, {String key = ''}) async {
+  Future<CogFix> fix(String server, Map<String, Object?> body, {String key = '', String device = ''}) async {
     asked.add(body);
     return const CogFix(explanation: 'Use a capital W.', file: 'Blink.ino', newContent: 'void setup() {}\nvoid loop() { digitalWrite(LED_BUILTIN, HIGH); }\n');
   }
 
   @override
-  Future<CogCheck> check(String server, Map<String, Object?> body, {String key = ''}) async {
+  Future<CogCheck> check(String server, Map<String, Object?> body, {String key = '', String device = ''}) async {
     asked.add(body);
     return const CogCheck(question: 'Which compiles?', options: ['delay(1);', 'Delay(1);'], answer: 0, explanation: 'Lower case.', concept: 'Names are case-sensitive');
   }
@@ -408,4 +412,61 @@ void main() {
     const after = 'a\nb\nc\nD\ne\nf\ng';
     expect(cogDiff(before, after), [(' ', 3, 'c'), ('−', 0, 'd'), ('+', 4, 'D'), (' ', 5, 'e')]);
   });
+
+  group('Cog without setting up', () {
+    test('with nothing set up, Cog asks RoboCore’s own Cog and sends this computer’s number', () async {
+      final (s, fake) = await openProject();
+      expect(s.settings.cogDevice, isEmpty, reason: 'made the first time Cog is asked');
+      await s.cog.ask('Hello?');
+      await s.cog.ask('And again?');
+      expect(fake.servers, [kCogServer, kCogServer], reason: 'the compile server plays no part');
+      expect(fake.devices.first, matches(RegExp(r'^[0-9a-f]{32}$')));
+      expect(fake.devices.toSet(), hasLength(1), reason: 'the same number each time');
+      expect(s.settings.cogDevice, fake.devices.first, reason: 'kept with the settings');
+      expect(fake.keys, ['', ''], reason: 'no school key needed');
+    });
+
+    test('a school’s own Cog server is used when one is set', () async {
+      final (s, fake) = await openProject();
+      s.updateSettings((x) => x.cogServer = 'https://cog.school.example');
+      expect(s.cog.server, 'https://cog.school.example');
+      await s.cog.ask('Hello?');
+      expect(fake.servers, ['https://cog.school.example']);
+      s.updateSettings((x) => x.cogServer = '  ');
+      expect(s.cog.server, kCogServer, reason: 'blank means RoboCore’s own');
+    });
+
+    test('the Cog Worker address typed in as a compile server before is dropped; a real compile server stays', () {
+      expect(Settings.fromJson({'compileServer': 'https://robocore-cog.someone.workers.dev'}).compileServer, '');
+      expect(Settings.fromJson({'compileServer': 'https://robocore-cog.someone.workers.dev/'}).compileServer, '');
+      expect(Settings.fromJson({'compileServer': 'https://robocore-compile.onrender.com'}).compileServer, 'https://robocore-compile.onrender.com');
+      expect(Settings.fromJson({'compileServer': 'http://localhost:8080'}).compileServer, 'http://localhost:8080');
+      final st = Settings.fromJson((Settings()
+            ..cogServer = 'https://cog.school.example'
+            ..cogDevice = 'abcdef0123456789')
+          .toJson());
+      expect((st.cogServer, st.cogDevice), ('https://cog.school.example', 'abcdef0123456789'));
+      expect((Settings.fromJson({}).cogServer, Settings.fromJson({}).cogDevice), ('', ''));
+    });
+
+    test('the client sends the computer’s number, and Test Cog on an open Cog asks for no key', () async {
+      final heard = <String, String?>{};
+      final c = CogClient(client: MockClient((req) async {
+        if (req.url.path == '/health') {
+          return http.Response(
+              '{"ok":true,"cog":{"ready":true,"model":"llama","keys":false,"open":true,"by":{"label":"Llama 3.3, run by Cloudflare","company":"Cloudflare","where":"the United States"}}}',
+              200);
+        }
+        heard[req.url.path] = req.headers['X-Cog-Device'];
+        return http.Response('{"explanation":"e","file":"a.ino","newContent":"x"}', 200);
+      }));
+      await c.fix(kCogServer, {}, device: '0123456789abcdef');
+      expect(heard, {'/cog/fix': '0123456789abcdef'});
+      final (ok, said) = await c.status(kCogServer);
+      expect(ok, isTrue);
+      expect(said, contains('Nothing to set up'));
+      expect(heard.keys, ['/cog/fix'], reason: 'no /cog/key check on an open Cog');
+    });
+  });
 }
+
