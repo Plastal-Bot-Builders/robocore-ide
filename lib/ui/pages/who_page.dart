@@ -21,14 +21,14 @@ class WhoPage extends StatelessWidget {
     Widget tile({required Widget avatar, required String title, String? sub, required VoidCallback onTap, bool current = false, bool dashed = false}) =>
         Hover(
           onTap: onTap,
-          radius: 14,
+          radius: 4,
           builder: (context, h) => Container(
             height: 84,
             padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
               color: dashed ? Colors.transparent : (h ? c.sunk : c.raised),
               border: Border.all(color: current ? c.ink : (dashed ? c.muted : c.line), width: 2),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(children: [
               avatar,

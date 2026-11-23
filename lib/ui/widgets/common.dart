@@ -28,7 +28,7 @@ class RcIcon extends StatelessWidget {
 /// Pointer-hover aware wrapper used by most clickable things. It takes the keyboard focus too: Tab reaches it,
 /// Enter or Space presses it, and a ring shows where the focus is (WCAG 2.1.1, 2.4.7). [radius] is the ring's.
 class Hover extends StatefulWidget {
-  const Hover({super.key, required this.builder, this.onTap, this.cursor = SystemMouseCursors.click, this.tooltip, this.radius = 6});
+  const Hover({super.key, required this.builder, this.onTap, this.cursor = SystemMouseCursors.click, this.tooltip, this.radius = 4});
   final Widget Function(BuildContext context, bool hover) builder;
   final VoidCallback? onTap;
   final MouseCursor cursor;
@@ -183,7 +183,7 @@ class Btn extends StatelessWidget {
         return Container(
           height: hh,
           padding: EdgeInsets.only(left: small ? 10 : 12, right: small ? 10 : 14),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
           child: Row(
             mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -224,7 +224,7 @@ class IconBtn extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? c.brandSoft : (h ? c.ink.withValues(alpha: .06) : Colors.transparent),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: RcIcon(icon, size: iconSize, color: (color ?? c.ink).withValues(alpha: onTap == null ? .4 : 1)),
       ),
@@ -233,7 +233,7 @@ class IconBtn extends StatelessWidget {
 }
 
 class RcCard extends StatelessWidget {
-  const RcCard({super.key, required this.child, this.padding = EdgeInsets.zero, this.radius = 10, this.color, this.clip = true});
+  const RcCard({super.key, required this.child, this.padding = EdgeInsets.zero, this.radius = 4, this.color, this.clip = true});
   final Widget child;
   final EdgeInsets padding;
   final double radius;
@@ -243,26 +243,29 @@ class RcCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = RC.of(context);
-    return EdgedBox(radius: radius, color: color ?? c.surface, padding: padding, clip: clip, child: child);
+    return EdgedBox(radius: radius, edge: c.line, color: color ?? c.surface, padding: padding, clip: clip, child: child);
   }
 }
 
-/// A rounded box, filled, with no edge (the design has had no outlines on cards and panels since v1.0.1). The content
-/// is clipped to the rounded corners, so a fill, a picture or an editor reaching the corners follows them. Nothing is
-/// drawn over the content: on the Mac, anything Flutter draws over the editors' WebViews takes their clicks.
+/// A rounded box with a 1 px edge that its content can't cover (the edges came back in 1.0.13: without them the
+/// sections were hard to tell apart). The content is clipped to the inside of the edge, so a fill, a picture or an
+/// editor reaching the corners stops where the corner line starts. The edge itself is drawn under the content: on the
+/// Mac, anything Flutter draws over the editors' WebViews takes their clicks.
 class EdgedBox extends StatelessWidget {
-  const EdgedBox({super.key, required this.child, required this.radius, this.color, this.padding = EdgeInsets.zero, this.clip = true});
+  const EdgedBox(
+      {super.key, required this.child, required this.radius, required this.edge, this.color, this.padding = EdgeInsets.zero, this.clip = true});
   final Widget child;
   final double radius;
+  final Color edge;
   final Color? color;
   final EdgeInsets padding;
   final bool clip;
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(radius)),
+        decoration: BoxDecoration(color: color, border: Border.all(color: edge), borderRadius: BorderRadius.circular(radius)),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
+          borderRadius: BorderRadius.circular(radius - 1),
           clipBehavior: clip ? Clip.antiAlias : Clip.none,
           child: Padding(padding: padding, child: child),
         ),
@@ -343,7 +346,7 @@ class RcInput extends StatelessWidget {
     // A sunk fill and no edge. Focused, the focus ring's colour as a 1.5 px edge; an error keeps the ink edge (1.5 px)
     // and shows a warning icon in the field; the message under it is bold.
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(4),
       borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide.none,
     );
     return SizedBox(
@@ -374,7 +377,7 @@ class RcInput extends StatelessWidget {
           enabledBorder: border,
           border: border,
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(color: c.focus, width: 1.5),
           ),
         ),
@@ -383,8 +386,8 @@ class RcInput extends StatelessWidget {
   }
 }
 
-/// A select as in the design: a sunk field with a chevron and no edge; while open, an up chevron. The menu has no edge
-/// either (its shadow sets it apart); the chosen option has a yellow row, bold text and a check.
+/// A select as in the design: a sunk field with a chevron and no edge; while open, an up chevron. The menu has a 1 px
+/// edge and a shadow; the chosen option has a yellow row, bold text and a check.
 class RcSelect<T> extends StatefulWidget {
   const RcSelect({
     super.key,
@@ -433,7 +436,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
         color: c.raised,
         elevation: 6,
         menuPadding: const EdgeInsets.all(4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: BorderSide(color: c.line)),
         constraints: BoxConstraints(minWidth: (w.width != null && w.width!.isFinite) ? w.width! : 160),
         itemBuilder: (_) => [
           for (final it in w.items)
@@ -446,7 +449,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
                 padding: const EdgeInsets.only(left: 10, right: 8),
                 decoration: BoxDecoration(
                   color: it.$1 == w.value ? (c.dark ? kBrand.withValues(alpha: .2) : c.brandSoft) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(children: [
                   Expanded(
@@ -466,7 +469,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
           padding: const EdgeInsets.only(left: 10, right: 8),
           decoration: BoxDecoration(
             color: c.sunk,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             mainAxisSize: w.width == null ? MainAxisSize.min : MainAxisSize.max,

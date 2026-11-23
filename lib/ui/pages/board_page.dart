@@ -48,7 +48,7 @@ class BoardPage extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: id == sel ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(children: [
                   RcIcon('chip', size: 18, color: c.ink),
@@ -91,6 +91,7 @@ class BoardPage extends StatelessWidget {
         Container(
           padding: const EdgeInsets.only(bottom: 8),
           margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(width: 84, child: Text(d[0], style: tCaption(c))),
             Expanded(child: Text(d[1], style: tBody(c, size: 13, height: 18 / 13))),

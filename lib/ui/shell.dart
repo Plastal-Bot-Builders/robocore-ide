@@ -125,6 +125,7 @@ class _ShellState extends State<Shell> {
       }
     });
     attachMenuBar((id) => _menuCommand(s, id));
+    attachWindowChrome();
     s.usb.choosePort = (ports) => showPortChooser(context, ports);
   }
 
@@ -228,8 +229,8 @@ class _ShellState extends State<Shell> {
     final onEditor = s.view == Screen.editor && s.cur != null;
     // First start on this device: ask who is using it before anything else.
     // A shared computer: who is coding (at start with several people, or from Switch person).
-    if (s.choosingPerson) return const WhoPage();
-    if (s.needsProfile) return const WelcomePage();
+    if (s.choosingPerson) return const _WindowTop(child: WhoPage());
+    if (s.needsProfile) return const _WindowTop(child: WelcomePage());
     _updateMenuBar(s);
     if (s.justUpdated != null && !_toldUpdated) {
       _toldUpdated = true;
@@ -264,7 +265,13 @@ class _ShellState extends State<Shell> {
                   backgroundColor: c.bg,
                   width: 260,
                   shape: const RoundedRectangleBorder(),
-                  child: SafeArea(child: SideBar(collapsed: false, onNavigate: () => _scaffold.currentState?.closeDrawer())),
+                  child: SafeArea(
+                    // In the Mac app the window's buttons sit over the drawer's top: the list starts below them.
+                    child: Padding(
+                      padding: EdgeInsets.only(top: isMacApp ? kMacBarHeight - 12 : 0),
+                      child: SideBar(collapsed: false, onNavigate: () => _scaffold.currentState?.closeDrawer()),
+                    ),
+                  ),
                 )
               : null,
           body: Stack(
@@ -387,7 +394,8 @@ class _Toast extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(10),
+          border: error ? null : Border.all(color: c.line),
+          borderRadius: BorderRadius.circular(4),
           boxShadow: popShadow,
         ),
         child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -423,6 +431,76 @@ const _gearSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
     '<rect x="10.3" y="1.2" width="3.4" height="5" rx=".7" transform="rotate(315 12 12)"/>'
     '</g><circle cx="12" cy="12" r="6.2" fill="none" stroke="#000" stroke-width="3.2"/></svg>';
 
+/// The yellow bar at the top of the window (Home's [TopBar] and the editor's [EditorTopBar]). In the Mac app it is also
+/// the window's title bar: macOS's close, minimise and zoom buttons sit at its left (MainFlutterWindow.swift draws no
+/// title bar of its own), so there the bar is [kMacBarHeight] tall, the height AppKit centres those buttons on, and its
+/// content starts right of them (at the left edge again in full screen, where macOS hides them). An empty part of the
+/// bar moves the window when dragged and zooms it on a double-click.
+class _TitleBar extends StatelessWidget {
+  const _TitleBar({required this.height, required this.left, required this.right, required this.child});
+  final double height, left, right;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    if (!isMacApp) return Container(height: height, padding: EdgeInsets.only(left: left, right: right), color: c.top, child: child);
+    return ValueListenableBuilder<bool>(
+      valueListenable: macFullScreen,
+      builder: (context, full, _) => Container(
+        height: kMacBarHeight,
+        color: c.top,
+        child: Stack(fit: StackFit.expand, children: [
+          // Behind the bar's content, so only its empty parts reach it.
+          const _DragArea(),
+          Padding(padding: EdgeInsets.only(left: full ? left : kMacButtonsInset, right: right), child: child),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Mac app: an empty strip the window can be moved by, at the top of the screens that have no top bar (who is coding,
+/// the first start), where the window's buttons sit.
+class _WindowTop extends StatelessWidget {
+  const _WindowTop({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isMacApp) return child;
+    return ColoredBox(
+      color: RC.of(context).bg,
+      child: Column(children: [const SizedBox(height: kMacBarHeight, child: _DragArea()), Expanded(child: child)]),
+    );
+  }
+}
+
+/// Tells the window while the pointer is over it, so a press there moves the window (see [setMacDragArea]).
+class _DragArea extends StatefulWidget {
+  const _DragArea();
+  @override
+  State<_DragArea> createState() => _DragAreaState();
+}
+
+class _DragAreaState extends State<_DragArea> {
+  bool _in = false;
+
+  void _set(bool on) {
+    _in = on;
+    setMacDragArea(on);
+  }
+
+  @override
+  void dispose() {
+    if (_in) setMacDragArea(false);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(onEnter: (_) => _set(true), onExit: (_) => _set(false), child: const SizedBox.expand());
+}
+
 class TopBar extends StatelessWidget {
   const TopBar({super.key, required this.phone, required this.onMenu});
   final bool phone;
@@ -431,13 +509,12 @@ class TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final c = RC.of(context);
     final p = s.view == Screen.editor ? s.cur : null;
     final narrow = MediaQuery.sizeOf(context).width < 1100;
-    return Container(
+    return _TitleBar(
       height: 56,
-      padding: EdgeInsets.only(left: phone ? 8 : 20, right: phone ? 8 : 16),
-      color: c.top,
+      left: phone ? 8 : 20,
+      right: phone ? 8 : 16,
       // A yellow focus ring (the Navy theme's) would not show on the yellow bar.
       child: FocusRing(
         color: kNavy,
@@ -452,7 +529,7 @@ class TopBar extends StatelessWidget {
                   tooltip: 'RoboCore IDE home',
                   builder: (context, h) => ProductLockup(scale: phone ? .76 : 1, product: !phone),
                 ),
-              if (!phone) const SizedBox(width: 25),
+              if (!phone) ...[const SizedBox(width: 12), Container(width: 1, height: 24, color: kNavy.withValues(alpha: .2)), const SizedBox(width: 12)],
               // The project name takes the free space itself: a Flexible next to a Spacer would split it in half and leave
               // the right-hand buttons stranded mid-bar on wide windows.
               if (p != null)
@@ -525,7 +602,7 @@ class TopBar extends StatelessWidget {
                     height: 32,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+                        color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
                     child: SvgPicture.string(_gearSvg,
                         width: 17, height: 17, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn), excludeFromSemantics: true),
                   ),
@@ -568,14 +645,14 @@ class UpdateBanner extends StatelessWidget {
 
     Widget button(String label, VoidCallback onTap, {bool primary = false, String? icon}) => Hover(
           onTap: onTap,
-          radius: 12,
+          radius: 4,
           builder: (context, h) => Container(
             height: phone ? 40 : 48,
             padding: EdgeInsets.symmetric(horizontal: primary ? 22 : 18),
             decoration: BoxDecoration(
               color: primary ? (h ? kBrandPressed : kBrand) : (h ? Colors.white.withValues(alpha: .08) : Colors.transparent),
               border: primary ? null : Border.all(color: const Color(0xFF5B6577), width: 2),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               if (icon != null) ...[RcIcon(icon, size: 18, color: primary ? kNavy : fg), const SizedBox(width: 8)],
@@ -705,13 +782,12 @@ class EditorTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final c = RC.of(context);
     final p = s.cur!;
     final narrow = MediaQuery.sizeOf(context).width < 1180;
-    return Container(
+    return _TitleBar(
       height: 60,
-      padding: const EdgeInsets.only(left: 12, right: 16), // the right edge lines up with Home's top bar
-      color: c.top,
+      left: 12,
+      right: 16, // the right edge lines up with Home's top bar
       child: FocusRing(
         color: kNavy,
         child: SafeArea(
@@ -735,7 +811,7 @@ class EditorTopBar extends StatelessWidget {
               child: Container(
                 height: 44,
                 padding: const EdgeInsets.only(left: 8, right: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Flexible(child: _ProjectName(p: p)),
                   if (!narrow) ...[const SizedBox(width: 4), _SavePill(p: p), const SizedBox(width: 6)],
@@ -756,6 +832,8 @@ class EditorTopBar extends StatelessWidget {
             const Expanded(child: Center(child: _ModeSwitch())),
             if (s.updateVersion != null && s.updateDismissed) ...[UpdatePill(compact: narrow), const SizedBox(width: 10)],
             BoardChip(compact: narrow),
+            const SizedBox(width: 8),
+            EditorConnectButton(compact: narrow), // the editor's one Connect (it used to float over the workspace)
             const SizedBox(width: 10),
             CogButton(compact: narrow),
             const SizedBox(width: 6),
@@ -766,7 +844,7 @@ class EditorTopBar extends StatelessWidget {
                 width: 36, // with the 6 px gap, the gear sits where it is on Home's top bar
                 height: 40,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
                 child: SvgPicture.string(_gearSvg,
                     width: 18, height: 18, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn), excludeFromSemantics: true),
               ),
@@ -790,14 +868,14 @@ class _BarButton extends StatelessWidget {
   Widget build(BuildContext context) => Hover(
         onTap: onTap,
         tooltip: tip,
-        radius: 12,
+        radius: 4,
         builder: (context, h) => Container(
           width: 44,
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: filled ? (h ? .75 : .55) : (h ? .3 : 0)),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: RcIcon(icon, size: 22, color: kNavy),
         ),
@@ -815,13 +893,13 @@ class _ModeSwitch extends StatelessWidget {
       final on = mode == m;
       return Hover(
         onTap: () => s.setMode(m),
-        radius: 9,
+        radius: 4,
         builder: (context, h) => Container(
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: on ? kNavy : (h ? Colors.white.withValues(alpha: .6) : Colors.transparent),
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             RcIcon(m == 'blocks' ? 'blocks' : 'code', size: 16, color: on ? kCream : kNavy),
@@ -834,7 +912,7 @@ class _ModeSwitch extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .55), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .55), borderRadius: BorderRadius.circular(4)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [seg('blocks', 'Blocks'), const SizedBox(width: 4), seg('code', 'Code')]),
     );
   }
@@ -861,7 +939,7 @@ class _TopPrimary extends StatelessWidget {
         child: Container(
           height: 32,
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(color: h && !busy ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: h && !busy ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(4)),
           child: Stack(children: [
             Padding(
               padding: const EdgeInsets.only(left: 12, right: 14),
@@ -902,7 +980,7 @@ class _PrimaryIcon extends StatelessWidget {
           width: 34,
           height: 32,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: h ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: h ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(4)),
           child: RcIcon(icon, size: 16, color: kCream),
         ),
       );
@@ -938,7 +1016,7 @@ class _ProjectName extends StatelessWidget {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-            color: h || open ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+            color: h || open ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Flexible(
             child: Text(p.name,
@@ -997,7 +1075,7 @@ class _BoardChipState extends State<BoardChip> {
           // White with no edge (the design's Board Selector since v1.0.1); open, an up chevron.
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const RcIcon('chip', size: 18, color: kNavy),
@@ -1012,9 +1090,10 @@ class _BoardChipState extends State<BoardChip> {
                       style: const TextStyle(fontFamily: fBody, fontSize: 12, height: 16 / 12, color: Color(0xFF6A7380))),
                 ],
               ),
-              const SizedBox(width: 21),
+              const SizedBox(width: 10),
+              Container(width: 1, height: 20, color: const Color(0xFFE7E5E0)),
             ],
-            if (widget.compact) const SizedBox(width: 10),
+            const SizedBox(width: 10),
             LinkDot(level: s.connLevel),
             if (!widget.compact) ...[
               const SizedBox(width: 6),
@@ -1042,7 +1121,8 @@ class BoardMenu extends StatelessWidget {
       width: 340,
       decoration: BoxDecoration(
         color: c.raised,
-        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.line),
+        borderRadius: BorderRadius.circular(4),
         boxShadow: popShadow,
       ),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1059,7 +1139,7 @@ class BoardMenu extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: id == cur ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(children: [
                   RcIcon('chip', size: 18, color: c.ink),
@@ -1078,6 +1158,7 @@ class BoardMenu extends StatelessWidget {
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Text('Port', style: tLabel(c, w: FontWeight.w500)),
@@ -1198,7 +1279,7 @@ class _SearchBoxState extends State<SearchBox> {
       popup: (context) => Container(
         width: 320,
         padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(10), boxShadow: popShadow),
+        decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4), boxShadow: popShadow),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (ps.isNotEmpty) _h(c, 'Projects'),
           for (final p in ps)
@@ -1270,7 +1351,7 @@ class _SearchBoxState extends State<SearchBox> {
           onTap: onTap,
           builder: (context, h) => Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(4)),
             child: Row(children: [
               RcIcon(icon, size: 16, color: c.ink),
               const SizedBox(width: 10),
@@ -1312,7 +1393,7 @@ class SideBar extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       width: collapsed ? 64 : 208,
       padding: EdgeInsets.fromLTRB(collapsed ? 10 : 12, 12, collapsed ? 10 : 12, 10),
-      color: c.bg,
+      decoration: BoxDecoration(color: c.bg, border: Border(right: BorderSide(color: c.line2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (rp != null)
           Hover(
@@ -1327,7 +1408,7 @@ class SideBar extends StatelessWidget {
               decoration: BoxDecoration(
                 // The open project: a brandSoft tile, like the current page in the list below.
                 color: s.view == Screen.editor ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
                 RcIcon(rp.mode == 'blocks' ? 'blocks' : 'code', size: 18, color: c.ink),
@@ -1361,6 +1442,7 @@ class SideBar extends StatelessWidget {
         const SizedBox(height: 2),
         Container(
           padding: EdgeInsets.only(top: 10, left: collapsed ? 0 : 12, right: collapsed ? 0 : 4),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.end, children: [
             if (onNavigate == null)
               IconBtn('panel', onTap: s.toggleSidebar, tip: collapsed ? 'Expand sidebar' : 'Collapse sidebar'),
@@ -1390,7 +1472,7 @@ class _NavItem extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 12),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? c.ink.withValues(alpha: .05) : Colors.transparent),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Stack(clipBehavior: Clip.none, children: [
             if (on)
@@ -1443,7 +1525,7 @@ class StatusBar extends StatelessWidget {
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: c.bg,
+      decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line2))),
       child: Row(children: [
         // Ink dot, the box yellow while busy, a warning icon on an error (the design's Connection Status).
         if (s.stateKind == 'err')

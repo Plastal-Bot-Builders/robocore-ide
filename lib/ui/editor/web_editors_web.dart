@@ -7,6 +7,8 @@ import 'dart:js_interop';
 
 import 'package:flutter/widgets.dart';
 
+import 'block_picture.dart';
+
 const kWebEditors = true;
 
 Future<void> initWebEditors() async {}
@@ -38,6 +40,14 @@ extension type _Api._(JSObject _) implements JSObject {
   external void setIdeKeys(JSFunction handler);
 }
 
+/// rcEditor.blocks.picture's answer.
+extension type _Picture._(JSObject _) implements JSObject {
+  external String get png;
+  external double get width;
+  external double get height;
+  external double get ratio;
+}
+
 extension type _Blocks._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> mount(
       String options, String? json, bool tidy, JSFunction onChange, JSFunction onZoom, JSFunction onSelect, JSFunction onHistory);
@@ -47,6 +57,7 @@ extension type _Blocks._(JSObject _) implements JSObject {
   external void redo();
   external void clear();
   external int add(String json);
+  external JSPromise<_Picture> picture(String json, double ratio);
   external int count();
   external void zoom(int dir);
   external void zoomToFit();
@@ -278,6 +289,20 @@ class BlocklyEditorState extends State<BlocklyEditor> {
 
   /// Puts stacks of blocks (a JSON list of Blockly block states) loose beside the program, as one undo step.
   void add(String json) => _api?.add(json);
+
+  /// A picture of stacks of blocks (a JSON list of Blockly block states), drawn by the page's Blockly exactly as the
+  /// editor draws them, [ratio] image pixels to a logical pixel. Null when the page isn't up or can't draw them.
+  Future<BlockPicture?> picture(String json, double ratio) async {
+    final api = _api;
+    if (api == null) return null;
+    try {
+      final p = await api.picture(json, ratio).toDart;
+      return BlockPicture.fromPage(p.png, p.width, p.height, p.ratio);
+    } catch (_) {
+      return null;
+    }
+  }
+
   int get count => _api?.count() ?? 0;
 
   /// [dir] 1 zooms in, -1 out.

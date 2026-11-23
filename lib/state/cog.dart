@@ -11,6 +11,7 @@ import '../data/catalog.dart';
 import '../engine/block_script.dart';
 import '../engine/compiler.dart' show Problem;
 import '../hw/cog_client.dart';
+import '../ui/editor/block_picture.dart';
 import 'app_state.dart';
 
 enum CogKind { you, cog, hint, tryIt, fix, check, notice }
@@ -48,6 +49,10 @@ class CogBlock {
 /// program (a JSON list of Blockly block states), its code to the cursor. Null where the editors can't take them.
 void Function(String json)? cogAddBlocks;
 void Function(String text)? cogInsertCode;
+
+/// Also set by the editor page: draws stacks of blocks (the same JSON) with the editor's own Blockly, so Cog's stacks
+/// look exactly like the blocks in the editor; [ratio] is image pixels per logical pixel. Null without the web editors.
+Future<BlockPicture?> Function(String json, double ratio)? cogPictureBlocks;
 
 const kCogStyles = {'hints': 'Hints first', 'explain': 'Explain the answer', 'write': 'Write code for me'};
 
@@ -370,6 +375,21 @@ class CogController {
       }
     }
     return parseBlockScript(script, variables: _vars);
+  }
+
+  final _pictures = <String, Future<BlockPicture?>>{};
+
+  /// A picture of [script]'s stacks drawn by the editor's Blockly, or null when there is none to draw them (the panel
+  /// then draws the stack itself). Each stack is drawn once per theme and pixel ratio.
+  Future<BlockPicture?>? pictureOf(BlockScript script, {required bool dark, required double ratio}) {
+    final draw = cogPictureBlocks;
+    if (draw == null || script.isEmpty) return null;
+    final json = jsonEncode(script.stacks);
+    final key = '$dark $ratio $json';
+    final known = _pictures[key];
+    if (known != null) return known;
+    if (_pictures.length >= 40) _pictures.remove(_pictures.keys.first);
+    return _pictures[key] = draw(json, ratio);
   }
 
   /// Puts a reply's blocks loose beside the program (one undo step). The student joins them on.

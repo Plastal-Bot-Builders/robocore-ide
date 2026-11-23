@@ -30,7 +30,8 @@ class LibrariesPage extends StatelessWidget {
                 for (var i = 0; i < list.length; i++)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                        child: Tooltip(
+                    decoration: BoxDecoration(border: i == 0 ? null : Border(top: BorderSide(color: c.line2))),
+                    child: Tooltip(
                       message: '#include <${list[i].h}>${list[i].arch == 'esp32' ? ' · ESP32 boards only' : ''}',
                       waitDuration: const Duration(milliseconds: 800),
                       child: Row(children: [
@@ -70,7 +71,7 @@ class LibrariesPage extends StatelessWidget {
               ? Btn('Remove', icon: 'trash', small: true, onTap: () => s.uninstall(id))
               : Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     RcIcon('check', size: 16, color: c.ink),
                     const SizedBox(width: 6),

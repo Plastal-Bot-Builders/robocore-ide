@@ -11,6 +11,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../hw/page_server.dart';
 import '../widgets/ui_scale.dart';
+import 'block_picture.dart';
 import 'web_editors_windows.dart';
 
 var _windows = false;
@@ -248,7 +249,34 @@ class BlocklyEditorState extends State<BlocklyEditor> {
         if (mounted) widget.onSelect?.call(a[0] as String);
       case 'history':
         if (mounted) widget.onHistory?.call(a[0] as bool, a[1] as bool);
+      case 'picture':
+        _pictures.remove((a[0] as num).toInt())?.complete(BlockPicture.fromPage(a[1], a[2], a[3], a[4]));
     }
+  }
+
+  final _pictures = <int, Completer<BlockPicture?>>{};
+  var _lastPicture = 0;
+
+  /// A picture of stacks of blocks (a JSON list of Blockly block states), drawn by the page's Blockly exactly as the
+  /// editor draws them, [ratio] image pixels to a logical pixel. Null when the page isn't up or can't draw them.
+  Future<BlockPicture?> picture(String json, double ratio) {
+    if (!_ready) return Future.value(null);
+    final id = ++_lastPicture;
+    final done = _pictures[id] = Completer<BlockPicture?>();
+    _page.run(_js('rcNative.picture', [id, json, ratio]));
+    return done.future.timeout(const Duration(seconds: 15), onTimeout: () {
+      _pictures.remove(id);
+      return null;
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final p in _pictures.values) {
+      p.complete(null);
+    }
+    _pictures.clear();
+    super.dispose();
   }
 
   void _call(String method, [List<Object?> args = const []]) {

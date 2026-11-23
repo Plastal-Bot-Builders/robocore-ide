@@ -118,7 +118,8 @@ class DialogFrame extends StatelessWidget {
         width: 500,
         decoration: BoxDecoration(
           color: c.raised,
-          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.line),
+          borderRadius: BorderRadius.circular(4),
           boxShadow: modalShadow,
         ),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -141,8 +142,9 @@ class DialogFrame extends StatelessWidget {
             Flexible(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(24, 16, 24, 20), child: body))
           else
             const SizedBox(height: 12),
-          // The footer: the buttons on the right, no divider line above them.
-          Padding(
+          // The design's footer has a divider line above the buttons.
+          Container(
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
             padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(width: 8), actions[i]],
@@ -260,7 +262,7 @@ class _ModeOption extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             RcIcon(icon, size: 20, color: c.ink),
@@ -357,8 +359,9 @@ class _ProjectSettingsDialogState extends State<_ProjectSettingsDialog> {
         const FieldLabel('Board'),
         RcSelect<String>(value: board, height: 36, width: double.infinity, items: _boardItems, onChanged: (v) => setState(() => board = v)),
         const SizedBox(height: 16),
-        // A setting row as in the design (no divider line above it since v1.0.1).
-        Padding(
+        // A setting row as in the design: a divider line above it.
+        Container(
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           padding: const EdgeInsets.only(top: 12),
           child: Row(children: [
             Expanded(

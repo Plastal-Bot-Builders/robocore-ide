@@ -96,7 +96,7 @@ class BlocksView extends StatelessWidget {
     final banner = p.codeEdited
         ? Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-            color: c.brandSoft,
+            decoration: BoxDecoration(color: c.brandSoft, border: Border(bottom: BorderSide(color: c.line))),
             child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 12, runSpacing: 8, children: [
               RcIcon('info', size: 16, color: c.ink),
               Text(
@@ -111,7 +111,10 @@ class BlocksView extends StatelessWidget {
       onWillAcceptWithDetails: (d) => !d.data.fromPalette,
       onAcceptWithDetails: (d) => s.removeBlock(d.data.stack!, d.data.index!),
       builder: (context, cand, _) => Container(
-        color: cand.isNotEmpty ? c.errSoft : c.surface,
+        decoration: BoxDecoration(
+          color: cand.isNotEmpty ? c.errSoft : c.surface,
+          border: Border(right: BorderSide(color: c.line2)),
+        ),
         child: phone
             ? SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -147,7 +150,7 @@ class BlocksView extends StatelessWidget {
         : Container(
             width: 160,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            color: c.surface,
+            decoration: BoxDecoration(color: c.surface, border: Border(right: BorderSide(color: c.line2))),
             child: ListView(children: [for (final k in kCats) _CatButton(k: k, on: k.id == cat.id)]),
           );
 
@@ -159,7 +162,9 @@ class BlocksView extends StatelessWidget {
         child: phone
             ? Column(children: [
                 cats,
+                Container(height: 1, color: c.line2),
                 SizedBox(height: 76, child: palette),
+                Container(height: 1, color: c.line2),
                 Expanded(child: canvas),
               ])
             : Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -210,7 +215,7 @@ class _CatButton extends StatelessWidget {
           padding: const EdgeInsets.only(left: 12, right: 10),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Stack(clipBehavior: Clip.none, children: [
             if (on && !compact)
@@ -327,7 +332,7 @@ class _SelectPill extends StatelessWidget {
       onSelected: onChanged,
       position: PopupMenuPosition.under,
       color: c.raised,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: BorderSide(color: c.line)),
       itemBuilder: (_) => [
         for (final o in opts)
           PopupMenuItem<String>(
@@ -517,7 +522,8 @@ class _Canvas extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: c.raised,
-              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: c.line),
+              borderRadius: BorderRadius.circular(4),
               boxShadow: const [BoxShadow(color: Color(0x1A1B2A41), blurRadius: 6, offset: Offset(0, 2))],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -597,8 +603,9 @@ class _StackView extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               constraints: const BoxConstraints(minWidth: 200),
               decoration: BoxDecoration(
-                color: c.sunk,
-                borderRadius: BorderRadius.circular(7),
+                color: c.surface,
+                border: Border.all(color: c.line, width: 2),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Text('Drop or click blocks to add them here', style: tCaption(c, color: c.faint)),
             )

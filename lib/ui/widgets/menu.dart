@@ -88,8 +88,7 @@ class _RcMenuState extends State<RcMenu> {
   Widget build(BuildContext context) {
     final c = RC.of(context);
     Widget row(MenuEntry e) {
-      // A gap, not a line: the design has no dividers.
-      if (e.divider) return const SizedBox(height: 9);
+      if (e.divider) return Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 4), color: c.line2);
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Hover(
@@ -102,7 +101,7 @@ class _RcMenuState extends State<RcMenu> {
           builder: (context, h) => Container(
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(4)),
             child: Row(children: [
               if (e.icon != null) ...[RcIcon(e.icon!, size: 16, color: c.ink), const SizedBox(width: 10)],
               Expanded(child: Text(e.label, style: tLabel(c, w: FontWeight.w500), overflow: TextOverflow.ellipsis)),
@@ -119,7 +118,8 @@ class _RcMenuState extends State<RcMenu> {
         width: widget.width,
         decoration: BoxDecoration(
           color: c.raised,
-          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: c.line),
+          borderRadius: BorderRadius.circular(4),
           boxShadow: popShadow,
         ),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

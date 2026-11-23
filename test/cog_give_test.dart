@@ -10,6 +10,7 @@ import 'package:robocore_ide/state/app_state.dart';
 import 'package:robocore_ide/state/cog.dart';
 import 'package:robocore_ide/ui/app_scope.dart';
 import 'package:robocore_ide/ui/cog/cog_panel.dart';
+import 'package:robocore_ide/ui/editor/block_picture.dart';
 
 import 'cog_test.dart' show FakeCog, openProject;
 
@@ -168,6 +169,81 @@ void main() {
       expect(find.text('Add to my blocks'), findsNothing);
       expect(find.text('Copy'), findsNothing);
       await tester.pump(const Duration(seconds: 5));
+    });
+
+    group('drawn by the editor\'s own Blockly', () {
+      // A 1 × 1 PNG: the widget's size comes from the picture's own width and height.
+      final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');
+      tearDown(() => cogPictureBlocks = null);
+
+      testWidgets('the stack is the editor\'s picture of the blocks, with the same buttons, drawn once', (tester) async {
+        s.setMode('blocks');
+        final asked = <String>[];
+        cogPictureBlocks = (json, ratio) async {
+          asked.add(json);
+          return BlockPicture(png, 200, 120, ratio);
+        };
+        final item = CogItem(CogKind.cog, text: _square, give: true);
+        await _show(tester, s, CogText(item.text, item: item));
+        await tester.pump();
+        expect(find.byType(Image), findsOneWidget);
+        expect(tester.getSize(find.byType(Image)), const Size(200, 120));
+        expect(find.text('repeat 4 times'), findsNothing, reason: 'the picture, not the stack drawn here');
+        expect(find.bySemanticsLabel(RegExp('^Blocks: repeat 4 times')), findsOneWidget);
+        expect((jsonDecode(asked.single) as List).single['type'], 'controls_repeat_ext');
+        expect(find.text('Add to my blocks'), findsOneWidget);
+        expect(find.text('Copy'), findsOneWidget);
+        await _show(tester, s, CogText(item.text, item: item));
+        await tester.pump();
+        expect(asked, hasLength(1), reason: 'a rebuild shows the same picture');
+        await tester.pump(const Duration(seconds: 5));
+      });
+
+      testWidgets('a stack wider than the panel is made at most a quarter smaller, then scrolls sideways', (tester) async {
+        s.setMode('blocks');
+        cogPictureBlocks = (json, ratio) async => BlockPicture(png, 1000, 100, ratio);
+        final item = CogItem(CogKind.cog, text: _square, give: true);
+        await _show(tester, s, CogText(item.text, item: item));
+        await tester.pump();
+        expect(tester.getSize(find.byType(Image)), const Size(750, 75));
+        expect(find.ancestor(of: find.byType(Image), matching: find.byWidgetPredicate((w) => w is SingleChildScrollView && w.scrollDirection == Axis.horizontal)),
+            findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+      });
+
+      testWidgets('drawn here when the editor can\'t draw it', (tester) async {
+        s.setMode('blocks');
+        cogPictureBlocks = (json, ratio) async => null;
+        final item = CogItem(CogKind.cog, text: _square, give: true);
+        await _show(tester, s, CogText(item.text, item: item));
+        await tester.pump();
+        expect(find.byType(Image), findsNothing);
+        expect(find.text('repeat 4 times'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+      });
+
+      testWidgets('a line that is not a block is listed under the picture', (tester) async {
+        s.setMode('blocks');
+        cogPictureBlocks = (json, ratio) async => BlockPicture(png, 120, 40, ratio);
+        final item = CogItem(CogKind.cog, text: '```blocks\nstop moving\nfly to the moon\n```', give: true);
+        await _show(tester, s, CogText(item.text, item: item));
+        await tester.pump();
+        expect(find.byType(Image), findsOneWidget);
+        expect(find.text('fly to the moon  (not a block)'), findsOneWidget);
+        expect(find.textContaining('1 line is not a block'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+      });
+    });
+
+    test('a picture comes only from a PNG with a size', () {
+      const url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+      final p = BlockPicture.fromPage(url, 683, 1061, 2)!;
+      expect((p.width, p.height, p.ratio), (683.0, 1061.0, 2.0));
+      expect(p.png.sublist(1, 4), 'PNG'.codeUnits);
+      expect(BlockPicture.fromPage(null, 10, 10, 2), isNull);
+      expect(BlockPicture.fromPage('data:image/svg+xml;base64,AAAA', 10, 10, 2), isNull);
+      expect(BlockPicture.fromPage(url, 0, 10, 2), isNull);
+      expect(BlockPicture.fromPage('data:image/png;base64,***', 10, 10, 2), isNull);
     });
 
     testWidgets('a line that is not a block is said so and stays out', (tester) async {

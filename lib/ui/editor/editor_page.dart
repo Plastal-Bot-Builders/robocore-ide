@@ -21,6 +21,7 @@ import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/serial_log.dart';
 import '../widgets/split_handle.dart';
+import 'block_picture.dart';
 import 'blocks_view.dart';
 import 'code_view.dart';
 import 'web_editors.dart';
@@ -52,17 +53,20 @@ class _EditorPageState extends State<EditorPage> {
     if (kWebEditors) {
       cogAddBlocks = _addBlocks;
       cogInsertCode = _insertCode;
+      cogPictureBlocks = _pictureBlocks;
     }
   }
 
   void _addBlocks(String json) => _blockly.currentState?.add(json);
   void _insertCode(String text) => _monaco.currentState?.insert(text);
+  Future<BlockPicture?> _pictureBlocks(String json, double ratio) => _blockly.currentState?.picture(json, ratio) ?? Future.value(null);
 
   @override
   void dispose() {
     if (editorMenuCommand == _menuCommand) editorMenuCommand = null;
     if (cogAddBlocks == _addBlocks) cogAddBlocks = null;
     if (cogInsertCode == _insertCode) cogInsertCode = null;
+    if (cogPictureBlocks == _pictureBlocks) cogPictureBlocks = null;
     super.dispose();
   }
 
@@ -195,22 +199,24 @@ class _EditorPageState extends State<EditorPage> {
     // An open workspace, edge to edge (no card). The floating controls sit over it; the editor stays the first
     // child of the Stack, so showing or hiding them never moves (and reloads) the Blockly or Monaco frame.
     final blocks = p.mode == 'blocks';
-    final workspace = Stack(children: [
-      Positioned.fill(child: ColoredBox(color: c.surface, child: Column(children: [toolbar, Expanded(child: main)]))),
-      Positioned(
-        top: blocks ? 18 : 62,
-        right: 24,
-        child: const FrameShield(child: _ConnectButton()),
-      ),
-      // The view tools: a column on the right edge, above the run buttons, where the block list (which opens on the
-      // left) never reaches.
-      Positioned(
-        right: phone ? 21 : 33, // centred over the Upload button
-        bottom: phone ? 104 : 130,
-        child: FrameShield(child: _viewTools(s, c, p, width)),
-      ),
-      Positioned(right: 20, bottom: 14, child: FrameShield(child: _RunButtons(compact: phone))),
-    ]);
+    final workspace = LayoutBuilder(builder: (context, box) {
+      // With the C++ pane open beside the blocks, the blocks' view tools stay over the blocks, at their right edge
+      // (they follow the divider when it is dragged); the run buttons keep the workspace's right edge.
+      final (cppShown, cppWidth) = blocks && kWebEditors ? _cppPane(s, width, box.maxWidth) : (false, 0.0);
+      final besideCpp = cppShown ? cppWidth + _cppHandle : 0.0;
+      return Stack(children: [
+        Positioned.fill(child: ColoredBox(color: c.surface, child: Column(children: [toolbar, Expanded(child: main)]))),
+        // Connect is in the editor's top bar (EditorConnectButton), so nothing floats over the top of the code.
+        // The view tools: a column on the right edge of the blocks (or the code), above the run buttons, where the
+        // block list (which opens on the left) never reaches.
+        Positioned(
+          right: (phone ? 21 : 33) + besideCpp, // centred over the Upload button when nothing is beside the blocks
+          bottom: phone ? 104 : 130,
+          child: FrameShield(child: _viewTools(s, c, p, width)),
+        ),
+        Positioned(right: 20, bottom: 14, child: FrameShield(child: _RunButtons(compact: phone))),
+      ]);
+    });
     final panel = ConsolePanel(boardTab: !showBoard);
     final cogBeside = width >= 1000;
 
@@ -265,11 +271,21 @@ class _EditorPageState extends State<EditorPage> {
 
   /// A column on the right of the workspace, above the run buttons. Blocks: fit, zoom in, zoom out · undo, redo ·
   /// delete all · the C++ beside the blocks. Code: text size, undo, redo.
+  // Beside the blocks: the blocks keep at least 400 px (the toolbox takes ~150), the C++ pane at least 240 px.
+  static const _minBlocks = 400.0, _minCpp = 240.0, _cppHandle = 7.0;
+
+  /// Whether the "C++ from the blocks" pane shows beside the blocks in a workspace [boxWidth] wide, and its width.
+  (bool, double) _cppPane(AppState s, double width, double boxWidth) {
+    final show = s.settings.showCpp && width >= 900 && boxWidth >= _minBlocks + _minCpp + _cppHandle;
+    final w = (_cppWidth ?? s.settings.cppPaneWidth).clamp(_minCpp, (boxWidth - _minBlocks - _cppHandle).clamp(_minCpp, double.infinity));
+    return (show, w);
+  }
+
   Widget _viewTools(AppState s, RC c, Project p, double width) {
     final blocks = p.mode == 'blocks';
     final code = _monaco.currentState;
     void font(int size) => s.updateSettings((st) => st.fontSize = size.clamp(10, 24));
-    // Short windows (a laptop with the update banner showing) get smaller buttons, so the column clears Connect.
+    // Short windows (a laptop with the update banner showing) get smaller buttons, so the column clears the toolbar.
     final small = MediaQuery.sizeOf(context).height < 760;
     final size = small ? 34.0 : 40.0;
     Widget sep() => Container(width: 26, height: 1, margin: EdgeInsets.symmetric(vertical: small ? 3 : 4), color: c.line);
@@ -277,7 +293,7 @@ class _EditorPageState extends State<EditorPage> {
         IconBtn(icon, onTap: onTap, tip: tip, size: size, iconSize: small ? 18 : 20, active: active);
     return Container(
       padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(14), boxShadow: popShadow),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(4), boxShadow: popShadow),
       child: Column(mainAxisSize: MainAxisSize.min, children: blocks
           ? [
               if (kWebEditors) ...[
@@ -356,10 +372,8 @@ class _EditorPageState extends State<EditorPage> {
       },
     );
     return LayoutBuilder(builder: (context, box) {
-      // Blocks keep at least 400 px (the toolbox takes ~150), the C++ pane at least 240 px.
-      const minBlocks = 400.0, minCpp = 240.0, handle = 7.0;
-      final show = s.settings.showCpp && width >= 900 && box.maxWidth >= minBlocks + minCpp + handle;
-      final cppWidth = (_cppWidth ?? s.settings.cppPaneWidth).clamp(minCpp, (box.maxWidth - minBlocks - handle).clamp(minCpp, double.infinity));
+      final (show, cppWidth) = _cppPane(s, width, box.maxWidth);
+      const handle = _cppHandle;
       return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: editor),
         // Hidden, the C++ pane keeps its editor loaded (and takes no room).
@@ -435,7 +449,7 @@ class _EditorPageState extends State<EditorPage> {
     return Container(
       height: 40,
       padding: const EdgeInsets.only(left: 12, right: 8),
-      color: c.sunk,
+      decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
       child: Row(children: [
         RcIcon(icon, size: 16, color: c.ink),
         const SizedBox(width: 10),
@@ -580,7 +594,8 @@ class ConsolePanel extends StatelessWidget {
     Widget body() {
       switch (t) {
         case 'serial':
-          return const Column(children: [Expanded(child: SerialLog()), SendRow(hint: 'Send a message to the board')]);
+          // No Connect of its own here: the editor's one Connect is in its top bar.
+          return const Column(children: [Expanded(child: SerialLog(connect: false)), SendRow(hint: 'Send a message to the board')]);
         case 'output':
           return const OutputLog();
         case 'board':
@@ -602,7 +617,7 @@ class ConsolePanel extends StatelessWidget {
                 onTap: () => s.gotoProblem(e),
                 builder: (context, h) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  decoration: BoxDecoration(color: h ? c.raised : Colors.transparent, borderRadius: BorderRadius.circular(7)),
+                  decoration: BoxDecoration(color: h ? c.raised : Colors.transparent, borderRadius: BorderRadius.circular(4)),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Padding(padding: const EdgeInsets.only(top: 2), child: RcIcon(e.isError ? 'alert' : 'info', size: 15, color: e.isError ? c.err : c.muted)),
                     const SizedBox(width: 10),
@@ -618,11 +633,15 @@ class ConsolePanel extends StatelessWidget {
       }
     }
 
-    return RcCard(
+    // Flat, edge to edge in its drawer like the board panel beside it: the split handle above and the divider beside
+    // it are its edges. (A rounded card's edge here met the window edge and the divider in odd corners.)
+    return ColoredBox(
+      color: c.surface,
       child: Column(children: [
         Container(
           height: 40,
           padding: const EdgeInsets.only(left: 8, right: 8),
+          decoration: BoxDecoration(border: s.panelOpen ? Border(bottom: BorderSide(color: c.line2)) : null),
           child: Row(children: [
             Expanded(
               child: SingleChildScrollView(
@@ -732,6 +751,7 @@ class _LiveBoardState extends State<LiveBoard> {
           Container(
             height: 40,
             padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
             child: Row(children: [
               Expanded(child: Text('PREVIEW BOARD', style: tH2(c), overflow: TextOverflow.ellipsis)),
               Tooltip(
@@ -893,6 +913,7 @@ class _UsbBoardStatus extends StatelessWidget {
     final pct = s.uploadPct;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           LinkDot(level: s.usbOpen ? 'live' : (s.detectedBoard != null ? 'waiting' : 'off'), size: 7),
@@ -914,21 +935,23 @@ class _UsbBoardStatus extends StatelessWidget {
           Text(
             s.usbOpen
                 ? '${s.usbLabel ?? 'USB'} · Upload compiles on the server and flashes it here.'
-                : 'Plug in the RoboCore and press Connect.',
+                // No Connect button here: the editor's one Connect is in its top bar.
+                : 'Plug in the RoboCore and press Connect at the top.',
             style: tCaption(c),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-        const SizedBox(height: 8),
-        Row(children: [
-          if (s.usbOpen)
-            Btn('Reset board', kind: BtnKind.plain, small: true, onTap: s.busy == null ? s.resetUsbBoard : null)
-          else
-            Btn('Connect', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
-          const SizedBox(width: 8),
-          if (!s.hasServer)
-            Expanded(child: Text('Set a compile server in Settings', style: tCaption(c, color: c.err, w: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-        ]),
+        if (s.usbOpen || !s.hasServer) ...[
+          const SizedBox(height: 8),
+          Row(children: [
+            if (s.usbOpen) ...[
+              Btn('Reset board', kind: BtnKind.plain, small: true, onTap: s.busy == null ? s.resetUsbBoard : null),
+              const SizedBox(width: 8),
+            ],
+            if (!s.hasServer)
+              Expanded(child: Text('Set a compile server in Settings', style: tCaption(c, color: c.err, w: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+          ]),
+        ],
       ]),
     );
   }
@@ -1026,10 +1049,13 @@ class _NewTabDialogState extends State<_NewTabDialog> {
   }
 }
 
-/// The board's Connect button, floating top right of the workspace: yellow with a plug, a green dot once connected.
-/// Not connected, it connects (in the Windows app only while a board is plugged in); connected, it disconnects.
-class _ConnectButton extends StatelessWidget {
-  const _ConnectButton();
+/// The editor's one Connect, in its top bar beside the board: navy with the yellow plug (the bar itself is yellow),
+/// "Connected" with a green dot once connected; [compact] (a narrow window) shows the plug alone. Not connected, it
+/// connects (in the Windows app only while a board is plugged in); connected, it disconnects.
+class EditorConnectButton extends StatelessWidget {
+  const EditorConnectButton({super.key, this.compact = false});
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
@@ -1037,47 +1063,46 @@ class _ConnectButton extends StatelessWidget {
     final on = s.linked;
     final found = s.onUsb && s.detectedBoard != null;
     final canConnect = !s.onUsb || s.canConnectUsb;
-    final label = on ? 'Connected' : (found ? 'Board found' : 'Connect');
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: c.raised.withValues(alpha: .9), borderRadius: BorderRadius.circular(999)),
-        child: Text(label, style: tLabel(c, w: FontWeight.w600)),
-      ),
-      const SizedBox(width: 8),
-      Hover(
-        onTap: on ? s.disconnect : (canConnect ? s.connect : null),
-        tooltip: on
-            ? 'Disconnect ${s.onUsb ? (s.usbLabel ?? 'the board') : 'the preview board'}'
-            : (canConnect ? 'Connect the board' : 'Plug in the ${kBoards[s.board]!.name} to connect it'),
-        radius: 999,
-        builder: (context, h) => Opacity(
-          opacity: on || canConnect ? 1 : .55,
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: h ? kBrandPressed : kBrand,
-              shape: BoxShape.circle,
-              boxShadow: const [BoxShadow(color: Color(0x2E1B2A41), blurRadius: 16, offset: Offset(0, 6))],
-            ),
-            child: Stack(children: [
-              const Center(child: RcIcon('plug', size: 26, color: kNavy)),
+    final label = on ? 'Connected' : (found ? 'Connect board' : 'Connect');
+    return Hover(
+      onTap: on ? s.disconnect : (canConnect ? s.connect : null),
+      tooltip: on
+          ? 'Disconnect ${s.onUsb ? (s.usbLabel ?? 'the board') : 'the preview board'}'
+          : (canConnect ? 'Connect the board' : 'Plug in the ${kBoards[s.board]!.name} to connect it'),
+      radius: 4,
+      builder: (context, h) => Opacity(
+        opacity: on || canConnect ? 1 : .55,
+        child: Container(
+          height: 40,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 11 : 14),
+          decoration: BoxDecoration(
+            // Connected: white like the board chip beside it; not yet: navy like Home's New project.
+            color: on ? Colors.white : (h ? const Color(0xFF2A3D5A) : kNavy),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Stack(clipBehavior: Clip.none, children: [
+              RcIcon('plug', size: 18, color: on ? kNavy : kBrand),
               if (on)
                 Positioned(
-                  right: 1,
-                  bottom: 3,
+                  right: -4,
+                  bottom: -3,
                   child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(color: c.ok, shape: BoxShape.circle, border: Border.all(color: c.surface, width: 3)),
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(color: c.ok, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
                   ),
                 ),
             ]),
-          ),
+            if (!compact) ...[
+              const SizedBox(width: 8),
+              Text(label,
+                  style: TextStyle(fontFamily: fBody, fontSize: 13, height: 16 / 13, fontWeight: FontWeight.w600, color: on ? kNavy : Colors.white)),
+            ],
+          ]),
         ),
       ),
-    ]);
+    );
   }
 }
 
@@ -1091,7 +1116,9 @@ class _RunButtons extends StatelessWidget {
     final s = AppScope.of(context);
     final c = RC.of(context);
     final uploading = s.busy == 'upload';
-    final small = compact ? 44.0 : 52.0, stop = compact ? 52.0 : 64.0, big = compact ? 64.0 : 76.0;
+    // Serial, Verify and Stop are one size, Upload the big one. Every circle is centred on one line (a slot as tall
+    // as Upload) and every label sits on one line under them, so the row lines up whatever the sizes.
+    final small = compact ? 44.0 : 52.0, big = compact ? 64.0 : 76.0;
 
     Widget round(
       String label, {
@@ -1105,52 +1132,56 @@ class _RunButtons extends StatelessWidget {
       double? progress,
     }) =>
         Column(mainAxisSize: MainAxisSize.min, children: [
-          Hover(
-            onTap: onTap,
-            tooltip: tip,
-            radius: 999,
-            builder: (context, h) => Opacity(
-              opacity: onTap == null && progress == null ? .45 : 1,
-              child: SizedBox(
-                width: size,
-                height: size,
-                child: Stack(alignment: Alignment.center, children: [
-                  Container(
-                    width: size,
-                    height: size,
-                    decoration: BoxDecoration(
-                      color: h && onTap != null ? (hover ?? bg) : bg,
-                      shape: BoxShape.circle,
-                      border: border,
-                      boxShadow: const [BoxShadow(color: Color(0x241B2A41), blurRadius: 14, offset: Offset(0, 5))],
+          SizedBox(
+            height: big,
+            child: Center(
+              child: Hover(
+                onTap: onTap,
+                tooltip: tip,
+                radius: 999,
+                builder: (context, h) => SizedBox(
+                  width: size,
+                  height: size,
+                  child: Stack(alignment: Alignment.center, children: [
+                    // The circle stays solid when the button can't be pressed (a faded circle vanished into the
+                    // workspace); only its icon fades.
+                    Container(
+                      width: size,
+                      height: size,
+                      decoration: BoxDecoration(
+                        color: h && onTap != null ? (hover ?? bg) : bg,
+                        shape: BoxShape.circle,
+                        border: border,
+                        boxShadow: const [BoxShadow(color: Color(0x241B2A41), blurRadius: 14, offset: Offset(0, 5))],
+                      ),
                     ),
-                  ),
-                  if (progress != null)
-                    SizedBox(
-                      width: size - 6,
-                      height: size - 6,
-                      child: CircularProgressIndicator(value: progress, strokeWidth: 4, color: kBrand, backgroundColor: kNavyHover),
-                    ),
-                  icon,
-                ]),
+                    if (progress != null)
+                      SizedBox(
+                        width: size - 6,
+                        height: size - 6,
+                        child: CircularProgressIndicator(value: progress, strokeWidth: 4, color: kBrand, backgroundColor: kNavyHover),
+                      ),
+                    Opacity(opacity: onTap == null && progress == null ? .4 : 1, child: icon),
+                  ]),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: c.raised.withValues(alpha: .85), borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: c.raised.withValues(alpha: .85), borderRadius: BorderRadius.circular(4)),
             child: Text(label, style: tCaption(c, color: c.ink, w: FontWeight.w600)),
           ),
         ]);
 
     return ListenableBuilder(
       listenable: s.sim,
-      builder: (context, _) => Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+      builder: (context, _) => Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         round('Serial',
             size: small,
             bg: s.panelOpen ? c.brandSoft : c.raised,
-            border: s.panelOpen ? Border.all(color: c.ink, width: 2) : null,
+            border: s.panelOpen ? Border.all(color: c.ink, width: 2) : Border.all(color: c.line),
             icon: RcIcon('term', size: 22, color: c.ink),
             tip: s.panelOpen ? 'Hide the Serial Monitor ($kMod+J)' : 'Show the Serial Monitor ($kMod+J)',
             onTap: s.togglePanel),
@@ -1158,13 +1189,15 @@ class _RunButtons extends StatelessWidget {
         round(s.busy == 'verify' ? 'Verifying…' : 'Verify',
             size: small,
             bg: c.raised,
+            border: Border.all(color: c.line),
             icon: s.busy == 'verify' ? Spinner(size: 20, color: c.ink) : RcIcon('check', size: 24, color: c.ink),
             tip: 'Verify ($kMod+R)',
             onTap: s.busy == null ? s.verify : null),
         SizedBox(width: compact ? 8 : 12),
         round('Stop',
-            size: stop,
-            bg: c.sunk,
+            size: small,
+            bg: c.raised,
+            border: Border.all(color: c.line),
             icon: RcIcon('stop', size: 22, color: c.ink),
             tip: uploading ? 'Cancel the upload' : (s.busy == 'verify' ? 'Cancel Verify' : 'Stop the sketch'),
             onTap: s.canStop ? s.stop : null),

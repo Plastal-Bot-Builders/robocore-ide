@@ -51,7 +51,8 @@ class ExampleCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: h ? c.raised : c.surface,
-          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: h ? c.faint : c.line),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -100,7 +101,7 @@ Future<void> showExampleDialog(BuildContext context, Example e) => showDialog<vo
               Badge2(e.cat, bg: c.sunk, fg: c.ink),
             ]),
             const SizedBox(height: 14),
-            SizedBox(height: 120, child: EdgedBox(radius: 8, child: Thumb(blocks: e.hasBlocks))),
+            SizedBox(height: 120, child: EdgedBox(radius: 4, edge: c.line, child: Thumb(blocks: e.hasBlocks))),
             const SizedBox(height: 12),
             Text(e.hasBlocks ? 'Opens as a Blocks project; switch to C++ any time.' : 'Opens as a C++ project.',
                 style: tBody(c, size: 13, color: c.muted, height: 18 / 13)),

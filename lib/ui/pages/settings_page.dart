@@ -25,8 +25,12 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title.toUpperCase(), style: tH2(c))),
-            // No divider lines between the rows: the rows' own padding spaces them.
-            ...rows,
+            // A divider line above every row but the first.
+            for (var i = 0; i < rows.length; i++)
+              Container(
+                decoration: BoxDecoration(border: i == 0 ? null : Border(top: BorderSide(color: c.line2))),
+                child: rows[i],
+              ),
           ]),
         );
 
@@ -53,7 +57,7 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(children: [
             Expanded(
@@ -447,8 +451,8 @@ Future<String?> _pin(BuildContext context, {required String title, required Stri
                 isDense: true,
                 filled: true,
                 fillColor: c.sunk,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.focus, width: 1.5)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.focus, width: 1.5)),
               ),
             );
         return AlertDialog(
@@ -521,7 +525,7 @@ class _CogStyleRow extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
           ),
           // The design's Help Style: title and description, the radio on the right.
           child: Row(children: [
@@ -723,7 +727,7 @@ class _CogStatusRowState extends State<_CogStatusRow> {
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               RcIcon(st.$1 == true ? 'check' : 'alert', size: 18, color: st.$1 == true ? c.ok : c.ink),
               const SizedBox(width: 10),
@@ -754,7 +758,7 @@ class _LockedField extends StatelessWidget {
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       alignment: Alignment.centerLeft,
-      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
       child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: tBody(c, size: 13, color: c.muted)),
     );
   }

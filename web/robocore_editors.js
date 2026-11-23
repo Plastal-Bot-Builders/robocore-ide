@@ -181,19 +181,19 @@
       '.robocore-renderer .blocklyOutlinePath { fill: rgba(27,42,65,.28) !important; }',
       '.robocore-renderer .rcNavyText > .blocklyOutlinePath { fill: rgba(27,42,65,.14) !important; }',
       // A dropdown's menu: white, the chosen option on a yellow row with a check on the right (the design's Menu Item).
-      // No edge (the design has had no outlines since v1.0.1): the shadow sets the menu apart.
-      '.blocklyDropDownDiv { background: #FFFFFF !important; border: none !important; border-radius: 8px !important;' +
+      // A 1 px edge and a shadow set the menu apart.
+      '.blocklyDropDownDiv { background: #FFFFFF !important; border: 1px solid rgba(27,42,65,.16) !important; border-radius: 4px !important;' +
         ' box-shadow: 0 8px 24px rgba(27,42,65,.16) !important; }',
-      '.blocklyDropDownDiv .blocklyDropDownArrow { background: #FFFFFF !important; border-color: transparent !important; }',
+      '.blocklyDropDownDiv .blocklyDropDownArrow { background: #FFFFFF !important; border-color: rgba(27,42,65,.16) !important; }',
       '.blocklyDropDownDiv .blocklyMenu { padding: 4px !important; }',
-      '.blocklyDropDownDiv .blocklyMenuItem { position: relative; border-radius: 6px; padding: 7px 36px 7px 10px !important; min-width: 120px;' +
+      '.blocklyDropDownDiv .blocklyMenuItem { position: relative; border-radius: 4px; padding: 7px 36px 7px 10px !important; min-width: 120px;' +
         ' font: 500 13px Barlow, sans-serif; }',
       '.blocklyDropDownDiv .blocklyMenuItemContent { color: ' + INK + ' !important; }',
       '.blocklyDropDownDiv .blocklyMenuItemHighlight { background: #F0EDE7 !important; }',
       '.blocklyDropDownDiv .blocklyMenuItemSelected { background: #FCE9BF !important; font-weight: 600; }',
       '.blocklyDropDownDiv .blocklyMenuItemSelected .blocklyMenuItemCheckbox { position: absolute; right: 10px; top: 50%; margin: -8px 0 0 0;' +
         ` float: none; background: url("${svgUri('<path d="M20 6 9 17l-5-5"/>', INK, 16, 2.5)}") center / 16px no-repeat !important; }`,
-      '.rcNavy .blocklyDropDownDiv, .rcNavy .blocklyDropDownDiv .blocklyDropDownArrow { background: ' + INK + ' !important; border-color: transparent !important; }',
+      '.rcNavy .blocklyDropDownDiv, .rcNavy .blocklyDropDownDiv .blocklyDropDownArrow { background: ' + INK + ' !important; border-color: rgba(247,241,227,.2) !important; }',
       '.rcNavy .blocklyDropDownDiv .blocklyMenuItemContent { color: ' + CREAM + ' !important; }',
       '.rcNavy .blocklyDropDownDiv .blocklyMenuItemHighlight { background: #22344F !important; }',
       '.rcNavy .blocklyDropDownDiv .blocklyMenuItemSelected { background: rgba(242,176,30,.2) !important; }',
@@ -207,12 +207,14 @@
       // On the yellow Events blocks the dropdown chevron is navy, like their labels.
       '.robocore-renderer .rcNavyText > .blocklyDropdownField > image { filter: brightness(0.15); }',
       // The toolbox (the design's Block Category rows): 160 px wide, 34 px rows, 22 px colour chips.
-      // No divider line between the toolbox and the workspace.
-      '.blocklyToolbox { width: ' + z(160) + '; box-sizing: border-box; padding: ' + z(12) + ' ' + z(8) + ' !important; border: none !important; }',
+      // A divider line between the toolbox and the workspace.
+      '.blocklyToolbox { width: ' + z(160) + '; box-sizing: border-box; padding: ' + z(12) + ' ' + z(8) + ' !important;' +
+        ' border: none !important; border-right: 1px solid rgba(27,42,65,.10) !important; }',
+      '.robocore-navy-theme .blocklyToolbox { border-right-color: rgba(247,241,227,.14) !important; }',
       '.blocklyToolboxCategoryContainer { margin: 0 0 ' + z(2) + '; }',
       '.blocklyToolboxCategory { position: relative; height: ' + z(34) + '; line-height: ' + z(34) + '; margin: 0;' +
         ' padding: 0 ' + z(8) + ' 0 ' + z(10) + ' !important;' +
-        ' border-radius: 6px; border-left: none !important; cursor: pointer; }',
+        ' border-radius: 4px; border-left: none !important; cursor: pointer; }',
       '.blocklyTreeRowContentContainer { display: flex; align-items: center; gap: ' + z(8) + '; height: ' + z(34) + '; }',
       '.blocklyToolboxCategoryLabel { font: 500 ' + z(13) + '/' + z(16) + ' Barlow, sans-serif; color: #5B6573; white-space: nowrap; }',
       '.blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(27,42,65,.05); }',
@@ -240,10 +242,10 @@
       // Zoom buttons and trashcan drawn as in the design (Blockly's sprite images hidden).
       '.blocklyZoom > image, .blocklyZoom > svg > image, .blocklyTrash > image, .blocklyTrashLid > svg { display: none; }',
       '.blocklyZoom { cursor: pointer; }',
-      '.rcZoomBox { fill: #FFFFFF; stroke: none; }',
+      '.rcZoomBox { fill: #FFFFFF; stroke: rgba(27,42,65,.16); stroke-width: 1px; }',
       '.blocklyZoom:hover .rcZoomBox { fill: ' + CREAM + '; }',
       '.rcIcon { fill: none; stroke: ' + INK + '; stroke-width: 2.25px; stroke-linecap: round; stroke-linejoin: round; }',
-      '.robocore-navy-theme .rcZoomBox { fill: #22344F; }',
+      '.robocore-navy-theme .rcZoomBox { fill: #22344F; stroke: rgba(247,241,227,.2); }',
       '.robocore-navy-theme .blocklyZoom:hover .rcZoomBox { fill: #2C405E; }',
       '.robocore-navy-theme .rcIcon { stroke: ' + CREAM + '; }',
       '.blocklyTrashLid { opacity: 1 !important; }',
@@ -1453,7 +1455,134 @@
     zoom(dir) { zoomBy(dir); },
     zoomToFit() { if (ws) ws.zoomToFit(); },
     resetZoom() { resetZoom(); },
+    // A picture of stacks of blocks (a JSON list of Blockly block states, as Cog suggests them), drawn by this
+    // Blockly exactly as the editor draws them at its starting size: {png (a data: URL), width, height (CSS pixels),
+    // ratio (PNG pixels per CSS pixel)}. See "Pictures of blocks" below.
+    picture(json, ratio) { return pictureOf(json, ratio); },
   };
+
+  // ======================================================================= Pictures of blocks
+
+  // Cog's suggested stacks are shown in the app as pictures drawn by this page's Blockly, so they look exactly like
+  // the blocks in the editor (same renderer, theme, fields and fonts). A second workspace draws them: read-only, out
+  // of sight and unreachable by Tab, and never the main workspace. Its drawing is copied with every style written
+  // into it and the fonts embedded (a picture can't see the page's style sheet or fonts), then turned into a PNG.
+  let pictureWs = null, pictureTheme = null, pictureFontCss = null;
+  const PICTURE_FONTS = [['Barlow', 500, 'Barlow-500'], ['Barlow', 600, 'Barlow-600'], ['Barlow', 700, 'Barlow-700']];
+  const PICTURE_STYLE = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linecap',
+    'stroke-linejoin', 'stroke-dasharray', 'opacity', 'display', 'visibility', 'font-family', 'font-size', 'font-weight',
+    'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'filter'];
+
+  function pictureWorkspace() {
+    if (pictureWs) return pictureWs;
+    const host = document.createElement('div');
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position:fixed;left:-20000px;top:0;width:1600px;height:1600px;pointer-events:none;';
+    document.body.appendChild(host);
+    const main = Blockly.getMainWorkspace();
+    pictureWs = Blockly.inject(host, {
+      renderer: 'robocore',
+      theme: CTX.theme === 'navy' ? NAVY : PAPER_THEME,
+      readOnly: true,
+      media: 'vendor/blockly/media/',
+      move: { scrollbars: false, drag: false, wheel: false },
+      zoom: { controls: false, wheel: false, pinch: false, startScale: START_SCALE },
+      trashcan: false,
+      sounds: false,
+    });
+    // Injecting makes a workspace the main one; the editor's stays main (keyboard, menus, copy and paste).
+    if (main && main !== pictureWs && Blockly.common && Blockly.common.setMainWorkspace) Blockly.common.setMainWorkspace(main);
+    try { Blockly.getFocusManager().unregisterTree(pictureWs); } catch (e) { /* older Blockly: no focus manager */ }
+    pictureWs.getParentSvg().setAttribute('tabindex', '-1');
+    return pictureWs;
+  }
+
+  async function fontCss() {
+    if (pictureFontCss !== null) return pictureFontCss;
+    const faces = await Promise.all(PICTURE_FONTS.map(async ([family, weight, file]) => {
+      try {
+        const r = await fetch('assets/assets/fonts/' + file + '.ttf');
+        if (!r.ok) return '';
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return "@font-face{font-family:'" + family + "';font-weight:" + weight + ';src:url(data:font/ttf;base64,' + btoa(bin) + ") format('truetype');}";
+      } catch (e) {
+        return '';
+      }
+    }));
+    return (pictureFontCss = faces.join(''));
+  }
+
+  // Copies the computed style of every element onto its copy (the copy's classes mean nothing outside the page).
+  function inlineStyles(src, dst) {
+    const cs = getComputedStyle(src);
+    let s = '';
+    for (const p of PICTURE_STYLE) {
+      const v = cs.getPropertyValue(p);
+      if (v) s += p + ':' + v + ';';
+    }
+    dst.setAttribute('style', s);
+    dst.removeAttribute('class');
+    for (let i = 0; i < src.children.length && i < dst.children.length; i++) inlineStyles(src.children[i], dst.children[i]);
+  }
+
+  async function pictureOf(json, ratio) {
+    await ready;
+    const stacks = JSON.parse(json);
+    if (!Array.isArray(stacks)) throw new Error('not a list of blocks');
+    rememberMessages(stacks);
+    const w = pictureWorkspace();
+    const theme = CTX.theme === 'navy' ? NAVY : PAPER_THEME;
+    if (pictureTheme !== theme) { w.setTheme(theme); pictureTheme = theme; }
+    w.clear();
+    // Far apart first (the stacks' heights are only known once drawn), then one under the other.
+    stacks.forEach((state, i) => {
+      if (state && typeof state === 'object') {
+        Blockly.serialization.blocks.append(Object.assign({}, state, { x: 0, y: i * 4000 }), w, { recordUndo: false });
+      }
+    });
+    // Drawn now, not on the next animation frame (a hidden WebView, as in the C++ view, may hold frames back).
+    const rm = Blockly.renderManagement;
+    if (rm && rm.triggerQueuedRenders) rm.triggerQueuedRenders(w);
+    else if (rm && rm.finishQueuedRenders) await rm.finishQueuedRenders();
+    let y = 0;
+    for (const b of w.getTopBlocks(true)) {
+      b.moveTo(new Blockly.utils.Coordinate(0, y));
+      y += b.getHeightWidth().height + 16;
+    }
+    if (!w.getTopBlocks(false).length) throw new Error('no blocks');
+    const box = w.getBlocksBoundingBox();
+    const pad = 2;
+    const width = Math.ceil(box.right - box.left + 2 * pad), height = Math.ceil(box.bottom - box.top + 2 * pad);
+    const NS = 'http://www.w3.org/2000/svg';
+    const out = document.createElementNS(NS, 'svg');
+    out.setAttribute('width', String(width));
+    out.setAttribute('height', String(height));
+    out.setAttribute('viewBox', (box.left - pad) + ' ' + (box.top - pad) + ' ' + width + ' ' + height);
+    const style = document.createElementNS(NS, 'style');
+    style.textContent = await fontCss();
+    out.appendChild(style);
+    const defs = w.getParentSvg().querySelector('defs');
+    if (defs) out.appendChild(defs.cloneNode(true));
+    const canvas = w.getCanvas();
+    const copy = canvas.cloneNode(true);
+    copy.removeAttribute('transform');
+    inlineStyles(canvas, copy);
+    out.appendChild(copy);
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(out));
+    await img.decode();
+    // The embedded fonts can lag the first paint of the picture by a moment.
+    await new Promise((r) => setTimeout(r, 30));
+    const r = Math.max(1, Math.min(4, Number(ratio) || 2));
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(width * r);
+    cv.height = Math.ceil(height * r);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    w.clear();
+    return { png: cv.toDataURL('image/png'), width, height, ratio: r };
+  }
 
   let PAPER_THEME = null, NAVY = null;
   function setTheme(t) {
@@ -1482,9 +1611,9 @@
       ];
     };
     const common = {
-      'editorSuggestWidget.background': '#FFFFFF', 'editorSuggestWidget.border': '#00000000',
+      'editorSuggestWidget.background': '#FFFFFF', 'editorSuggestWidget.border': '#1B2A4129',
       'editorSuggestWidget.selectedBackground': '#F2B01E38', 'editorHoverWidget.background': '#FFFFFF',
-      'editorHoverWidget.border': '#00000000', 'diffEditor.insertedTextBackground': '#F2B01E38',
+      'editorHoverWidget.border': '#1B2A4129', 'diffEditor.insertedTextBackground': '#F2B01E38',
       'diffEditor.removedTextBackground': '#1B2A410F',
       'editor.lineHighlightBackground': '#F2B01E1F', 'editor.selectionBackground': '#F2B01E55',
       'editorOverviewRuler.errorForeground': '#1B2A41', 'editorOverviewRuler.warningForeground': '#8A5A00',
@@ -1866,6 +1995,13 @@
           (scale) => send('zoom', scale),
           (j) => send('select', j),
           (canUndo, canRedo) => send('history', canUndo, canRedo)).then(() => send('mounted'), failed);
+      },
+      // A picture of Cog's suggested stacks (blocksApi.picture), answered as ['picture', id, png or null, width,
+      // height, ratio].
+      picture(id, json, ratio) {
+        blocksApi.picture(json, ratio).then(
+          (p) => send('picture', id, p.png, p.width, p.height, p.ratio),
+          (e) => { send('picture', id, null, 0, 0, 1); failed(e); });
       },
       mountCode(optionsJson, explain) {
         codeApi.mount(optionsJson,

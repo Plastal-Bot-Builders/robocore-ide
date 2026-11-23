@@ -12,7 +12,9 @@ import '../../state/app_state.dart';
 import '../../state/cog.dart';
 import '../../theme.dart';
 import '../app_scope.dart';
+import '../editor/block_picture.dart';
 import '../widgets/common.dart';
+import '../widgets/ui_scale.dart';
 
 /// Cog's avatar: the RoboCore gear on a yellow disc.
 class CogMark extends StatelessWidget {
@@ -157,6 +159,7 @@ class _CogPanelState extends State<CogPanel> {
     final header = Container(
       height: 56,
       padding: const EdgeInsets.only(left: 14, right: 8),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
       child: Row(children: [
         const CogMark(size: 30),
         const SizedBox(width: 10),
@@ -194,6 +197,7 @@ class _CogPanelState extends State<CogPanel> {
     final prompts = cog.prompts;
     final footer = Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         if (prompts.isNotEmpty) ...[
           Wrap(spacing: 6, runSpacing: 6, children: [
@@ -410,6 +414,7 @@ class _CogBubble extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           decoration: BoxDecoration(
             color: c.raised,
+            border: Border.all(color: c.line),
             borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(2), topRight: Radius.circular(10), bottomLeft: Radius.circular(10), bottomRight: Radius.circular(10)),
           ),
@@ -449,7 +454,7 @@ class _Item extends StatelessWidget {
       case CogKind.tryIt:
         return Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(4)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text((it.overline ?? '').toUpperCase(), style: tOverline(c, color: c.textBrand)),
             const SizedBox(height: 4),
@@ -459,7 +464,7 @@ class _Item extends StatelessWidget {
       case CogKind.notice:
         return Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             RcIcon('alert', size: 18, color: c.ink),
             const SizedBox(width: 10),
@@ -517,7 +522,7 @@ class CogText extends StatelessWidget {
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SelectableText(code, style: tMono(c, size: 12, height: 18 / 12)),
@@ -653,7 +658,7 @@ class CogBlockStack extends StatelessWidget {
             Container(
               margin: const EdgeInsets.symmetric(vertical: 1.5),
               padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
-              decoration: BoxDecoration(border: Border.all(color: c.line2), borderRadius: BorderRadius.circular(5)),
+              decoration: BoxDecoration(border: Border.all(color: c.line2), borderRadius: BorderRadius.circular(4)),
               child: Text('${r.text}  (not a block)', style: tBody(c, size: 12, color: c.muted, height: 16 / 12)),
             )));
         continue;
@@ -679,17 +684,49 @@ class CogBlockStack extends StatelessWidget {
 
     final it = item;
     final left = parsed.unknown;
+    // The stack drawn here: used when the editor's own Blockly can't draw it (no web editors, or not loaded yet).
+    final drawn = Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
+    );
+    final ratio = (MediaQuery.devicePixelRatioOf(context) * UiScale.of(context)).clamp(1.0, 4.0);
+    final picture = cog.pictureOf(parsed, dark: c.dark, ratio: ratio);
+    final Widget stack = picture == null
+        ? drawn
+        : FutureBuilder<BlockPicture?>(
+            future: picture,
+            builder: (context, snap) {
+              final p = snap.data;
+              if (p != null) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _BlockPictureCard(p: p),
+                  // The picture has only the blocks; the lines that are not blocks are listed under it.
+                  for (final r in parsed.rows)
+                    if (r.kind == RowKind.unknown)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('${r.text}  (not a block)', style: tBody(c, size: 12, color: c.muted, height: 16 / 12)),
+                      ),
+                ]);
+              }
+              if (snap.connectionState == ConnectionState.done) return drawn;
+              // Being drawn (a moment): the room it will take, so the conversation doesn't jump.
+              return Container(
+                width: double.infinity,
+                height: (parsed.rows.length * 30.0 + 20).clamp(48.0, 360.0),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+              );
+            },
+          );
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(8)),
-        child: Semantics(
-          container: true,
-          label: 'Blocks: ${[for (final r in parsed.rows) r.text].join(', ')}',
-          child: ExcludeSemantics(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows)),
-        ),
+      Semantics(
+        container: true,
+        label: 'Blocks: ${[for (final r in parsed.rows) r.text].join(', ')}',
+        child: ExcludeSemantics(child: stack),
       ),
       if (it != null && left > 0)
         Padding(
@@ -710,6 +747,30 @@ class CogBlockStack extends StatelessWidget {
           ]),
         ),
     ]);
+  }
+}
+
+/// A stack drawn by the editor's own Blockly, on the editor's background: the same blocks as in the editor. One wider
+/// than the panel is made at most a quarter smaller; past that it scrolls sideways, so its words stay readable.
+class _BlockPictureCard extends StatelessWidget {
+  const _BlockPictureCard({required this.p});
+  final BlockPicture p;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = RC.of(context);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+      child: LayoutBuilder(builder: (context, box) {
+        final scale = (box.maxWidth / p.width).clamp(.75, 1.0);
+        final w = p.width * scale, h = p.height * scale;
+        final image = Image.memory(p.png, width: w, height: h, fit: BoxFit.fill, filterQuality: FilterQuality.medium, gaplessPlayback: true);
+        return w <= box.maxWidth ? Align(alignment: Alignment.centerLeft, child: image) : SingleChildScrollView(scrollDirection: Axis.horizontal, child: image);
+      }),
+    );
   }
 }
 
@@ -779,11 +840,13 @@ class _Suggestion extends StatelessWidget {
     final rows = cogDiff(before, f.newContent);
     final firstLine = rows.where((r) => r.$1 == '+').firstOrNull?.$2;
     return EdgedBox(
-      radius: 8,
+      radius: 4,
+      edge: c.ink,
       color: c.raised,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
+        Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
           child: Row(children: [
             Expanded(child: Text('SUGGESTED FIX', style: tOverline(c))),
             Text('${f.file}${firstLine == null ? '' : ' · line $firstLine'}', style: tCaption(c, color: c.faint)),
@@ -805,8 +868,9 @@ class _Suggestion extends StatelessWidget {
               ),
             ]),
           ),
-        Padding(
+        Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line2))),
           child: switch (item.fixState) {
             'applied' => Row(children: [
                 RcIcon('check', size: 16, color: c.ok),
@@ -851,7 +915,7 @@ class _QuickCheckState extends State<_QuickCheck> {
     final right = it.answered && it.picked == q.answer;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('QUICK CHECK', style: tOverline(c, color: c.textBrand)),
         const SizedBox(height: 6),
@@ -936,7 +1000,7 @@ class _Concepts extends StatelessWidget {
         );
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('YOU’VE LEARNED', style: tOverline(c, color: c.muted)),
         const SizedBox(height: 8),

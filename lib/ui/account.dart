@@ -23,6 +23,7 @@ class AccountButton extends StatelessWidget {
       width: 260,
       header: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(s.user.isEmpty ? 'No name set' : s.user, style: tLabel(c), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 2),
@@ -121,6 +122,7 @@ class _ShortcutsDialog extends StatelessWidget {
           for (final (action, keys) in rows)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line2))),
               child: Row(children: [
                 Expanded(child: Text(action, style: tBody(c, size: 13, height: 18 / 13))),
                 const SizedBox(width: 12),

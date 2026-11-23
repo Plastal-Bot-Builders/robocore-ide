@@ -11,7 +11,11 @@ import 'common.dart';
 final _hiRe = RegExp('obstacle|warning|error', caseSensitive: false);
 
 class SerialLog extends StatefulWidget {
-  const SerialLog({super.key});
+  const SerialLog({super.key, this.connect = true});
+
+  /// With no board connected, a Connect button beside the message (the Serial Monitor page). The editor's drawer has
+  /// none: the editor's one Connect is in its top bar.
+  final bool connect;
   @override
   State<SerialLog> createState() => _SerialLogState();
 }
@@ -44,6 +48,8 @@ class _SerialLogState extends State<SerialLog> {
           if (s.autoscroll) _toEnd();
           // USB-C picked but no port open: say so, with Connect (SM-07). Earlier lines stay readable under a bar.
           final noBoard = s.onUsb && !s.usbOpen;
+          final connect = widget.connect;
+          final then = connect ? 'then press Connect.' : 'then press Connect at the top.';
           if (log.isEmpty && noBoard) {
             return Center(
               child: SingleChildScrollView(
@@ -51,10 +57,12 @@ class _SerialLogState extends State<SerialLog> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text('NO BOARD CONNECTED', style: tH2(c)),
                   const SizedBox(height: 10),
-                  Text('Plug ${kBoards[s.boardId]!.name} in with a ${s.usbName} data cable, then press Connect.',
+                  Text('Plug ${kBoards[s.boardId]!.name} in with a ${s.usbName} data cable, $then',
                       style: tBody(c, size: 13, color: c.muted), textAlign: TextAlign.center),
-                  const SizedBox(height: 10),
-                  Btn('Connect', icon: 'plug', kind: BtnKind.primary, onTap: s.connectUsb),
+                  if (connect) ...[
+                    const SizedBox(height: 10),
+                    Btn('Connect', icon: 'plug', kind: BtnKind.primary, onTap: s.connectUsb),
+                  ],
                 ]),
               ),
             );
@@ -78,20 +86,22 @@ class _SerialLogState extends State<SerialLog> {
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Container(
               padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-              color: c.sunk,
+              decoration: BoxDecoration(color: c.sunk, border: Border(bottom: BorderSide(color: c.line2))),
               child: Row(children: [
                 Expanded(
                   child: Text.rich(
                     TextSpan(children: [
                       TextSpan(text: 'No board connected. ', style: tLabel(c)),
-                      TextSpan(text: 'Plug ${kBoards[s.boardId]!.name} in with a ${s.usbName} data cable, then press Connect.', style: tCaption(c)),
+                      TextSpan(text: 'Plug ${kBoards[s.boardId]!.name} in with a ${s.usbName} data cable, $then', style: tCaption(c)),
                     ]),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Btn('Connect', icon: 'plug', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
+                if (connect) ...[
+                  const SizedBox(width: 8),
+                  Btn('Connect', icon: 'plug', kind: BtnKind.primary, small: true, onTap: s.connectUsb),
+                ],
               ]),
             ),
             Expanded(child: list),
@@ -279,7 +289,7 @@ class _SendRowState extends State<SendRow> {
     final phone = MediaQuery.sizeOf(context).width < 760;
     return Container(
       padding: widget.big ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10) : const EdgeInsets.fromLTRB(12, 8, 8, 8),
-      color: c.surface,
+      decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.line2))),
       child: Row(children: [
         Expanded(child: RcInput(controller: _c, focusNode: _f, hint: widget.hint, height: h, onSubmitted: (_) => _send())),
         if (widget.big && !phone) ...[
