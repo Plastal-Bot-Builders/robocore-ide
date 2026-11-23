@@ -48,7 +48,7 @@ class BoardPage extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: id == sel ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(children: [
                   RcIcon('chip', size: 18, color: c.ink),

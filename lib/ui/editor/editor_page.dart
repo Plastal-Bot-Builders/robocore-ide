@@ -49,6 +49,10 @@ class _EditorPageState extends State<EditorPage> {
   void initState() {
     super.initState();
     editorMenuCommand = _menuCommand;
+    // The blocks open with the room to drag them: the "C++ from the blocks" pane starts closed each time the editor
+    // opens, and only its button (or View › C++ from the blocks) opens it.
+    final s = AppScope.read(context);
+    if (s.settings.showCpp) WidgetsBinding.instance.addPostFrameCallback((_) => s.updateSettings((st) => st.showCpp = false));
     // Cog hands blocks and code to the Blockly and Monaco editors (the Flutter editors of the other apps take none).
     if (kWebEditors) {
       cogAddBlocks = _addBlocks;
@@ -293,11 +297,13 @@ class _EditorPageState extends State<EditorPage> {
         IconBtn(icon, onTap: onTap, tip: tip, size: size, iconSize: small ? 18 : 20, active: active);
     return Container(
       padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(4), boxShadow: popShadow),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(14), boxShadow: popShadow),
       child: Column(mainAxisSize: MainAxisSize.min, children: blocks
           ? [
               if (kWebEditors) ...[
-                b('fit', 'Fit the blocks to the screen', () => _blockly.currentState?.zoomToFit()),
+                // Back to the view a project opens with (the starting size, centred on the blocks), as View › Actual
+                // Size does. Zoom to fit enlarged a small program to fill the screen.
+                b('fit', 'Back to the starting view ($kMod+0)', () => _blockly.currentState?.resetZoom()),
                 b('zin', 'Zoom in ($kMod+=)', () => _blockly.currentState?.zoom(1)),
                 b('zout', 'Zoom out ($kMod+−)', () => _blockly.currentState?.zoom(-1)),
                 sep(),
@@ -617,7 +623,7 @@ class ConsolePanel extends StatelessWidget {
                 onTap: () => s.gotoProblem(e),
                 builder: (context, h) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  decoration: BoxDecoration(color: h ? c.raised : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: h ? c.raised : Colors.transparent, borderRadius: BorderRadius.circular(7)),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Padding(padding: const EdgeInsets.only(top: 2), child: RcIcon(e.isError ? 'alert' : 'info', size: 15, color: e.isError ? c.err : c.muted)),
                     const SizedBox(width: 10),
@@ -1069,7 +1075,7 @@ class EditorConnectButton extends StatelessWidget {
       tooltip: on
           ? 'Disconnect ${s.onUsb ? (s.usbLabel ?? 'the board') : 'the preview board'}'
           : (canConnect ? 'Connect the board' : 'Plug in the ${kBoards[s.board]!.name} to connect it'),
-      radius: 4,
+      radius: 8,
       builder: (context, h) => Opacity(
         opacity: on || canConnect ? 1 : .55,
         child: Container(
@@ -1078,7 +1084,7 @@ class EditorConnectButton extends StatelessWidget {
           decoration: BoxDecoration(
             // Connected: white like the board chip beside it; not yet: navy like Home's New project.
             color: on ? Colors.white : (h ? const Color(0xFF2A3D5A) : kNavy),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Stack(clipBehavior: Clip.none, children: [
@@ -1168,9 +1174,9 @@ class _RunButtons extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: c.raised.withValues(alpha: .85), borderRadius: BorderRadius.circular(4)),
+          // The label alone, with no pill behind it (the pale pill read as a faint white edge).
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1),
             child: Text(label, style: tCaption(c, color: c.ink, w: FontWeight.w600)),
           ),
         ]);

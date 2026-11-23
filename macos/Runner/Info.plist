@@ -33,5 +33,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- The window in macOS's earlier style: 15 pt corners, as the Arduino IDE has (macOS 26 rounds a window with a
+	     toolbar to 36 pt). Apple keeps this setting for a limited time; check it again with each new macOS. -->
+	<key>UIDesignRequiresCompatibility</key>
+	<true/>
 </dict>
 </plist>

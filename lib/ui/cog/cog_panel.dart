@@ -454,7 +454,7 @@ class _Item extends StatelessWidget {
       case CogKind.tryIt:
         return Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(8)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text((it.overline ?? '').toUpperCase(), style: tOverline(c, color: c.textBrand)),
             const SizedBox(height: 4),
@@ -464,7 +464,7 @@ class _Item extends StatelessWidget {
       case CogKind.notice:
         return Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             RcIcon('alert', size: 18, color: c.ink),
             const SizedBox(width: 10),
@@ -522,7 +522,7 @@ class CogText extends StatelessWidget {
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SelectableText(code, style: tMono(c, size: 12, height: 18 / 12)),
@@ -593,17 +593,32 @@ class _CodeActions extends StatelessWidget {
   }
 }
 
-/// The block categories' colours, as in the block editor (web/robocore_editors.js, CATS).
+/// The block categories' colours ("Zambian stones"), as in the block editor (web/robocore_editors.js, CATS).
 const kBlockColours = {
   'events': Color(0xFFF2B01E),
-  'movement': Color(0xFF2F6BBF),
-  'motors': Color(0xFFB84A26),
-  'light': Color(0xFF7A4FB5),
-  'sensors': Color(0xFF0F7680),
-  'control': Color(0xFF8A5A00),
-  'operators': Color(0xFF2F7A4C),
-  'variables': Color(0xFFB23E7A),
+  'movement': Color(0xFF2C5A9D),
+  'motors': Color(0xFF904016),
+  'light': Color(0xFF744388),
+  'sensors': Color(0xFF006C7B),
+  'control': Color(0xFF6B5B00),
+  'operators': Color(0xFF006E3B),
+  'variables': Color(0xFF913949),
+  'myblocks': Color(0xFF525F6F),
   'pins': Color(0xFF1B2A41),
+};
+
+/// The same in the dark theme: each stone lifted to 3:1 against the navy, as the block editor's Navy theme has them.
+const kBlockColoursDark = {
+  'events': Color(0xFFF2B01E),
+  'movement': Color(0xFF406EB3),
+  'motors': Color(0xFFA8562E),
+  'light': Color(0xFF8C5AA1),
+  'sensors': Color(0xFF007A88),
+  'control': Color(0xFF7E6E00),
+  'operators': Color(0xFF1A7E4A),
+  'variables': Color(0xFFAB505F),
+  'myblocks': Color(0xFF626E7F),
+  'pins': Color(0xFF4F6FA0),
 };
 
 /// A blocks script from a reply, drawn as a stack: each line a bar in its category's colour, the blocks inside
@@ -620,7 +635,7 @@ class CogBlockStack extends StatelessWidget {
     final c = RC.of(context);
     final cog = AppScope.of(context).cog;
     final parsed = cog.blocksOf(script);
-    Color colour(String cat) => cat == 'pins' && c.dark ? const Color(0xFF4F6FA0) : (kBlockColours[cat] ?? c.muted);
+    Color colour(String cat) => (c.dark ? kBlockColoursDark : kBlockColours)[cat] ?? c.muted;
 
     final rows = <Widget>[];
     final open = <Color>[]; // the colour of each block the next rows sit inside, outermost first
@@ -658,7 +673,7 @@ class CogBlockStack extends StatelessWidget {
             Container(
               margin: const EdgeInsets.symmetric(vertical: 1.5),
               padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
-              decoration: BoxDecoration(border: Border.all(color: c.line2), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(border: Border.all(color: c.line2), borderRadius: BorderRadius.circular(5)),
               child: Text('${r.text}  (not a block)', style: tBody(c, size: 12, color: c.muted, height: 16 / 12)),
             )));
         continue;
@@ -689,7 +704,7 @@ class CogBlockStack extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: c.codeBg, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
     );
     final ratio = (MediaQuery.devicePixelRatioOf(context) * UiScale.of(context)).clamp(1.0, 4.0);
@@ -718,7 +733,7 @@ class CogBlockStack extends StatelessWidget {
                 width: double.infinity,
                 height: (parsed.rows.length * 30.0 + 20).clamp(48.0, 360.0),
                 margin: const EdgeInsets.symmetric(vertical: 4),
-                decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
               );
             },
           );
@@ -763,7 +778,7 @@ class _BlockPictureCard extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
       child: LayoutBuilder(builder: (context, box) {
         final scale = (box.maxWidth / p.width).clamp(.75, 1.0);
         final w = p.width * scale, h = p.height * scale;
@@ -840,7 +855,7 @@ class _Suggestion extends StatelessWidget {
     final rows = cogDiff(before, f.newContent);
     final firstLine = rows.where((r) => r.$1 == '+').firstOrNull?.$2;
     return EdgedBox(
-      radius: 4,
+      radius: 8,
       edge: c.ink,
       color: c.raised,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -915,7 +930,7 @@ class _QuickCheckState extends State<_QuickCheck> {
     final right = it.answered && it.picked == q.answer;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('QUICK CHECK', style: tOverline(c, color: c.textBrand)),
         const SizedBox(height: 6),
@@ -1000,7 +1015,7 @@ class _Concepts extends StatelessWidget {
         );
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('YOU’VE LEARNED', style: tOverline(c, color: c.muted)),
         const SizedBox(height: 8),

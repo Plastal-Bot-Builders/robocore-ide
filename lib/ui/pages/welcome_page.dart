@@ -54,7 +54,7 @@ class _WelcomePageState extends State<WelcomePage> {
               decoration: BoxDecoration(
                 color: c.raised,
                 border: Border.all(color: c.line),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(14),
                 boxShadow: modalShadow,
               ),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

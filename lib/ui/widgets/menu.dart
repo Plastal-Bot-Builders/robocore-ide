@@ -101,7 +101,7 @@ class _RcMenuState extends State<RcMenu> {
           builder: (context, h) => Container(
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
             child: Row(children: [
               if (e.icon != null) ...[RcIcon(e.icon!, size: 16, color: c.ink), const SizedBox(width: 10)],
               Expanded(child: Text(e.label, style: tLabel(c, w: FontWeight.w500), overflow: TextOverflow.ellipsis)),
@@ -119,7 +119,7 @@ class _RcMenuState extends State<RcMenu> {
         decoration: BoxDecoration(
           color: c.raised,
           border: Border.all(color: c.line),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: popShadow,
         ),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

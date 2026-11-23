@@ -28,7 +28,7 @@ class RcIcon extends StatelessWidget {
 /// Pointer-hover aware wrapper used by most clickable things. It takes the keyboard focus too: Tab reaches it,
 /// Enter or Space presses it, and a ring shows where the focus is (WCAG 2.1.1, 2.4.7). [radius] is the ring's.
 class Hover extends StatefulWidget {
-  const Hover({super.key, required this.builder, this.onTap, this.cursor = SystemMouseCursors.click, this.tooltip, this.radius = 4});
+  const Hover({super.key, required this.builder, this.onTap, this.cursor = SystemMouseCursors.click, this.tooltip, this.radius = 6});
   final Widget Function(BuildContext context, bool hover) builder;
   final VoidCallback? onTap;
   final MouseCursor cursor;
@@ -183,7 +183,7 @@ class Btn extends StatelessWidget {
         return Container(
           height: hh,
           padding: EdgeInsets.only(left: small ? 10 : 12, right: small ? 10 : 14),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
           child: Row(
             mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -224,7 +224,7 @@ class IconBtn extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? c.brandSoft : (h ? c.ink.withValues(alpha: .06) : Colors.transparent),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: RcIcon(icon, size: iconSize, color: (color ?? c.ink).withValues(alpha: onTap == null ? .4 : 1)),
       ),
@@ -233,7 +233,7 @@ class IconBtn extends StatelessWidget {
 }
 
 class RcCard extends StatelessWidget {
-  const RcCard({super.key, required this.child, this.padding = EdgeInsets.zero, this.radius = 4, this.color, this.clip = true});
+  const RcCard({super.key, required this.child, this.padding = EdgeInsets.zero, this.radius = 10, this.color, this.clip = true});
   final Widget child;
   final EdgeInsets padding;
   final double radius;
@@ -346,7 +346,7 @@ class RcInput extends StatelessWidget {
     // A sunk fill and no edge. Focused, the focus ring's colour as a 1.5 px edge; an error keeps the ink edge (1.5 px)
     // and shows a warning icon in the field; the message under it is bold.
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(6),
       borderSide: error ? BorderSide(color: c.ink, width: 1.5) : BorderSide.none,
     );
     return SizedBox(
@@ -377,7 +377,7 @@ class RcInput extends StatelessWidget {
           enabledBorder: border,
           border: border,
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
             borderSide: BorderSide(color: c.focus, width: 1.5),
           ),
         ),
@@ -436,7 +436,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
         color: c.raised,
         elevation: 6,
         menuPadding: const EdgeInsets.all(4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: BorderSide(color: c.line)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.line)),
         constraints: BoxConstraints(minWidth: (w.width != null && w.width!.isFinite) ? w.width! : 160),
         itemBuilder: (_) => [
           for (final it in w.items)
@@ -449,7 +449,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
                 padding: const EdgeInsets.only(left: 10, right: 8),
                 decoration: BoxDecoration(
                   color: it.$1 == w.value ? (c.dark ? kBrand.withValues(alpha: .2) : c.brandSoft) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(children: [
                   Expanded(
@@ -469,7 +469,7 @@ class _RcSelectState<T> extends State<RcSelect<T>> {
           padding: const EdgeInsets.only(left: 10, right: 8),
           decoration: BoxDecoration(
             color: c.sunk,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
             mainAxisSize: w.width == null ? MainAxisSize.min : MainAxisSize.max,

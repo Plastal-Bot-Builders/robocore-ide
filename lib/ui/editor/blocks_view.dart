@@ -215,7 +215,7 @@ class _CatButton extends StatelessWidget {
           padding: const EdgeInsets.only(left: 12, right: 10),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Stack(clipBehavior: Clip.none, children: [
             if (on && !compact)
@@ -332,7 +332,7 @@ class _SelectPill extends StatelessWidget {
       onSelected: onChanged,
       position: PopupMenuPosition.under,
       color: c.raised,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: BorderSide(color: c.line)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.line)),
       itemBuilder: (_) => [
         for (final o in opts)
           PopupMenuItem<String>(
@@ -523,7 +523,7 @@ class _Canvas extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.raised,
               border: Border.all(color: c.line),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(8),
               boxShadow: const [BoxShadow(color: Color(0x1A1B2A41), blurRadius: 6, offset: Offset(0, 2))],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -605,7 +605,7 @@ class _StackView extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c.surface,
                 border: Border.all(color: c.line, width: 2),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(7),
               ),
               child: Text('Drop or click blocks to add them here', style: tCaption(c, color: c.faint)),
             )

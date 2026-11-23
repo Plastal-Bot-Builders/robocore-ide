@@ -71,17 +71,20 @@
     blocks: '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
     plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
   };
+  // The "Zambian stones" palette (Fred, 2026-11-23): sapphire, copper, amethyst, petrol, olive gold, malachite, garnet
+  // and slate beside the brand's yellow and navy. Each takes cream text at 4.5:1 or more (WCAG). The last colour is
+  // the Navy theme's: the same stone lifted to 3:1 against its workspace, cream text still at 4.5:1.
   const CATS = [
     ['events', 'Events', YELLOW, 'zap'],
-    ['movement', 'Movement', '#2F6BBF', 'bot'],
-    ['motors', 'Motors', '#B84A26', 'gauge'],
-    ['light', 'Light & Sound', '#7A4FB5', 'lightbulb'],
-    ['sensors', 'Sensors', '#0F7680', 'radio'],
-    ['control', 'Control', '#8A5A00', 'repeat'],
-    ['operators', 'Operators', '#2F7A4C', 'sigma'],
-    ['variables', 'Variables', '#B23E7A', 'variable'],
-    ['myblocks', 'My Blocks', '#5B6577', 'blocks'],
-    ['pins', 'Pins & Serial', INK, 'plug'],
+    ['movement', 'Movement', '#2C5A9D', 'bot', '#406EB3'],
+    ['motors', 'Motors', '#904016', 'gauge', '#A8562E'],
+    ['light', 'Light & Sound', '#744388', 'lightbulb', '#8C5AA1'],
+    ['sensors', 'Sensors', '#006C7B', 'radio', '#007A88'],
+    ['control', 'Control', '#6B5B00', 'repeat', '#7E6E00'],
+    ['operators', 'Operators', '#006E3B', 'sigma', '#1A7E4A'],
+    ['variables', 'Variables', '#913949', 'variable', '#AB505F'],
+    ['myblocks', 'My Blocks', '#525F6F', 'blocks', '#626E7F'],
+    ['pins', 'Pins & Serial', INK, 'plug', PINS_NAVY],
   ];
   // Lucide icons are drawn on a 24 px grid; at 14-18 px they need a heavier line to read like the design's.
   const svgUri = (paths, stroke, size = 24, weight = 2) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -96,8 +99,8 @@
 
   function theme(navy) {
     const styles = {};
-    for (const [k, , c] of CATS) {
-      const primary = navy && k === 'pins' ? PINS_NAVY : c;
+    for (const [k, , c, , onNavy] of CATS) {
+      const primary = navy && onNavy ? onNavy : c;
       styles['rc_' + k] = { colourPrimary: primary, colourSecondary: darker(primary, 0.85), colourTertiary: INK };
     }
     // Blockly's own blocks take the RoboCore colours (and categories, see defineBlocks()).
@@ -182,11 +185,11 @@
       '.robocore-renderer .rcNavyText > .blocklyOutlinePath { fill: rgba(27,42,65,.14) !important; }',
       // A dropdown's menu: white, the chosen option on a yellow row with a check on the right (the design's Menu Item).
       // A 1 px edge and a shadow set the menu apart.
-      '.blocklyDropDownDiv { background: #FFFFFF !important; border: 1px solid rgba(27,42,65,.16) !important; border-radius: 4px !important;' +
+      '.blocklyDropDownDiv { background: #FFFFFF !important; border: 1px solid rgba(27,42,65,.16) !important; border-radius: 8px !important;' +
         ' box-shadow: 0 8px 24px rgba(27,42,65,.16) !important; }',
       '.blocklyDropDownDiv .blocklyDropDownArrow { background: #FFFFFF !important; border-color: rgba(27,42,65,.16) !important; }',
       '.blocklyDropDownDiv .blocklyMenu { padding: 4px !important; }',
-      '.blocklyDropDownDiv .blocklyMenuItem { position: relative; border-radius: 4px; padding: 7px 36px 7px 10px !important; min-width: 120px;' +
+      '.blocklyDropDownDiv .blocklyMenuItem { position: relative; border-radius: 6px; padding: 7px 36px 7px 10px !important; min-width: 120px;' +
         ' font: 500 13px Barlow, sans-serif; }',
       '.blocklyDropDownDiv .blocklyMenuItemContent { color: ' + INK + ' !important; }',
       '.blocklyDropDownDiv .blocklyMenuItemHighlight { background: #F0EDE7 !important; }',
@@ -214,8 +217,11 @@
       '.blocklyToolboxCategoryContainer { margin: 0 0 ' + z(2) + '; }',
       '.blocklyToolboxCategory { position: relative; height: ' + z(34) + '; line-height: ' + z(34) + '; margin: 0;' +
         ' padding: 0 ' + z(8) + ' 0 ' + z(10) + ' !important;' +
-        ' border-radius: 4px; border-left: none !important; cursor: pointer; }',
-      '.blocklyTreeRowContentContainer { display: flex; align-items: center; gap: ' + z(8) + '; height: ' + z(34) + '; }',
+        ' border-radius: 6px; border-left: none !important; cursor: pointer; }',
+      '.blocklyTreeRowContentContainer { display: flex; flex-direction: row !important; align-items: center; gap: ' + z(8) + '; height: ' + z(34) + '; }',
+      // (The continuous list's add-on centres the names under a dot; the design's rows stay as they were.)
+      '.blocklyToolbox .blocklyToolboxCategory { height: ' + z(34) + ' !important; }',
+      '.blocklyToolbox .blocklyToolboxCategoryLabel { margin: 0 !important; text-align: left !important; }',
       '.blocklyToolboxCategoryLabel { font: 500 ' + z(13) + '/' + z(16) + ' Barlow, sans-serif; color: #5B6573; white-space: nowrap; }',
       '.blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(27,42,65,.05); }',
       '.blocklyToolboxSelected { background: #FCE9BF !important; }',
@@ -228,6 +234,10 @@
       '.robocore-navy-theme .blocklyToolboxSelected .blocklyToolboxCategoryLabel { color: ' + CREAM + ' !important; }',
       '.blocklyWidgetDiv .blocklyMenu, .blocklyDropDownDiv { font-family: Barlow, sans-serif; }',
       // The flyout: a title (category swatch + name) over the blocks, and the design's buttons.
+      // A block longer than the list shows whole over the workspace while the pointer is over it (clipLongBlocks).
+      '.injectionDiv .blocklyFlyout { overflow: visible; }',
+      '.injectionDiv .blocklyFlyout .blocklyBlockCanvas > .rcLong:hover { clip-path: none !important; }',
+      '.injectionDiv .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { text-transform: uppercase; }',
       '.injectionDiv .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { font: 600 18px "Barlow Condensed", Barlow, sans-serif;' +
         ' letter-spacing: .54px; fill: ' + INK + ' !important; }',
       '.robocore-navy-theme .blocklyFlyout .rcFlyoutTitle > .blocklyFlyoutLabelText { fill: ' + CREAM + ' !important; }',
@@ -263,48 +273,174 @@
       '.robocore-renderer.injectionDiv { --blockly-active-node-color: ' + INK + '; --blockly-active-tree-color: ' + INK + '; }',
       '.robocore-renderer.robocore-navy-theme.injectionDiv, .robocore-renderer.injectionDiv .robocore-navy-theme {' +
         ' --blockly-active-node-color: ' + YELLOW + '; --blockly-active-tree-color: ' + YELLOW + '; }',
-      '.robocore-renderer .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + INK + '; stroke-width: 2.5px; }',
+      // One thin outline for every block (Blockly's glow made a thick ring on most colours): navy on paper, yellow on
+      // the navy theme, with the exceptions below.
+      '.robocore-renderer .blocklySelected > .blocklyPath.blocklyPathSelected { filter: none !important; stroke: ' + INK + '; stroke-width: 1.5px; }',
+      '.robocore-navy-theme .blocklySelected > .blocklyPath.blocklyPathSelected { stroke: ' + YELLOW + '; }',
+      '.robocore-renderer .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + INK + '; stroke-width: 1.5px; }',
       '.blocklyKeyboardNavigation .robocore-renderer .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
         ' .blocklyKeyboardNavigation.robocore-renderer .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + INK + '; }',
       '.robocore-navy-theme .rcNavyText.blocklySelected > .blocklyPath.blocklyPathSelected { stroke: ' + CREAM + '; }',
       '.blocklyKeyboardNavigation .robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus,' +
         ' .blocklyKeyboardNavigation.robocore-navy-theme .rcNavyText > .blocklyPath.blocklyActiveFocus { stroke: ' + CREAM + '; }',
-      '.robocore-renderer .rcInkBlock.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + YELLOW + '; stroke-width: 2.5px; }',
+      '.robocore-renderer .rcInkBlock.blocklySelected > .blocklyPath.blocklyPathSelected { filter: none; stroke: ' + YELLOW + '; stroke-width: 1.5px; }',
       '.blocklyKeyboardNavigation .robocore-renderer .rcInkBlock > .blocklyPath.blocklyActiveFocus,' +
         ' .blocklyKeyboardNavigation.robocore-renderer .rcInkBlock > .blocklyPath.blocklyActiveFocus { stroke: ' + YELLOW + '; }',
       '.robocore-renderer .blocklyHighlightedConnectionPath { filter: drop-shadow(0 0 1px ' + INK + '); }',
-      // A round chip in the category's colour with its icon (the design's toolbox).
-      '.rcCatIcon { display: inline-block; flex: none; width: ' + z(22) + '; height: ' + z(22) + '; border-radius: 50%;' +
-        ' background-repeat: no-repeat; background-position: center; background-size: ' + z(14) + ' ' + z(14) + '; }',
-      ...CATS.map(([k, , c, icon]) => `.rcCat_${k} { background-color: ${c}; background-image: url("${svgUri(ICONS[icon], k === 'events' ? INK : CREAM, 24, 2.6)}"); }`),
-      // On the navy toolbox the navy Pins & Serial chip takes the dark theme's lighter blue.
-      '.robocore-navy-theme .rcCat_pins { background-color: ' + PINS_NAVY + '; }',
+      // A plain round chip in the category's colour (Fred, 2026-11-23: no icon inside).
+      '.rcCatIcon { display: inline-block; flex: none; width: ' + z(22) + '; height: ' + z(22) + '; border-radius: 50%; }',
+      ...CATS.map(([k, , c]) => `.rcCat_${k} { background-color: ${c}; }`),
+      // On the navy toolbox the chips take the Navy theme's lifted colours (and Pins & Serial its lighter blue).
+      ...CATS.filter((x) => x[4]).map(([k, , , , n]) => `.robocore-navy-theme .rcCat_${k} { background-color: ${n}; }`),
     ].join('\n');
     document.head.appendChild(css);
   }
 
-  // The flyout as in the design: 16 px padding and gaps, and a title with the category's colour swatch.
+  // The block list: every category's blocks in one list that scrolls from one category to the next, as in Scratch and
+  // LEGO SPIKE (@blockly/continuous-toolbox, vendor/blockly/continuous-toolbox.js). A category's row scrolls the list
+  // to it, and scrolling lights the row of the category in view. The list is closed until a category is chosen, and
+  // closes as Blockly's always did: a block taken out of it, a click on the workspace, or the same category again.
+  // Its blocks are drawn smaller than the workspace's (a block taken out takes the workspace's size), and the list
+  // keeps one width: a block longer than it is cut at the edge and shows whole under the pointer (clipLongBlocks).
+  const FLYOUT_SCALE = 0.75, FLYOUT_W = 240;
   function registerFlyout() {
-    class RcFlyout extends Blockly.VerticalFlyout {
+    window.registerContinuousToolbox();
+    // Keep the design's category rows (colour chip + name, one row each): the add-on swaps in its own look (a dot over
+    // the name), which the scrolling list doesn't need. Its CSS for those rows is overridden below (!important).
+    Blockly.registry.register(Blockly.registry.Type.TOOLBOX_ITEM, Blockly.ToolboxCategory.registrationName, Blockly.ToolboxCategory, true);
+    class RcToolbox extends window.ContinuousToolbox {
+      // The list is built as Blockly starts, so Variables' and My Blocks' contents (filled in by the workspace's
+      // callbacks) must be known before then.
+      init() {
+        registerMyBlocks(this.getWorkspace());
+        // Not the add-on's init, which opens the list straight away; only its refresh when blocks change.
+        Blockly.Toolbox.prototype.init.call(this);
+        this.getWorkspace().addChangeListener((e) => {
+          if (e.type === Blockly.Events.BLOCK_CREATE || e.type === Blockly.Events.BLOCK_DELETE || e.type === Blockly.Events.BLOCK_CHANGE) {
+            this.refreshSelection();
+          }
+        });
+      }
+      // A category opens the list right at its blocks; with the list open, another category scrolls there; the same
+      // category again closes it.
+      updateFlyout_(oldItem, newItem) {
+        const flyout = this.getFlyout();
+        if (!newItem || oldItem === newItem) {
+          flyout.hide();
+        } else if (!flyout.isVisible()) {
+          flyout.show(this.getInitialFlyoutContents());
+          flyout.jumpToCategory(newItem);
+        } else {
+          flyout.scrollToCategory(newItem);
+        }
+      }
+      // Blockly's own rule (the add-on keeps a category chosen, for a list that never closes).
+      shouldDeselectItem_(oldItem, newItem) {
+        return !!oldItem && (!oldItem.isCollapsible() || oldItem !== newItem);
+      }
+      // The list lights the category in view as it scrolls: the same one again changes nothing (with the rule above it
+      // would have gone dark, which is why the light sometimes vanished).
+      selectCategoryByName(name) {
+        if (this.getSelectedItem()?.getName() === name) return;
+        super.selectCategoryByName(name);
+      }
+      // One click opens the list at a category, or takes the open list there; a click on the category the list is
+      // already showing closes it. (Blockly closes on any click on the lit category, also when the list has scrolled
+      // on within it: then this click goes back to its start, and the next one closes.)
+      onClick_(e) {
+        const id = e.target && e.target.getAttribute ? e.target.getAttribute('id') : null;
+        const item = id ? this.getToolboxItemById(id) : null;
+        const flyout = this.getFlyout();
+        if (item && item === this.getSelectedItem() && flyout.isVisible() && !flyout.isAtCategory(item)) {
+          flyout.scrollToCategory(item);
+          e.preventDefault();
+          return;
+        }
+        super.onClick_(e);
+      }
+      // Variables and My Blocks change as the student works: their contents come from the workspace's callbacks and
+      // are filled in here, each time the list is built (Blockly 13.3's flyout can't expand a category inside the
+      // list; it showed "%{BKY_NEW_VARIABLE}" and an empty My Blocks).
+      getInitialFlyoutContents() {
+        const ws = this.getWorkspace();
+        const text = (s) => Blockly.utils.parsing.replaceMessageReferences(s);
+        return this.getToolboxItems().flatMap((item) => this.convertToolboxItemToFlyoutItems(item)).flatMap((x) => {
+          if (!x.custom) return [x];
+          const fill = ws.getToolboxCategoryCallback(x.custom);
+          return (fill ? fill(ws) : []).map((y) => (typeof y.text === 'string' ? Object.assign({}, y, { text: text(y.text) }) : y));
+        });
+      }
+      // Each category starts with the design's title (a colour swatch, the name in capitals). Its text is the
+      // category's name: that is how the list finds where each category starts.
+      convertToolboxItemToFlyoutItems(item) {
+        const out = window.ContinuousToolbox.prototype.convertToolboxItemToFlyoutItems.call(null, item);
+        const c = out.length && String(out[0].kind).toLowerCase() === 'label' ? CATS.find((x) => x[1] === out[0].text) : null;
+        if (c) out[0] = { kind: 'label', text: c[1], 'web-class': 'rcFlyoutTitle rcTitle_' + c[0] };
+        return out;
+      }
+    }
+    Blockly.registry.register(Blockly.registry.Type.TOOLBOX, 'rcToolbox', RcToolbox);
+    class RcFlyout extends window.ContinuousFlyout {
       constructor(options) {
         super(options);
         this.MARGIN = 16;
         this.GAP_Y = 16;
+        this.autoClose = true; // closes when a block is taken out or the workspace is clicked (see RcToolbox)
+      }
+      // Opening on a category: straight to it (scrolling to it is for a list that is already open).
+      jumpToCategory(category) {
+        const y = this.getCategoryScrollPosition(category.getName());
+        if (y === null) return;
+        const fws = this.getWorkspace();
+        const m = fws.getMetrics();
+        fws.scrollbar?.setY(Math.min(y * fws.scale, Math.max(0, m.scrollHeight - m.viewHeight)));
       }
       show(contents) {
         super.show(contents);
         decorateFlyout(this.getWorkspace().getCanvas());
+        clipLongBlocks(this);
+        this.syncCategory();
       }
-      // The palette keeps its size when the workspace zooms (as in Scratch and the design); Blockly's default
-      // follows the workspace. A block taken out of it takes the workspace's size.
+      // Every scroll step (wheel, trackpad, scroll bar, the scroll to a chosen category) passes here, so the lit
+      // category follows the list at once (the add-on waited for Blockly's viewport events, which come late).
+      setMetrics_(xy) {
+        super.setMetrics_(xy);
+        this.syncCategory();
+      }
+      selectCategoryByScrollPosition() {
+        this.syncCategory();
+      }
+      // Lights the category whose title has reached the top of the list (the first one above the first title).
+      // While the list scrolls to a chosen category, that one stays lit.
+      syncCategory() {
+        const tb = this.targetWorkspace.getToolbox();
+        if (!tb || !this.isVisible() || this.scrollTarget !== undefined || !this.scrollPositions.size) return;
+        const fws = this.getWorkspace();
+        const y = -fws.scrollY / fws.scale + 2;
+        let name = this.scrollPositions.keys().next().value;
+        for (const [n, top] of this.scrollPositions) {
+          if (y < top) break;
+          name = n;
+        }
+        if (tb.getSelectedItem()?.getName() !== name) tb.selectCategoryByName(name);
+      }
+      // Whether the list shows this category from its title (or is as far down as it goes).
+      isAtCategory(category) {
+        const y = this.getCategoryScrollPosition(category.getName());
+        if (y === null) return true;
+        const fws = this.getWorkspace();
+        const m = fws.getMetrics();
+        return Math.abs(-fws.scrollY - Math.min(y * fws.scale, Math.max(0, m.scrollHeight - m.viewHeight))) < 6;
+      }
+      // The list keeps its size when the workspace zooms (as in Scratch and the design).
       getFlyoutScale() {
-        return 1;
+        return FLYOUT_SCALE;
       }
-      // At least the design's 288 px; Blockly fits the flyout to its widest block.
+      // One width whatever the blocks (Blockly would fit it to the widest block).
       reflowInternal_() {
         super.reflowInternal_();
-        if (this.width_ < 288) {
-          this.width_ = 288;
+        if (this.width_ !== FLYOUT_W) {
+          this.width_ = FLYOUT_W;
           this.position();
           this.targetWorkspace.resizeContents();
           this.targetWorkspace.recordDragTargets();
@@ -327,18 +463,31 @@
     return e;
   }
 
+  // A block longer than the list is cut at the list's edge (a clip on the block), and shows whole while the pointer is
+  // over it (the CSS rule .rcLong:hover drops the clip), so the list keeps one width.
+  function clipLongBlocks(flyout) {
+    const fw = flyout.getWorkspace();
+    const room = flyout.getWidth() / fw.scale - 6; // workspace units, with a little space before the edge
+    for (const b of fw.getTopBlocks(false)) {
+      const root = b.getSvgRoot();
+      const cut = b.getRelativeToSurfaceXY().x + b.getHeightWidth().width - room;
+      root.classList.toggle('rcLong', cut > 0);
+      root.style.clipPath = cut > 0 ? `inset(0 ${cut.toFixed(1)}px 0 0) stroke-box` : '';
+    }
+  }
+
   // Blockly centres a label's text; the title starts at the left, after a 14 px swatch.
   function decorateFlyout(canvas) {
     for (const g of canvas.querySelectorAll('.rcFlyoutTitle')) {
       if (g.querySelector('.rcSwatch')) continue;
       const text = g.querySelector('.blocklyFlyoutLabelText');
       const key = [...g.classList].find((c) => c.startsWith('rcTitle_')).slice(8);
-      const navy = CTX.theme === 'navy' && key === 'pins';
+      const cat = CATS.find((x) => x[0] === key);
       text.setAttribute('text-anchor', 'start');
       text.setAttribute('x', '24');
       const b = text.getBBox();
       svgEl('rect', { class: 'rcSwatch', x: 0, y: b.y + b.height / 2 - 7, width: 14, height: 14, rx: 4,
-        fill: navy ? PINS_NAVY : CATS.find((x) => x[0] === key)[2] }, g);
+        fill: CTX.theme === 'navy' && cat[4] ? cat[4] : cat[2] }, g);
     }
   }
 
@@ -699,12 +848,11 @@
   const num = (v) => ({ shadow: { type: 'math_number', fields: { NUM: v } } });
   const txt = (v) => ({ shadow: { type: 'text', fields: { TEXT: v } } });
   const blk = (type, inputs, extra) => Object.assign({ kind: 'block', type }, inputs ? { inputs } : {}, extra || {});
-  // Each flyout starts with its category's title (the design's swatch + name; see decorateFlyout).
-  const title = (key) => ({ kind: 'label', text: CATS.find((x) => x[0] === key)[1].toUpperCase(), 'web-class': 'rcFlyoutTitle rcTitle_' + key });
+  // Each category's title (the design's swatch + name) is added by RcToolbox, where the list scrolls to.
   const category = (key, contents, custom) => {
     const c = CATS.find((x) => x[0] === key);
     return Object.assign({ kind: 'category', name: c[1], categorystyle: key, cssConfig: { icon: 'rcCatIcon rcCat_' + key } },
-      custom ? { custom } : { contents: [title(key), ...contents] });
+      custom ? { custom } : { contents });
   };
   const TOOLBOX = {
     kind: 'categoryToolbox',
@@ -744,9 +892,9 @@
 
   // My Blocks: Make a block… and a call block for each block made (Blockly's procedures, no return value).
   function registerMyBlocks(w) {
-    w.registerToolboxCategoryCallback('RC_VARIABLES', (ws) => [title('variables'), ...Blockly.Variables.flyoutCategory(ws)]);
+    w.registerToolboxCategoryCallback('RC_VARIABLES', (ws) => Blockly.Variables.flyoutCategory(ws));
     w.registerToolboxCategoryCallback('RC_MYBLOCKS', (ws) => {
-      const items = [title('myblocks'), { kind: 'button', text: 'Make a block…', callbackkey: 'rcMakeBlock' }];
+      const items = [{ kind: 'button', text: 'Make a block…', callbackkey: 'rcMakeBlock' }];
       for (const [name, params] of Blockly.Procedures.allProcedures(ws)[0]) {
         items.push({ kind: 'block', type: 'procedures_callnoreturn', extraState: { name, params } });
       }
@@ -1372,16 +1520,22 @@
         // Zoom and delete are the app's floating view tools (editor_page.dart), so Blockly draws neither control.
         trashcan: false,
         sounds: false,
-        plugins: { flyoutsVerticalToolbox: 'rcFlyout' },
+        // Blockly's own metrics: the list floats over the workspace while open (the add-on's metrics are for a list
+        // that never closes, and would keep the workspace shifted right).
+        plugins: { toolbox: 'rcToolbox', flyoutsVerticalToolbox: 'rcFlyout' },
       });
-      registerMyBlocks(ws);
-      drawControls(ws);
+      drawControls(ws); // (Variables' and My Blocks' callbacks are registered by RcToolbox.init)
       // The app hides this frame while the C++ tab is open; re-measure when it shows again.
       new ResizeObserver(() => { if (ws) { Blockly.svgResize(ws); drawTitle(); } }).observe(document.getElementById('host'));
       ws.addChangeListener(Blockly.Events.disableOrphans);
       ws.addChangeListener((e) => {
         if (e.type === Blockly.Events.VIEWPORT_CHANGE) reportZoom();
         if (e.type === Blockly.Events.SELECTED) reportSelection();
+        // A block is outlined while it is dragged and let go of when dropped (Blockly keeps it selected until the next
+        // click elsewhere): focus goes back to the workspace, which draws no outline. (setSelected(null) throws in 13.)
+        if (e.type === Blockly.Events.BLOCK_DRAG && !e.isStart) {
+          setTimeout(() => { if (ws && Blockly.common.getSelected()) Blockly.getFocusManager().focusNode(ws); }, 0);
+        }
         // After Blockly has put the event on its undo stack.
         setTimeout(reportHistory, 0);
         if (loading || e.isUiEvent) return;
@@ -1909,6 +2063,7 @@
       await loadScript('vendor/blockly/blockly_compressed.js');
       await loadScript('vendor/blockly/blocks_compressed.js');
       await loadScript('vendor/blockly/msg/en.js');
+      await loadScript('vendor/blockly/continuous-toolbox.js');
       defineBlocks();
       registerRenderer();
       registerFlyout();

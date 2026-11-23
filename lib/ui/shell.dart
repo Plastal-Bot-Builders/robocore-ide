@@ -395,7 +395,7 @@ class _Toast extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           border: error ? null : Border.all(color: c.line),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: popShadow,
         ),
         child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -602,7 +602,7 @@ class TopBar extends StatelessWidget {
                     height: 32,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+                        color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
                     child: SvgPicture.string(_gearSvg,
                         width: 17, height: 17, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn), excludeFromSemantics: true),
                   ),
@@ -645,14 +645,14 @@ class UpdateBanner extends StatelessWidget {
 
     Widget button(String label, VoidCallback onTap, {bool primary = false, String? icon}) => Hover(
           onTap: onTap,
-          radius: 4,
+          radius: 12,
           builder: (context, h) => Container(
             height: phone ? 40 : 48,
             padding: EdgeInsets.symmetric(horizontal: primary ? 22 : 18),
             decoration: BoxDecoration(
               color: primary ? (h ? kBrandPressed : kBrand) : (h ? Colors.white.withValues(alpha: .08) : Colors.transparent),
               border: primary ? null : Border.all(color: const Color(0xFF5B6577), width: 2),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               if (icon != null) ...[RcIcon(icon, size: 18, color: primary ? kNavy : fg), const SizedBox(width: 8)],
@@ -811,7 +811,7 @@ class EditorTopBar extends StatelessWidget {
               child: Container(
                 height: 44,
                 padding: const EdgeInsets.only(left: 8, right: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Flexible(child: _ProjectName(p: p)),
                   if (!narrow) ...[const SizedBox(width: 4), _SavePill(p: p), const SizedBox(width: 6)],
@@ -844,7 +844,7 @@ class EditorTopBar extends StatelessWidget {
                 width: 36, // with the 6 px gap, the gear sits where it is on Home's top bar
                 height: 40,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: h ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
                 child: SvgPicture.string(_gearSvg,
                     width: 18, height: 18, colorFilter: const ColorFilter.mode(kNavy, BlendMode.srcIn), excludeFromSemantics: true),
               ),
@@ -868,14 +868,14 @@ class _BarButton extends StatelessWidget {
   Widget build(BuildContext context) => Hover(
         onTap: onTap,
         tooltip: tip,
-        radius: 4,
+        radius: 12,
         builder: (context, h) => Container(
           width: 44,
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: filled ? (h ? .75 : .55) : (h ? .3 : 0)),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: RcIcon(icon, size: 22, color: kNavy),
         ),
@@ -893,13 +893,13 @@ class _ModeSwitch extends StatelessWidget {
       final on = mode == m;
       return Hover(
         onTap: () => s.setMode(m),
-        radius: 4,
+        radius: 9,
         builder: (context, h) => Container(
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: on ? kNavy : (h ? Colors.white.withValues(alpha: .6) : Colors.transparent),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             RcIcon(m == 'blocks' ? 'blocks' : 'code', size: 16, color: on ? kCream : kNavy),
@@ -912,7 +912,7 @@ class _ModeSwitch extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .55), borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .55), borderRadius: BorderRadius.circular(12)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [seg('blocks', 'Blocks'), const SizedBox(width: 4), seg('code', 'Code')]),
     );
   }
@@ -939,7 +939,7 @@ class _TopPrimary extends StatelessWidget {
         child: Container(
           height: 32,
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(color: h && !busy ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: h && !busy ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(6)),
           child: Stack(children: [
             Padding(
               padding: const EdgeInsets.only(left: 12, right: 14),
@@ -980,7 +980,7 @@ class _PrimaryIcon extends StatelessWidget {
           width: 34,
           height: 32,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: h ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: h ? kNavyHover : kNavy, borderRadius: BorderRadius.circular(6)),
           child: RcIcon(icon, size: 16, color: kCream),
         ),
       );
@@ -1016,7 +1016,7 @@ class _ProjectName extends StatelessWidget {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-            color: h || open ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+            color: h || open ? Colors.white.withValues(alpha: .3) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Flexible(
             child: Text(p.name,
@@ -1075,7 +1075,7 @@ class _BoardChipState extends State<BoardChip> {
           // White with no edge (the design's Board Selector since v1.0.1); open, an up chevron.
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const RcIcon('chip', size: 18, color: kNavy),
@@ -1122,7 +1122,7 @@ class BoardMenu extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.raised,
         border: Border.all(color: c.line),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: popShadow,
       ),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1139,7 +1139,7 @@ class BoardMenu extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: id == cur ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(children: [
                   RcIcon('chip', size: 18, color: c.ink),
@@ -1279,7 +1279,7 @@ class _SearchBoxState extends State<SearchBox> {
       popup: (context) => Container(
         width: 320,
         padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4), boxShadow: popShadow),
+        decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(10), boxShadow: popShadow),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (ps.isNotEmpty) _h(c, 'Projects'),
           for (final p in ps)
@@ -1351,7 +1351,7 @@ class _SearchBoxState extends State<SearchBox> {
           onTap: onTap,
           builder: (context, h) => Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: h ? c.sunk : Colors.transparent, borderRadius: BorderRadius.circular(6)),
             child: Row(children: [
               RcIcon(icon, size: 16, color: c.ink),
               const SizedBox(width: 10),
@@ -1408,7 +1408,7 @@ class SideBar extends StatelessWidget {
               decoration: BoxDecoration(
                 // The open project: a brandSoft tile, like the current page in the list below.
                 color: s.view == Screen.editor ? c.brandSoft : (h ? c.sunk : Colors.transparent),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
                 RcIcon(rp.mode == 'blocks' ? 'blocks' : 'code', size: 18, color: c.ink),
@@ -1472,7 +1472,7 @@ class _NavItem extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 12),
           decoration: BoxDecoration(
             color: on ? c.brandSoft : (h ? c.ink.withValues(alpha: .05) : Colors.transparent),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Stack(clipBehavior: Clip.none, children: [
             if (on)

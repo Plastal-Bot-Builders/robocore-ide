@@ -402,7 +402,7 @@ class CodeViewState extends State<CodeView> {
         child: Container(
           width: 260,
           padding: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(4), boxShadow: popShadow),
+          decoration: BoxDecoration(color: c.raised, border: Border.all(color: c.line), borderRadius: BorderRadius.circular(8), boxShadow: popShadow),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             for (var i = 0; i < _ac.length; i++)
               GestureDetector(

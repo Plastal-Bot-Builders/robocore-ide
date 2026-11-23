@@ -21,7 +21,7 @@ class ProjectCard extends StatelessWidget {
     return Hover(
       onTap: () => s.openProject(p.id),
       builder: (context, h) => EdgedBox(
-        radius: 4,
+        radius: 10,
         // A 1 px edge that darkens when hovered, and the card lifts to the raised surface.
         edge: h ? c.faint : c.line,
         color: h ? c.raised : c.surface,
@@ -78,8 +78,8 @@ class Thumb extends StatelessWidget {
   final bool blocks;
 
   // Category colours of the blocks (web/robocore_editors.js CATS).
-  static const _events = kBrand, _pins = kNavy, _light = Color(0xFF7A4FB5), _control = Color(0xFF8A5A00);
-  static const _movement = Color(0xFF2F6BBF), _sensors = Color(0xFF0F7680);
+  static const _events = kBrand, _pins = kNavy, _light = Color(0xFF744388), _control = Color(0xFF6B5B00);
+  static const _movement = Color(0xFF2C5A9D), _sensors = Color(0xFF006C7B);
 
   @override
   Widget build(BuildContext context) {

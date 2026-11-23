@@ -71,7 +71,7 @@ class LibrariesPage extends StatelessWidget {
               ? Btn('Remove', icon: 'trash', small: true, onTap: () => s.uninstall(id))
               : Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: c.sunk, borderRadius: BorderRadius.circular(6)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     RcIcon('check', size: 16, color: c.ink),
                     const SizedBox(width: 6),

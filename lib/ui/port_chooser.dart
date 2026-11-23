@@ -52,7 +52,7 @@ class _PortChooserState extends State<_PortChooser> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: on ? c.brandSoft : (h ? Color.lerp(c.sunk, c.ink, .06) : c.sunk),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(children: [
                         RcIcon('chip', size: 20, color: c.ink),
