@@ -321,6 +321,9 @@ class AppState extends ChangeNotifier {
   bool usbOpen = false;
   String? usbLabel;
   int? uploadPct;
+
+  /// How many uploads have finished well (to the preview board or over USB): the Upload button shows a tick on each.
+  int uploadsDone = 0;
   int _lastPctLine = -10;
   String _rxBuf = '';
   Timer? _rxTimer;
@@ -1788,6 +1791,7 @@ class AppState extends ChangeNotifier {
     outLine('Hard resetting via RTS pin…');
     outLine('Uploaded to the preview ${b.name}. The sketch is now running in the simulator.', 'ok');
     busy = null;
+    uploadsDone++;
     lastRun = r;
     lastRunName = p.name;
     serialPush('— ${b.name} reset —', 'sys');
@@ -1945,6 +1949,7 @@ class AppState extends ChangeNotifier {
       serialPush('— ${b.name} restarted with ${p.name} —', 'sys');
       if (!usbOpen) outLine('The Serial Monitor did not reopen by itself. Press Connect in Board Setup to see the output.', 'sys');
       lastRunName = p.name;
+      uploadsDone++;
       setStatus('Uploaded');
     } else {
       outLine('Upload failed: ${res.message}', 'err');
@@ -2051,7 +2056,9 @@ class AppState extends ChangeNotifier {
     if (m == 'code') p.syncCode();
     p.mode = m;
     file = 0;
-    touch(p, immediate: true);
+    // Saved after the usual pause, not at once: writing the projects on the switch's first frame stalled its
+    // crossfade (editor_page.dart, _ModeFade).
+    touch(p);
   }
 
   void openFile(int i) {

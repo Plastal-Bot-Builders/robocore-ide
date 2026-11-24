@@ -110,6 +110,17 @@ class DialogFrame extends StatelessWidget {
 
   Widget _frame(BuildContext context) {
     final c = RC.of(context);
+    // The dialog route fades it in and out; it also settles in from a touch smaller (and goes the same way).
+    final route = ModalRoute.of(context)?.animation;
+    final dialog = _dialog(context, c);
+    if (route == null || MediaQuery.disableAnimationsOf(context)) return dialog;
+    return ScaleTransition(
+      scale: route.drive(Tween(begin: .96, end: 1.0).chain(CurveTween(curve: Curves.easeOutCubic))),
+      child: dialog,
+    );
+  }
+
+  Widget _dialog(BuildContext context, RC c) {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,

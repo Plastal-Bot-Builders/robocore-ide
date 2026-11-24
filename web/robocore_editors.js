@@ -225,6 +225,11 @@
       '.blocklyToolboxCategoryLabel { font: 500 ' + z(13) + '/' + z(16) + ' Barlow, sans-serif; color: #5B6573; white-space: nowrap; }',
       '.blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: rgba(27,42,65,.05); }',
       '.blocklyToolboxSelected { background: #FCE9BF !important; }',
+      // Motion: a row's highlight eases in and out, and the picked row's bar grows from its middle.
+      '.blocklyToolboxCategory { transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1); }',
+      '.blocklyToolboxSelected::before { animation: rcCatBar 200ms cubic-bezier(0.22, 1, 0.36, 1); }',
+      '@keyframes rcCatBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }',
+      '@media (prefers-reduced-motion: reduce) { .blocklyToolboxCategory { transition: none; } .blocklyToolboxSelected::before { animation: none; } }',
       '.blocklyToolboxSelected .blocklyToolboxCategoryLabel { color: ' + INK + ' !important; font-weight: 600; }',
       '.blocklyToolboxSelected::before { content: ""; position: absolute; left: 0; top: ' + z(8) + '; width: 3px; height: ' + z(18) + ';' +
         ' border-radius: 0 2px 2px 0; background: ' + YELLOW + '; }',
@@ -303,6 +308,9 @@
   // Its blocks are drawn smaller than the workspace's (a block taken out takes the workspace's size), and the list
   // keeps one width: a block longer than it is cut at the edge and shows whole under the pointer (clipLongBlocks).
   const FLYOUT_SCALE = 0.75, FLYOUT_W = 240;
+  // Motion (the block list): ease out to arrive, ease in to leave; none when the system asks for less motion.
+  const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)', EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
+  const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
   function registerFlyout() {
     window.registerContinuousToolbox();
     // Keep the design's category rows (colour chip + name, one row each): the add-on swaps in its own look (a dot over
@@ -400,6 +408,38 @@
         decorateFlyout(this.getWorkspace().getCanvas());
         clipLongBlocks(this);
         this.syncCategory();
+      }
+      // The list slides in from the category column and fades (180 ms), and fades back out when it closes (120 ms).
+      // Blockly takes it as closed at once (drops, clicks and the delete area behave as before); only its picture
+      // lingers for the fade, and takes no pointer meanwhile. No motion when the system asks for less.
+      updateDisplay() {
+        const g = this.svgGroup_;
+        const show = !!this.containerVisible && this.isVisible();
+        if (!g || !g.animate || REDUCED_MOTION.matches || show === this.rcShown) {
+          if (show) { this.rcFade?.cancel(); g && (g.style.pointerEvents = ''); }
+          this.rcShown = show;
+          return super.updateDisplay();
+        }
+        this.rcShown = show;
+        this.rcFade?.cancel();
+        if (show) {
+          g.style.pointerEvents = '';
+          super.updateDisplay();
+          this.rcFade = g.animate([{ opacity: 0, translate: '-12px 0' }, { opacity: 1, translate: '0 0' }],
+            { duration: 180, easing: EASE_OUT });
+          this.workspace_.scrollbar?.vScroll?.outerSvg?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: EASE_OUT });
+        } else {
+          this.workspace_.scrollbar?.setContainerVisible(false);
+          g.style.pointerEvents = 'none';
+          const fade = this.rcFade = g.animate([{ opacity: 1, translate: '0 0' }, { opacity: 0, translate: '-8px 0' }],
+            { duration: 120, easing: EASE_IN, fill: 'forwards' });
+          fade.onfinish = () => {
+            if (this.rcFade !== fade) return; // opened again meanwhile
+            super.updateDisplay();
+            fade.cancel();
+            g.style.pointerEvents = '';
+          };
+        }
       }
       // Every scroll step (wheel, trackpad, scroll bar, the scroll to a chosen category) passes here, so the lit
       // category follows the list at once (the add-on waited for Blockly's viewport events, which come late).
@@ -1526,7 +1566,23 @@
       });
       drawControls(ws); // (Variables' and My Blocks' callbacks are registered by RcToolbox.init)
       // The app hides this frame while the C++ tab is open; re-measure when it shows again.
-      new ResizeObserver(() => { if (ws) { Blockly.svgResize(ws); drawTitle(); } }).observe(document.getElementById('host'));
+      // In the web app the hidden editor's frame is 0 × 0 (behind the C++): Blockly then fits its view to nothing
+      // (its own window-resize handler) and forgets where it was scrolled, so Blocks ↔ Code came back at the top
+      // left. Where the blocks were while showing is kept, and given back when the frame shows again.
+      const host = document.getElementById('host');
+      const showing = () => host.clientWidth > 0 && host.clientHeight > 0;
+      let view = null, wasHidden = false;
+      ws.addChangeListener((e) => {
+        if (e.type === Blockly.Events.VIEWPORT_CHANGE && showing()) view = { x: ws.scrollX, y: ws.scrollY };
+      });
+      new ResizeObserver(() => {
+        if (!ws) return;
+        if (!showing()) { wasHidden = true; return; }
+        Blockly.svgResize(ws);
+        drawTitle();
+        if (wasHidden && view) ws.scroll(view.x, view.y);
+        wasHidden = false;
+      }).observe(host);
       ws.addChangeListener(Blockly.Events.disableOrphans);
       ws.addChangeListener((e) => {
         if (e.type === Blockly.Events.VIEWPORT_CHANGE) reportZoom();
@@ -1931,6 +1987,10 @@
       editor = monaco.editor.create(document.getElementById('host'), Object.assign({
         language: 'cpp',
         disableMonospaceOptimizations: true,
+        // Motion: the page scrolls smoothly, the cursor glides to where it goes and its blink fades.
+        smoothScrolling: !REDUCED_MOTION.matches,
+        cursorSmoothCaretAnimation: REDUCED_MOTION.matches ? 'off' : 'on',
+        cursorBlinking: REDUCED_MOTION.matches ? 'blink' : 'smooth',
         theme: CTX.theme === 'navy' ? 'robocore-navy' : 'robocore-paper',
         automaticLayout: true,
         minimap: { enabled: false },

@@ -189,7 +189,9 @@ void main() {
     final state = await _start(tester);
     state.openProject(state.sortedProjects.firstWhere((p) => p.mode == 'code' && p.board == 'v2').id);
     if (!state.panelOpen) state.togglePanel();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(); // builds the new screen (its transition starts here)
+    await tester.pump(const Duration(milliseconds: 300)); // past the page change and the drawer's slide
+    await tester.pump(); // (the old page is taken away on the frame after its fade)
     // Beside the console on a wide window; in the console's Board tab otherwise.
     if (find.text('Motors').evaluate().isEmpty) {
       await tester.tap(find.text('Board').last);
@@ -278,7 +280,9 @@ void main() {
     final state = await _start(tester);
     state.openProject(state.sortedProjects.firstWhere((p) => p.mode == 'code' && p.board == 'v2').id);
     if (!state.panelOpen) state.togglePanel();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(); // builds the new screen (its transition starts here)
+    await tester.pump(const Duration(milliseconds: 300)); // past the page change and the drawer's slide
+    await tester.pump(); // (the old page is taken away on the frame after its fade)
     if (find.text('USER').evaluate().isEmpty) {
       await tester.tap(find.text('Board').last);
       await tester.pump(const Duration(milliseconds: 100));

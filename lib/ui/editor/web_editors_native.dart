@@ -81,12 +81,12 @@ class _Page {
   late final Widget _webView = _win?.view() ?? WebViewWidget(controller: _mac!);
   Uri? _home;
 
-  /// The WebView, under the page's background until the editor is up (while it loads, a WebView is
-  /// blank, and black in dark mode).
-  Widget view({required bool ready, required Object? theme}) => Stack(fit: StackFit.expand, children: [
-        _Steady(child: _webView),
-        if (!ready) ColoredBox(color: theme == 'navy' ? const Color(0xFF17253A) : const Color(0xFFFFFCF5)),
-      ]);
+  /// The WebView, under the page's background whenever WebKit has nothing to show (see _Shown).
+  Widget view({required bool ready, required Object? theme}) => _Shown(
+        ready: ready,
+        color: theme == 'navy' ? const Color(0xFF17253A) : const Color(0xFFFFFCF5),
+        child: _Steady(child: _webView),
+      );
 
   /// The page stays the page: links (e.g. in a hover) do not replace it.
   NavigationDecision _navigate(NavigationRequest r) {
@@ -165,6 +165,65 @@ class _Steady extends StatelessWidget {
       }),
     );
   }
+}
+
+/// An editor's WebView under its page's colour while WebKit has nothing to show:
+/// - until the editor is up (a loading WebView is blank, and black in dark mode);
+/// - for a moment each time it comes back after being hidden (another screen, the C++ pane shut). macOS takes a hidden
+///   WebView out of the window, and WebKit then needs ~¼ s to paint it again: black until it has (seen frame by frame in
+///   a recording of the Mac app, 2026-11-23). The colour holds that long, then fades off the page.
+/// Hidden is TickerMode off (the editor's Offstage on other screens, the C++ pane's Visibility).
+class _Shown extends StatefulWidget {
+  const _Shown({required this.ready, required this.color, required this.child});
+  final bool ready;
+  final Color color;
+  final Widget child;
+
+  @override
+  State<_Shown> createState() => _ShownState();
+}
+
+class _ShownState extends State<_Shown> with SingleTickerProviderStateMixin {
+  // 1 = uncovered. Back from hidden it runs from 0: covered 280 ms, then fading 160 ms.
+  late final _back = AnimationController(vsync: this, duration: const Duration(milliseconds: 440), value: 1);
+  late final _cover = TweenSequence<double>([
+    TweenSequenceItem(tween: ConstantTween(1.0), weight: 280),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeOut)), weight: 160),
+  ]).animate(_back);
+  ValueListenable<TickerModeData>? _shown;
+  var _was = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final t = TickerMode.getValuesNotifier(context);
+    if (t == _shown) return;
+    _shown?.removeListener(_changed);
+    _shown = t..addListener(_changed);
+    _was = t.value.enabled;
+  }
+
+  void _changed() {
+    final now = _shown!.value.enabled;
+    if (now && !_was) _back.forward(from: 0);
+    _was = now;
+  }
+
+  @override
+  void dispose() {
+    _shown?.removeListener(_changed);
+    _back.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
+        widget.child,
+        // (Not painted at all once faded: then nothing of Flutter's sits over the WebView.)
+        IgnorePointer(
+          child: widget.ready ? FadeTransition(opacity: _cover, child: ColoredBox(color: widget.color)) : ColoredBox(color: widget.color),
+        ),
+      ]);
 }
 
 /// The options the page gets: the editor's own, and the display size it draws its content at (see _Steady).

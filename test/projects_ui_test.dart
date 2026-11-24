@@ -39,7 +39,9 @@ void main() {
   testWidgets('card menu: Duplicate, Rename…, Delete… (with its confirm dialog)', (tester) async {
     final s = await _start(tester);
     s.go(Screen.projects);
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(); // builds the new screen (its transition starts here)
+    await tester.pump(const Duration(milliseconds: 300)); // past the page change (the old page fades out over 140 ms)
+    await tester.pump(); // (the old page is taken away on the frame after its fade)
     expect(find.text('5 of 5 projects · saved on this device'), findsOneWidget);
     expect(find.text('New project'), findsWidgets, reason: 'the page has its own New project button');
 

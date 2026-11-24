@@ -297,13 +297,31 @@ class _ShellState extends State<Shell> {
                   StatusBar(phone: phone),
                 ],
               ),
-              if (s.toast != null)
-                Positioned(
-                  left: phone ? 0 : null,
-                  right: phone ? 0 : 24,
-                  bottom: phone ? 44 : 52,
-                  child: phone ? const Center(child: _Toast()) : const _Toast(),
+              // A toast rises and fades in, and fades away when it goes.
+              Positioned(
+                left: phone ? 0 : null,
+                right: phone ? 0 : 24,
+                bottom: phone ? 44 : 52,
+                child: AnimatedSwitcher(
+                  duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 220),
+                  reverseDuration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 160),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, a) => FadeTransition(
+                    opacity: a,
+                    child: SlideTransition(position: Tween(begin: const Offset(0, .25), end: Offset.zero).animate(a), child: child),
+                  ),
+                  child: s.toast == null
+                      ? const SizedBox.shrink()
+                      : KeyedSubtree(
+                          key: ValueKey('${s.toast}|${s.toastBody}|${s.toastError}'),
+                          child: () {
+                            final t = _Toast(title: s.toast!, body: s.toastBody, error: s.toastError, info: s.toastInfo);
+                            return phone ? Center(child: t) : t;
+                          }(),
+                        ),
                 ),
+              ),
             ],
           ),
         ),
@@ -347,7 +365,23 @@ class _ShellState extends State<Shell> {
           offstage: !onEditor,
           child: TickerMode(enabled: onEditor, child: const EditorPage()),
         ),
-      if (!onEditor) _view(s, phone),
+      // The other screens fade through: the new one fades in and rises a little while the old one fades out.
+      // Opening a project, the screen fades away over the editor (whose WebViews show their page colour until drawn).
+      AnimatedSwitcher(
+        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 220),
+        reverseDuration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 140),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [
+          for (final p in previous) IgnorePointer(child: p),
+          if (current != null) current,
+        ]),
+        transitionBuilder: (child, a) => FadeTransition(
+          opacity: a,
+          child: SlideTransition(position: Tween(begin: const Offset(0, .012), end: Offset.zero).animate(a), child: child),
+        ),
+        child: onEditor ? const SizedBox.shrink(key: ValueKey('editor')) : KeyedSubtree(key: ValueKey(s.view), child: _view(s, phone)),
+      ),
     ]);
   }
 
@@ -377,15 +411,19 @@ class _ShellState extends State<Shell> {
 /// A toast as in the design: success and info are white cards (check or info icon); an error is inverted (navy, a
 /// warning icon) — contrast, not colour. A bold title, the message under it, and close.
 class _Toast extends StatelessWidget {
-  const _Toast();
+  /// What it says is given, not read from AppState: a toast that goes keeps its words while it fades away.
+  const _Toast({required this.title, this.body, this.error = false, this.info = false});
+  final String title;
+  final String? body;
+  final bool error, info;
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = RC.of(context);
-    final error = s.toastError;
     final bg = error ? c.ink : c.raised;
     final fg = error ? (c.dark ? kNavy : kCream) : c.ink;
-    final body = s.toastBody;
+    final body = this.body;
     return Material(
       color: Colors.transparent,
       child: Container(
@@ -401,12 +439,12 @@ class _Toast extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Padding(
             padding: const EdgeInsets.only(top: 1),
-            child: RcIcon(error ? 'alert' : (s.toastInfo ? 'info' : 'check'), size: 18, color: fg),
+            child: RcIcon(error ? 'alert' : (info ? 'info' : 'check'), size: 18, color: fg),
           ),
           const SizedBox(width: 12),
           Flexible(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(s.toast ?? '', style: TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, fontWeight: FontWeight.w600, color: fg)),
+              Text(title, style: TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, fontWeight: FontWeight.w600, color: fg)),
               if (body != null && body.isNotEmpty)
                 Text(body, style: TextStyle(fontFamily: fBody, fontSize: 13, height: 18 / 13, color: fg.withValues(alpha: error ? .85 : .8))),
             ]),
@@ -889,23 +927,42 @@ class _ModeSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final mode = s.cur?.mode ?? 'blocks';
+    // The navy pill slides to the picked side as the editors crossfade (kModeSwitch), and the labels change colour
+    // with it. Both sides are one width, so the pill keeps its size on the way.
+    const segW = 100.0, gap = 4.0;
+    final time = MediaQuery.disableAnimationsOf(context) ? Duration.zero : kModeSwitch;
     Widget seg(String m, String label) {
       final on = mode == m;
       return Hover(
         onTap: () => s.setMode(m),
         radius: 9,
-        builder: (context, h) => Container(
+        builder: (context, h) => AnimatedContainer(
+          duration: time,
+          curve: Curves.easeOutCubic,
+          width: segW,
           height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: on ? kNavy : (h ? Colors.white.withValues(alpha: .6) : Colors.transparent),
+            color: !on && h ? Colors.white.withValues(alpha: .6) : Colors.white.withValues(alpha: 0),
             borderRadius: BorderRadius.circular(9),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            RcIcon(m == 'blocks' ? 'blocks' : 'code', size: 16, color: on ? kCream : kNavy),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontFamily: fBody, fontSize: 14, height: 1, fontWeight: FontWeight.w600, color: on ? kCream : kNavy)),
-          ]),
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: on ? kCream : kNavy),
+            duration: time,
+            curve: Curves.easeOutCubic,
+            // (Shrinks to fit the side rather than run over it, with larger text.)
+            builder: (context, ink, _) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  RcIcon(m == 'blocks' ? 'blocks' : 'code', size: 16, color: ink ?? kNavy),
+                  const SizedBox(width: 8),
+                  Text(label, style: TextStyle(fontFamily: fBody, fontSize: 14, height: 1, fontWeight: FontWeight.w600, color: ink)),
+                ]),
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -913,7 +970,23 @@ class _ModeSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: Colors.white.withValues(alpha: .55), borderRadius: BorderRadius.circular(12)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [seg('blocks', 'Blocks'), const SizedBox(width: 4), seg('code', 'Code')]),
+      child: SizedBox(
+        width: segW * 2 + gap,
+        height: 36,
+        child: Stack(children: [
+          AnimatedAlign(
+            duration: time,
+            curve: Curves.easeOutCubic,
+            alignment: mode == 'blocks' ? Alignment.centerLeft : Alignment.centerRight,
+            child: Container(
+              width: segW,
+              height: 36,
+              decoration: BoxDecoration(color: kNavy, borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+          Row(children: [seg('blocks', 'Blocks'), const SizedBox(width: gap), seg('code', 'Code')]),
+        ]),
+      ),
     );
   }
 }

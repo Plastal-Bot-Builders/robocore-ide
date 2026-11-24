@@ -32,8 +32,18 @@ class EditorPage extends StatefulWidget {
   State<EditorPage> createState() => _EditorPageState();
 }
 
-class _EditorPageState extends State<EditorPage> {
+class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin {
   bool _canUndo = false, _canRedo = false; // Blockly's undo stack (BK-09)
+
+  // The parts that slide open and closed beside the editors (_Slide): the Serial Monitor drawer under them, the
+  // "C++ from the blocks" pane beside the blocks and Cog's column on the right.
+  late final _drawer = _Slide(this, open: AppScope.read(context).panelOpen);
+  late final _cpp = _Slide(this, open: false);
+
+  late final _cog = _Slide(this, open: AppScope.read(context).cog.open, inMs: 260);
+
+  /// The editor's first frame: the C++ pane is put away then (initState), so it is not seen to slide shut.
+  bool _firstFrame = true;
   final Map<String, GlobalKey<CodeViewState>> _keys = {};
   GlobalKey<CodeViewState>? _active;
 
@@ -52,7 +62,10 @@ class _EditorPageState extends State<EditorPage> {
     // The blocks open with the room to drag them: the "C++ from the blocks" pane starts closed each time the editor
     // opens, and only its button (or View › C++ from the blocks) opens it.
     final s = AppScope.read(context);
-    if (s.settings.showCpp) WidgetsBinding.instance.addPostFrameCallback((_) => s.updateSettings((st) => st.showCpp = false));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (s.settings.showCpp) s.updateSettings((st) => st.showCpp = false);
+      _firstFrame = false;
+    });
     // Cog hands blocks and code to the Blockly and Monaco editors (the Flutter editors of the other apps take none).
     if (kWebEditors) {
       cogAddBlocks = _addBlocks;
@@ -71,6 +84,9 @@ class _EditorPageState extends State<EditorPage> {
     if (cogAddBlocks == _addBlocks) cogAddBlocks = null;
     if (cogInsertCode == _insertCode) cogInsertCode = null;
     if (cogPictureBlocks == _pictureBlocks) cogPictureBlocks = null;
+    _drawer.dispose();
+    _cpp.dispose();
+    _cog.dispose();
     super.dispose();
   }
 
@@ -123,18 +139,21 @@ class _EditorPageState extends State<EditorPage> {
     final f = p.files[fi];
 
     final openTabs = [for (var i = 0; i < p.files.length; i++) if (!s.closedTabs.contains(i)) i];
-    final tabs = p.mode == 'code'
+    // With the web editors the code keeps its tabs while the blocks show (they wait in the hidden code slot).
+    final tabs = p.mode == 'code' || kWebEditors
         ? Flexible(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 for (final i in openTabs)
-                  Container(
+                  AnimatedContainer(
+                    duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
                     height: 36,
                     margin: const EdgeInsets.only(top: 12),
                     padding: const EdgeInsets.only(left: 10, right: 8),
                     decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: i == fi ? c.ink : Colors.transparent, width: 2)),
+                      border: Border(bottom: BorderSide(color: i == fi ? c.ink : c.ink.withValues(alpha: 0), width: 2)),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Hover(
@@ -162,8 +181,9 @@ class _EditorPageState extends State<EditorPage> {
         : null;
 
     // Code: the file tabs and Find above the code. Blocks: nothing, the canvas starts at the top (its view tools
-    // float bottom left, see _ViewTools).
-    final Widget toolbar = p.mode == 'code'
+    // float bottom left, see _ViewTools). With the web editors the bar is part of the code's slot, so switching
+    // never changes either editor's size (a WebView that grows shows a blank strip until WebKit redraws it).
+    final Widget toolbar = p.mode == 'code' || kWebEditors
         ? Container(
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -186,57 +206,80 @@ class _EditorPageState extends State<EditorPage> {
               Expanded(child: CodeView(key: _codeKeyFor(p.id, fi), initial: f.content, fileName: f.name, errorLines: errLines)),
             ]);
     } else {
-      // Both editors stay loaded while the project is open, so Blocks ↔ C++ is instant and Blockly
-      // keeps its undo history; the hidden one is only not painted (its iframe stays in the page).
-      main = IndexedStack(
+      // Both editors stay loaded while the project is open, so Blocks ↔ C++ is quick and Blockly keeps its
+      // undo history; the hidden one is only not painted (its iframe stays in the page). The switch crossfades.
+      main = _ModeFade(
         index: p.mode == 'blocks' ? 0 : 1,
-        sizing: StackFit.expand,
         children: [
           _blocklyArea(s, c, p, width),
-          // The banner always takes this slot, so Monaco's frame never moves (moving it would reload it).
-          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_codeBanner(context, s, c, p, fi), Expanded(child: _monacoFor(s, c, p, fi))]),
+          // The tab bar and the banner always take this slot, so Monaco's frame never moves (moving it would
+          // reload it) and keeps one size.
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            toolbar,
+            _codeBanner(context, s, c, p, fi),
+            Expanded(child: _monacoFor(s, c, p, fi)),
+          ]),
         ],
       );
       _takeGotoLine(s, p);
     }
 
-    // An open workspace, edge to edge (no card). The floating controls sit over it; the editor stays the first
-    // child of the Stack, so showing or hiding them never moves (and reloads) the Blockly or Monaco frame.
+    // The workspace, in its card (the design's Workspace, see _card). The floating controls sit over it; the editor
+    // stays the first child of the Stack, so showing or hiding them never moves (and reloads) the Blockly or Monaco frame.
     final blocks = p.mode == 'blocks';
     final workspace = LayoutBuilder(builder: (context, box) {
       // With the C++ pane open beside the blocks, the blocks' view tools stay over the blocks, at their right edge
       // (they follow the divider when it is dragged); the run buttons keep the workspace's right edge.
-      final (cppShown, cppWidth) = blocks && kWebEditors ? _cppPane(s, width, box.maxWidth) : (false, 0.0);
-      final besideCpp = cppShown ? cppWidth + _cppHandle : 0.0;
+      // (They move with the pane as it slides open or shut.)
+      final (cppFits, cppWidth) = blocks && kWebEditors ? _cppPane(width, box.maxWidth) : (false, 0.0);
+      final besideCpp = cppFits ? cppWidth + _cppHandle : 0.0;
       return Stack(children: [
-        Positioned.fill(child: ColoredBox(color: c.surface, child: Column(children: [toolbar, Expanded(child: main)]))),
+        Positioned.fill(
+            child: ColoredBox(color: c.surface, child: kWebEditors ? main : Column(children: [toolbar, Expanded(child: main)]))),
         // Connect is in the editor's top bar (EditorConnectButton), so nothing floats over the top of the code.
         // The view tools: a column on the right edge of the blocks (or the code), above the run buttons, where the
         // block list (which opens on the left) never reaches.
-        Positioned(
-          right: (phone ? 21 : 33) + besideCpp, // centred over the Upload button when nothing is beside the blocks
-          bottom: phone ? 104 : 130,
-          child: FrameShield(child: _viewTools(s, c, p, width)),
+        AnimatedBuilder(
+          animation: _cpp.t,
+          // In a short window (or with the Serial Monitor tall) the column shrinks to the room above the run buttons
+          // instead of running out of the workspace's card at the top.
+          child: FrameShield(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: math.max(96, box.maxHeight - (phone ? 104 : 130) - 8)),
+              child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.bottomCenter, child: _viewTools(s, c, p, width)),
+            ),
+          ),
+          builder: (context, tools) => Positioned(
+            // centred over the Upload button when nothing is beside the blocks
+            right: (phone ? 21 : 33) + besideCpp * _cpp.t.value,
+            bottom: phone ? 104 : 130,
+            child: tools!,
+          ),
         ),
         Positioned(right: 20, bottom: 14, child: FrameShield(child: _RunButtons(compact: phone))),
       ]);
     });
-    final panel = ConsolePanel(boardTab: !showBoard);
+    // Shown only while the drawer is open or on its way, so it is drawn open throughout (closing, it slides away
+    // whole instead of emptying first).
+    final panel = ConsolePanel(boardTab: !showBoard, open: true);
     final cogBeside = width >= 1000;
+    _drawer.follow(s.panelOpen, context);
+    _cog.follow(s.cog.open, context);
+    _cpp.follow(s.settings.showCpp && !_firstFrame, context);
 
     final content = LayoutBuilder(builder: (context, box) {
       // The Serial Monitor is a drawer under the workspace, opened from the run buttons (or Ctrl/⌘+J). It keeps
       // 120 px at least and leaves the workspace 200 px at least.
       final maxConsole = (box.maxHeight - 200).clamp(120.0, double.infinity);
       final consoleHeight = (phone ? 220.0 : _consoleHeight ?? s.settings.consoleHeight).clamp(120.0, maxConsole);
-      return Column(children: [
-        Expanded(child: workspace),
-        if (s.panelOpen) ...[
-          if (!phone)
+      final drawer = Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // The gap between the workspace and the drawer's cards is the handle that resizes them.
+          if (phone)
+            const SizedBox(height: _gapPhone)
+          else
             SplitHandle(
               axis: Axis.vertical,
-              thickness: 7,
-              line: true,
+              thickness: _gap,
               onDrag: (dy) => setState(() => _consoleHeight = consoleHeight - dy),
               onEnd: () {
                 final h = consoleHeight;
@@ -249,27 +292,66 @@ class _EditorPageState extends State<EditorPage> {
             height: consoleHeight,
             child: showBoard
                 ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Expanded(child: panel),
-                    Container(width: 1, color: c.line),
-                    SizedBox(width: 280, child: ColoredBox(color: c.surface, child: SingleChildScrollView(child: BoardCard(boardId: p.board)))),
+                    Expanded(child: _card(c, panel)),
+                    const SizedBox(width: _gap),
+                    SizedBox(width: 280, child: _card(c, SingleChildScrollView(child: BoardCard(boardId: p.board)))),
                   ])
-                : panel,
+                : _card(c, panel),
           ),
-        ],
+        ]);
+      return Column(children: [
+        Expanded(child: _card(c, workspace)),
+        // The drawer rises from under the workspace, its tabs first; the workspace above gives way as it comes.
+        AnimatedBuilder(
+          animation: _drawer.t,
+          child: drawer,
+          builder: (context, drawer) => !_drawer.shows
+              ? const SizedBox.shrink()
+              : ClipRect(child: Align(alignment: Alignment.topCenter, heightFactor: _drawer.t.value, child: drawer)),
+        ),
       ]);
     });
 
     // The editor stays the first child in the same place whether Cog is open or not, so the
     // Blockly and Monaco frames are never moved (moving them would reload them).
+    // Cog slides in from the right: beside the editor its column opens and the editor gives way (steady while it
+    // moves, see _Slide); over a narrow editor the panel slides and fades in. Shut, it is kept until it has gone.
     return Stack(children: [
       Positioned.fill(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(child: content),
-          if (s.cog.open && cogBeside) const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 352, child: CogPanel())),
+          // The cards sit on the window's colour, 12 px from its edges and from each other (the design's Main area).
+          Expanded(child: ColoredBox(color: c.bg, child: Padding(padding: EdgeInsets.all(phone ? _gapPhone : _gap), child: content))),
+          if (cogBeside)
+            AnimatedBuilder(
+              animation: _cog.t,
+              // (The editor's margin is the gap on its left.)
+              child: const Padding(padding: EdgeInsets.fromLTRB(0, _gap, _gap, _gap), child: SizedBox(width: 352, child: CogPanel())),
+              builder: (context, cog) => !_cog.shows
+                  ? const SizedBox.shrink()
+                  : ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: _cog.t.value, child: cog)),
+            ),
         ]),
       ),
-      if (s.cog.open && !cogBeside)
-        Positioned(top: 12, right: 12, bottom: 12, width: math.min(400, width - 24), child: const FrameShield(child: CogPanel())),
+      if (!cogBeside)
+        AnimatedBuilder(
+          animation: _cog.t,
+          child: const FrameShield(child: CogPanel()),
+          builder: (context, cog) => !_cog.shows
+              ? const SizedBox.shrink()
+              : Positioned(
+                  top: 12,
+                  right: 12,
+                  bottom: 12,
+                  width: math.min(400, width - 24),
+                  child: IgnorePointer(
+                    ignoring: !s.cog.open,
+                    child: Opacity(
+                      opacity: _cog.t.value,
+                      child: Transform.translate(offset: Offset(48 * (1 - _cog.t.value), 0), child: cog),
+                    ),
+                  ),
+                ),
+        ),
     ]);
   }
 
@@ -278,11 +360,29 @@ class _EditorPageState extends State<EditorPage> {
   // Beside the blocks: the blocks keep at least 400 px (the toolbox takes ~150), the C++ pane at least 240 px.
   static const _minBlocks = 400.0, _minCpp = 240.0, _cppHandle = 7.0;
 
-  /// Whether the "C++ from the blocks" pane shows beside the blocks in a workspace [boxWidth] wide, and its width.
-  (bool, double) _cppPane(AppState s, double width, double boxWidth) {
-    final show = s.settings.showCpp && width >= 900 && boxWidth >= _minBlocks + _minCpp + _cppHandle;
+  /// The design's spacing: 12 px around the cards and between them (8 on a phone).
+  static const _gap = 12.0, _gapPhone = 8.0;
+
+  /// A card of the editor (the design's Workspace, Console and Board info): 10 px corners, a 1 px line, the surface
+  /// colour. The line is drawn behind the content, which sits 1 px inside it and is clipped to the corners (the Blockly
+  /// and Monaco WebViews too). Never draw over a WebView here: on macOS whatever Flutter paints above a WebView takes
+  /// the mouse over its whole bounds, and a line round the card took the whole workspace (blocks could not be dragged,
+  /// 2026-11-24).
+  static Widget _card(RC c, Widget child) => DecoratedBox(
+        decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: c.line)),
+        child: Padding(
+          padding: const EdgeInsets.all(1),
+          child: ClipRRect(borderRadius: BorderRadius.circular(9), child: ColoredBox(color: c.surface, child: child)),
+        ),
+      );
+
+  /// Whether the "C++ from the blocks" pane fits beside the blocks in a workspace [boxWidth] wide, and its width.
+  /// (Whether it is open is _cpp's: it slides.)
+  (bool, double) _cppPane(double width, double boxWidth) {
+    final s = AppScope.read(context);
+    final fits = width >= 900 && boxWidth >= _minBlocks + _minCpp + _cppHandle;
     final w = (_cppWidth ?? s.settings.cppPaneWidth).clamp(_minCpp, (boxWidth - _minBlocks - _cppHandle).clamp(_minCpp, double.infinity));
-    return (show, w);
+    return (fits, w);
   }
 
   Widget _viewTools(AppState s, RC c, Project p, double width) {
@@ -295,10 +395,23 @@ class _EditorPageState extends State<EditorPage> {
     Widget sep() => Container(width: 26, height: 1, margin: EdgeInsets.symmetric(vertical: small ? 3 : 4), color: c.line);
     Widget b(String icon, String tip, VoidCallback? onTap, {bool active = false}) =>
         IconBtn(icon, onTap: onTap, tip: tip, size: size, iconSize: small ? 18 : 20, active: active);
+    // Blocks has more tools than Code: on a switch the column grows or shrinks from the bottom while the buttons
+    // crossfade (kModeSwitch), instead of jumping.
+    final still = MediaQuery.disableAnimationsOf(context);
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(14), boxShadow: popShadow),
-      child: Column(mainAxisSize: MainAxisSize.min, children: blocks
+      child: AnimatedSize(
+        duration: still ? Duration.zero : kModeSwitch,
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.bottomCenter,
+        child: AnimatedSwitcher(
+          duration: still ? Duration.zero : kModeSwitch,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (current, previous) =>
+              Stack(alignment: Alignment.bottomCenter, children: [...previous, if (current != null) current]),
+          child: Column(key: ValueKey(blocks), mainAxisSize: MainAxisSize.min, children: blocks
           ? [
               if (kWebEditors) ...[
                 // Back to the view a project opens with (the starting size, centred on the blocks), as View › Actual
@@ -324,6 +437,8 @@ class _EditorPageState extends State<EditorPage> {
               b('undo', 'Undo ($kMod+Z)', kWebEditors ? () => code?.action('undo') : null),
               b('redo', 'Redo ($kMod+Shift+Z)', kWebEditors ? () => code?.action('redo') : null),
             ]),
+        ),
+      ),
     );
   }
 
@@ -378,14 +493,19 @@ class _EditorPageState extends State<EditorPage> {
       },
     );
     return LayoutBuilder(builder: (context, box) {
-      final (show, cppWidth) = _cppPane(s, width, box.maxWidth);
+      final (fits, cppWidth) = _cppPane(width, box.maxWidth);
       const handle = _cppHandle;
       return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: editor),
-        // Hidden, the C++ pane keeps its editor loaded (and takes no room).
-        Visibility(
-          visible: show,
-          maintainState: true,
+        // Hidden, the C++ pane keeps its editor loaded (and takes no room). It slides out from the blocks' right edge
+        // (_cpp): its editor keeps its size throughout and is uncovered, the blocks give way (steady meanwhile).
+        AnimatedBuilder(
+          animation: _cpp.t,
+          builder: (context, pane) => Visibility(
+            visible: fits && _cpp.shows,
+            maintainState: true,
+            child: ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: _cpp.t.value, child: pane)),
+          ),
           child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             SplitHandle(
               axis: Axis.horizontal,
@@ -421,6 +541,7 @@ class _EditorPageState extends State<EditorPage> {
                         style: tCaption(c, color: c.muted)),
                   ),
                 Expanded(
+                  // (Shown again after the pane was shut, it holds its page colour until WebKit has drawn it: _Shown.)
                   child: MonacoEditor(
                     key: _preview,
                     fileKey: '${p.id}/blocks.cpp',
@@ -562,9 +683,161 @@ class _EditorPageState extends State<EditorPage> {
   }
 }
 
+/// How long Blocks ↔ Code takes: the editors' crossfade, the view tools and the switch's sliding pill (shell.dart).
+const kModeSwitch = Duration(milliseconds: 220);
+
+/// A part that slides open (ease out, [inMs]) and shut (ease in, [outMs]) beside the editors: the Serial Monitor
+/// drawer, the C++ pane, Cog's column. While any of them moves the editors keep a steady size (as while a divider is
+/// dragged, see _Steady in web_editors_native.dart): a WebView resized every frame shows blank strips until WebKit
+/// catches up, so they take their new size once, when everything has arrived. No motion when the system asks for less.
+class _Slide {
+  _Slide(TickerProvider vsync, {required bool open, int inMs = 240, int outMs = 200})
+      : _c = AnimationController(
+          vsync: vsync,
+          duration: Duration(milliseconds: inMs),
+          reverseDuration: Duration(milliseconds: outMs),
+          value: open ? 1 : 0,
+        ) {
+    // Shutting eases in and out: it starts gently, so the first frames uncover next to nothing (see follow).
+    t = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInOutCubic);
+    _c.addStatusListener((st) {
+      if (st == AnimationStatus.completed || st == AnimationStatus.dismissed) _settled();
+    });
+  }
+
+  final AnimationController _c;
+  Timer? _wait;
+
+  /// 0 shut … 1 open, eased.
+  late final CurvedAnimation t;
+  bool? _open;
+  bool _moving = false;
+
+  /// How many slides are moving: the editors are steady while any is.
+  static int _anyMoving = 0;
+
+  /// Whether any of it shows (open, or on its way).
+  bool get shows => _c.value > 0;
+
+  /// Follows [open]. The first call takes it as it is (the editor opens with the part already open or shut).
+  void follow(bool open, BuildContext context) {
+    if (_open == open) return;
+    final first = _open == null;
+    _open = open;
+    if (first) {
+      _c.value = open ? 1 : 0;
+      return;
+    }
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _c.value = open ? 1 : 0;
+      return;
+    }
+    if (!_moving) {
+      _moving = true;
+      if (_anyMoving++ == 0) setEditorFramesInteractive(false);
+    }
+    _wait?.cancel();
+    if (open) {
+      _c.forward();
+    } else {
+      // Shutting uncovers editor that was hidden under the part. The editors have just been made steady (as big as the
+      // window), and WebKit paints that new room a frame or three later: uncovered sooner it shows black (seen in a
+      // frame-by-frame recording of the Mac app, 2026-11-23). So the part waits for the paint, then moves.
+      _wait = Timer(const Duration(milliseconds: 50), () {
+        if (_open == false) _c.reverse();
+      });
+    }
+  }
+
+  void _settled() {
+    if (!_moving) return;
+    _moving = false;
+    if (--_anyMoving == 0) setEditorFramesInteractive(true);
+  }
+
+  void dispose() {
+    _wait?.cancel();
+    _settled();
+    t.dispose();
+    _c.dispose();
+  }
+}
+
+/// Blocks ↔ Code as a crossfade. Both editors stay in the tree throughout (each WebView keeps its page and size);
+/// when still, only the shown one is painted, as in an IndexedStack. While switching, the lower editor stays fully
+/// painted and the upper one fades over it (in, or out), so the page never dims between the two; the editor that
+/// comes in slides the last few points from the side of the switch it was picked on (Blocks left, Code right).
+/// macOS fades and moves the WebViews themselves (platform-view opacity and transform), the web app its iframes.
+/// No motion when the system asks for less.
+class _ModeFade extends StatefulWidget {
+  const _ModeFade({required this.index, required this.children});
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_ModeFade> createState() => _ModeFadeState();
+}
+
+class _ModeFadeState extends State<_ModeFade> with SingleTickerProviderStateMixin {
+  late final AnimationController _t = AnimationController(vsync: this, duration: kModeSwitch, value: 1);
+  late int _from = widget.index;
+  static const _slide = 16.0;
+
+  @override
+  void didUpdateWidget(_ModeFade old) {
+    super.didUpdateWidget(old);
+    if (old.index == widget.index) return;
+    // A switch back while one is under way starts from the editor that was coming in.
+    _from = old.index;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _t.value = 1;
+    } else {
+      _t.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _t.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _t,
+        builder: (context, _) {
+          final to = widget.index;
+          final moving = _t.value < 1 && _from != to;
+          final v = Curves.easeOutCubic.transform(_t.value);
+          final upper = math.max(_from, to);
+          final dir = to > _from ? 1.0 : -1.0;
+          return Stack(fit: StackFit.expand, children: [
+            for (var i = 0; i < widget.children.length; i++)
+              Offstage(
+                // The same widgets in every state, so no editor is rebuilt (and no WebView reloaded) by a switch.
+                offstage: !(i == to || (moving && i == _from)),
+                child: IgnorePointer(
+                  ignoring: i != to,
+                  child: Opacity(
+                    opacity: !moving || i != upper ? 1 : (i == to ? v : 1 - v),
+                    child: Transform.translate(
+                      offset: Offset(moving && i == to ? dir * _slide * (1 - v) : 0, 0),
+                      child: widget.children[i],
+                    ),
+                  ),
+                ),
+              ),
+          ]);
+        },
+      );
+}
+
 class ConsolePanel extends StatelessWidget {
-  const ConsolePanel({super.key, this.boardTab = false});
+  const ConsolePanel({super.key, this.boardTab = false, this.open});
   final bool boardTab;
+
+  /// Drawn open whatever AppState.panelOpen says (the drawer it sits in is closing); null: as panelOpen says.
+  final bool? open;
 
   @override
   Widget build(BuildContext context) {
@@ -572,15 +845,19 @@ class ConsolePanel extends StatelessWidget {
     final c = RC.of(context);
     final phone = MediaQuery.sizeOf(context).width < 760;
     final t = s.panelTab;
+    final shown = open ?? s.panelOpen;
 
     Widget tab(String k, String label) {
       final on = t == k;
       return Hover(
         onTap: () => s.setPanelTab(k),
-        builder: (context, h) => Container(
+        // The underline fades over to the picked tab.
+        builder: (context, h) => AnimatedContainer(
+          duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
           height: 40,
           padding: const EdgeInsets.only(left: 10, right: 8),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: on ? c.ink : Colors.transparent, width: 2))),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: on ? c.ink : c.ink.withValues(alpha: 0), width: 2))),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Text(label, style: tLabel(c, color: on ? c.ink : c.faint, w: on ? FontWeight.w600 : FontWeight.w500)),
             if (k == 'problems' && s.problems.isNotEmpty) ...[
@@ -639,15 +916,15 @@ class ConsolePanel extends StatelessWidget {
       }
     }
 
-    // Flat, edge to edge in its drawer like the board panel beside it: the split handle above and the divider beside
-    // it are its edges. (A rounded card's edge here met the window edge and the divider in odd corners.)
+    // The card around it (the design's Console: corners, line) is the editor's (_EditorPageState._card), 12 px from
+    // the window's edges, the workspace and the board card, so no corner meets an edge.
     return ColoredBox(
       color: c.surface,
       child: Column(children: [
         Container(
           height: 40,
           padding: const EdgeInsets.only(left: 8, right: 8),
-          decoration: BoxDecoration(border: s.panelOpen ? Border(bottom: BorderSide(color: c.line2)) : null),
+          decoration: BoxDecoration(border: shown ? Border(bottom: BorderSide(color: c.line2)) : null),
           child: Row(children: [
             Expanded(
               child: SingleChildScrollView(
@@ -660,7 +937,7 @@ class ConsolePanel extends StatelessWidget {
                 ]),
               ),
             ),
-            if (s.panelOpen && t == 'serial') ...[
+            if (shown && t == 'serial') ...[
               if (!phone)
                 RcSelect<int>(
                   value: s.baud,
@@ -673,15 +950,15 @@ class ConsolePanel extends StatelessWidget {
               const SizedBox(width: 4),
               IconBtn('trash', onTap: s.clearLog, tip: 'Clear serial output'),
             ],
-            if (s.panelOpen && t == 'output') IconBtn('trash', onTap: s.clearOutput, tip: 'Clear output'),
-            if (s.panelOpen && t == 'problems') IconBtn('trash', onTap: s.clearProblems, tip: 'Clear problems'),
+            if (shown && t == 'output') IconBtn('trash', onTap: s.clearOutput, tip: 'Clear output'),
+            if (shown && t == 'problems') IconBtn('trash', onTap: s.clearProblems, tip: 'Clear problems'),
             Transform.rotate(
-              angle: s.panelOpen ? 0 : 3.14159,
-              child: IconBtn('chev', onTap: s.togglePanel, tip: s.panelOpen ? 'Collapse console' : 'Expand console'),
+              angle: shown ? 0 : 3.14159,
+              child: IconBtn('chev', onTap: s.togglePanel, tip: shown ? 'Collapse console' : 'Expand console'),
             ),
           ]),
         ),
-        if (s.panelOpen) Expanded(child: body()),
+        if (shown) Expanded(child: body()),
       ]),
     );
   }
@@ -1113,15 +1390,48 @@ class EditorConnectButton extends StatelessWidget {
 }
 
 /// Bottom right of the workspace: Serial Monitor, Verify, Stop and the big Upload button.
-class _RunButtons extends StatelessWidget {
+class _RunButtons extends StatefulWidget {
   const _RunButtons({this.compact = false});
   final bool compact;
 
   @override
+  State<_RunButtons> createState() => _RunButtonsState();
+}
+
+class _RunButtonsState extends State<_RunButtons> {
+  // Upload's motion: a ring that turns while the sketch is built, fills with the upload's progress, and when the
+  // upload has gone well closes and turns the arrow into a tick for a moment (AppState.uploadsDone).
+  int? _done;
+  bool _tick = false;
+  Timer? _untick;
+
+  void _watch(AppState s) {
+    if (_done == s.uploadsDone) return;
+    final first = _done == null;
+    _done = s.uploadsDone;
+    if (first) return;
+    _tick = true;
+    _untick?.cancel();
+    _untick = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _tick = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _untick?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final compact = widget.compact;
     final s = AppScope.of(context);
     final c = RC.of(context);
     final uploading = s.busy == 'upload';
+    _watch(s);
+    if (uploading) _tick = false;
+    final still = MediaQuery.disableAnimationsOf(context);
     // Serial, Verify and Stop are one size, Upload the big one. Every circle is centred on one line (a slot as tall
     // as Upload) and every label sits on one line under them, so the row lines up whatever the sizes.
     final small = compact ? 44.0 : 52.0, big = compact ? 64.0 : 76.0;
@@ -1135,7 +1445,7 @@ class _RunButtons extends StatelessWidget {
       VoidCallback? onTap,
       String? tip,
       Border? border,
-      double? progress,
+      Widget? ring,
     }) =>
         Column(mainAxisSize: MainAxisSize.min, children: [
           SizedBox(
@@ -1161,13 +1471,9 @@ class _RunButtons extends StatelessWidget {
                         boxShadow: const [BoxShadow(color: Color(0x241B2A41), blurRadius: 14, offset: Offset(0, 5))],
                       ),
                     ),
-                    if (progress != null)
-                      SizedBox(
-                        width: size - 6,
-                        height: size - 6,
-                        child: CircularProgressIndicator(value: progress, strokeWidth: 4, color: kBrand, backgroundColor: kNavyHover),
-                      ),
-                    Opacity(opacity: onTap == null && progress == null ? .4 : 1, child: icon),
+                    if (ring != null) SizedBox(width: size - 6, height: size - 6, child: ring),
+                    // (Upload's arrow stays bright while it uploads: the ring says it is busy.)
+                    Opacity(opacity: onTap == null && !(ring != null && uploading) ? .4 : 1, child: icon),
                   ]),
                 ),
               ),
@@ -1208,13 +1514,37 @@ class _RunButtons extends StatelessWidget {
             tip: uploading ? 'Cancel the upload' : (s.busy == 'verify' ? 'Cancel Verify' : 'Stop the sketch'),
             onTap: s.canStop ? s.stop : null),
         SizedBox(width: compact ? 8 : 12),
-        round(uploading ? (s.uploadPct == null ? 'Uploading…' : 'Uploading ${s.uploadPct} %') : 'Upload',
+        round(uploading ? (s.uploadPct == null ? 'Uploading…' : 'Uploading ${s.uploadPct} %') : (_tick ? 'Uploaded' : 'Upload'),
             size: big,
             bg: kNavy,
             hover: kNavyHover,
-            icon: uploading && s.uploadPct == null ? const Spinner(size: 26, color: kBrand) : const RcIcon('arrow', size: 30, color: kBrand),
+            // The arrow stays while the ring works; done, it turns into a tick (a small bounce) and back.
+            icon: AnimatedSwitcher(
+              duration: still ? Duration.zero : const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: a, child: child)),
+              child: _tick
+                  ? const RcIcon('check', key: ValueKey('tick'), size: 32, color: kBrand)
+                  : const RcIcon('arrow', key: ValueKey('arrow'), size: 30, color: kBrand),
+            ),
             tip: 'Upload ($kMod+U)',
-            progress: uploading && s.uploadPct != null ? s.uploadPct! / 100 : null,
+            ring: AnimatedOpacity(
+              opacity: uploading || _tick ? 1 : 0,
+              duration: still ? Duration.zero : const Duration(milliseconds: 300),
+              child: uploading && s.uploadPct == null
+                  // Building (or the preview board's quick upload): no amount yet, so the ring turns.
+                  ? const CircularProgressIndicator(strokeWidth: 4, color: kBrand, backgroundColor: kNavyHover, strokeCap: StrokeCap.round)
+                  // Writing: the ring follows the percentage smoothly; done, it closes (from empty, after the preview
+                  // board's turning ring) and fades.
+                  : TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: _tick || !uploading ? 1 : s.uploadPct! / 100),
+                      duration: still ? Duration.zero : const Duration(milliseconds: 360),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, _) => CircularProgressIndicator(
+                          value: v, strokeWidth: 4, color: kBrand, backgroundColor: kNavyHover, strokeCap: StrokeCap.round),
+                    ),
+            ),
             onTap: s.busy == null ? s.upload : null),
       ]),
     );
